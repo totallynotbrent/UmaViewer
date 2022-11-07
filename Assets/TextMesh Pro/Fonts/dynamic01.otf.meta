@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: e9132b160714b954cbe8e5341e773754
+guid: 036631af73b15ac41a9d10f75f5bbafe
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -9,7 +9,7 @@ TrueTypeFontImporter:
   characterPadding: 1
   includeFontData: 1
   fontNames:
-  - Alibaba PuHuiTi
+  - UMAMUSUME-RodinWanpaku Pro
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0
