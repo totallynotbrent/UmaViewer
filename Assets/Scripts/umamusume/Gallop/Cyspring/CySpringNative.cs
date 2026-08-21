@@ -208,24 +208,39 @@ namespace Gallop
                 if (clothPin.Ptr == IntPtr.Zero)
                     return;
 
-                NativeClothUpdate(
-                    clothPin.Ptr,
-                    nClothWorking,
-                    collisionPin.Ptr,
-                    parentPin.Ptr,
-                    stiffnessForceRate,
-                    dragForceRate,
-                    gravityRate,
-                    windX,
-                    windY,
-                    windZ,
-                    windStrength,
-                    bCollisionSwitch,
-                    timescale,
-                    is60FPS,
-                    moveRate,
-                    addMoveRate,
-                    springRate);
+                try
+                {
+                    NativeClothUpdate(
+                        clothPin.Ptr,
+                        nClothWorking,
+                        collisionPin.Ptr,
+                        parentPin.Ptr,
+                        stiffnessForceRate,
+                        dragForceRate,
+                        gravityRate,
+                        windX,
+                        windY,
+                        windZ,
+                        windStrength,
+                        bCollisionSwitch,
+                        timescale,
+                        is60FPS,
+                        moveRate,
+                        addMoveRate,
+                        springRate);
+                }
+                catch (DllNotFoundException ex)
+                {
+                    isNative = false;
+                    Debug.LogWarning("[CySpringNative] Native plugin missing, fallback to managed: " + ex.Message);
+                    return;
+                }
+                catch (EntryPointNotFoundException ex)
+                {
+                    isNative = false;
+                    Debug.LogWarning("[CySpringNative] Native entry missing, fallback: " + ex.Message);
+                    return;
+                }
             }
             finally
             {
@@ -294,26 +309,41 @@ namespace Gallop
                 if (clothPtr == IntPtr.Zero || workingPtr == IntPtr.Zero || argPtr == IntPtr.Zero)
                     return;
 
-                NativeClothSkirtUpdate(
-                    clothPtr,
-                    nClothWorking,
-                    collisionPtr,
-                    workingPtr,
-                    argPtr,
-                    parentPtr,
-                    stiffnessForceRate,
-                    dragForceRate,
-                    gravityRate,
-                    windX,
-                    windY,
-                    windZ,
-                    windStrength,
-                    bCollisionSwitch,
-                    timescale,
-                    is60FPS,
-                    moveRate,
-                    addMoveRate,
-                    springRate);
+                try
+                {
+                    NativeClothSkirtUpdate(
+                        clothPtr,
+                        nClothWorking,
+                        collisionPtr,
+                        workingPtr,
+                        argPtr,
+                        parentPtr,
+                        stiffnessForceRate,
+                        dragForceRate,
+                        gravityRate,
+                        windX,
+                        windY,
+                        windZ,
+                        windStrength,
+                        bCollisionSwitch,
+                        timescale,
+                        is60FPS,
+                        moveRate,
+                        addMoveRate,
+                        springRate);
+                }
+                catch (DllNotFoundException ex)
+                {
+                    isNative = false;
+                    Debug.LogWarning("[CySpringNative] Native plugin missing (skirt): " + ex.Message);
+                    return;
+                }
+                catch (EntryPointNotFoundException ex)
+                {
+                    isNative = false;
+                    Debug.LogWarning("[CySpringNative] Native entry missing (skirt): " + ex.Message);
+                    return;
+                }
 
                 arg = argPin.Value;
             }
@@ -410,9 +440,24 @@ namespace Gallop
                 if (workingPtr == IntPtr.Zero || argPtr == IntPtr.Zero)
                     return;
 
-                NativeSkirtUpdate(
-                    workingPtr,
-                    argPtr);
+                try
+                {
+                    NativeSkirtUpdate(
+                        workingPtr,
+                        argPtr);
+                }
+                catch (DllNotFoundException ex)
+                {
+                    isNative = false;
+                    Debug.LogWarning("[CySpringNative] Native plugin missing (skirtUpdate): " + ex.Message);
+                    return;
+                }
+                catch (EntryPointNotFoundException ex)
+                {
+                    isNative = false;
+                    Debug.LogWarning("[CySpringNative] Native entry missing (skirtUpdate): " + ex.Message);
+                    return;
+                }
 
                 arg = argPin.Value;
             }

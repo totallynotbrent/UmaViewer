@@ -213,7 +213,7 @@ namespace Gallop
 
             _updater.BeforeBeginSimulation();
 
-            float dt = Time.deltaTime;
+            float dt = Mathf.Clamp(Time.deltaTime, 0f, 1f / 60f); // ponytail: 30fps skirt fix - was 1/30 explodes, ceiling: fixed 2x step when !Is60FpsPhysics
 
             if (dt > _minDeltaTime)
             {
