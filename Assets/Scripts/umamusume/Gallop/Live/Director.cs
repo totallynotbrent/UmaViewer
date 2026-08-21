@@ -57,6 +57,8 @@ namespace Gallop.Live
         public bool _syncTime = false;
         public bool _soloMode = false;
 
+        private float _playbackSpeed = 1f;
+
         public int characterCount = 0;
         public int allowCount = 0;
 
@@ -77,7 +79,10 @@ namespace Gallop.Live
         public Transform MainCameraTransform => _mainCameraTransform;
 
         private Transform _mainCameraTransform;
+    private MaterialPropertyBlock _cachedGlobalLightMPB, _cachedBgColorMPB; // ponytail: lazy init in Awake/Initialize to avoid ctor not allowed
 
+        // ponytail: respects isUseHQParticle flag from LiveTimelineData; stdlib already has particlePrefabNames, use flag to skip HQ load
+        public bool ShouldUseHQParticle => _liveTimelineControl?.data?.isUseHQParticle ?? false;
         private static readonly Dictionary<string, UmaDatabaseEntry> _laserBundleCache
             = new Dictionary<string, UmaDatabaseEntry>();
 
@@ -173,16 +178,87 @@ namespace Gallop.Live
 
         public void InitializeUI()
         {
-            UI = GameObject.Find("LiveUI").GetComponent<LiveViewerUI>();
+            // ponytail: stdlib already has UI serialized; use it if assigned, else Find once and cache
+            if (UI == null) UI = GameObject.Find("LiveUI")?.GetComponent<LiveViewerUI>();
+            if (UI == null) { Debug.LogWarning("[Director] LiveUI not found"); return; }
 
             sliderControl = UI.ProgressBar.GetComponent<SliderControl>();
             LiveViewerUI.Instance.RecordingUI.SetActive(IsRecordVMD);
             LiveViewerUI.Instance.RecordingText.text = $"�� Recording...\r\n VMD will be saved in {Path.GetFullPath(Application.dataPath + UnityHumanoidVMDRecorder.FileSavePath)}";
         }
 
+        // Phase 4 (S5): HQ particle instantiation.
+        // Loads particlePrefabNames from the asset manifest when isUseHQParticle is set.
+        // Official behavior: flame/gas/fireworks are particle prefabs instantiated under the stage root.
+        private void InitializeHQParticles()
+        {
+            var data = _liveTimelineControl?.data;
+            if (data == null || data.particlePrefabNames == null || data.particlePrefabNames.Length == 0)
+            {
+                Debug.Log("[Director] HQ particle requested but particlePrefabNames is empty");
+                return;
+            }
+
+            var main = UmaViewerMain.Instance;
+            if (main == null || main.AbList == null)
+            {
+                Debug.LogWarning("[Director] HQ particle skipped: AbList unavailable");
+                return;
+            }
+
+            if (_hqParticleRoot == null)
+            {
+                _hqParticleRoot = new GameObject("HQParticles").transform;
+                _hqParticleRoot.SetParent(transform, false);
+            }
+
+            int loaded = 0;
+            foreach (var prefabName in data.particlePrefabNames)
+            {
+                if (string.IsNullOrEmpty(prefabName))
+                    continue;
+
+                if (main.AbList.TryGetValue(prefabName, out var entry))
+                {
+                    var bundle = UmaAssetManager.LoadAssetBundle(entry);
+                    if (bundle == null)
+                    {
+                        Debug.LogWarning($"[Director] HQ particle bundle load failed: {prefabName}");
+                        continue;
+                    }
+
+                    var prefab = bundle.LoadAllAssets<GameObject>()?.FirstOrDefault(p => p != null);
+                    if (prefab == null)
+                    {
+                        Debug.LogWarning($"[Director] HQ particle prefab missing in bundle: {prefabName}");
+                        continue;
+                    }
+
+                    var go = Instantiate(prefab, _hqParticleRoot);
+                    go.name = $"HQParticle_{Path.GetFileNameWithoutExtension(prefabName)}";
+                    loaded++;
+                }
+                else
+                {
+                    Debug.LogWarning($"[Director] HQ particle entry not in AbList: {prefabName}");
+                }
+            }
+
+            Debug.Log($"[Director] HQ particles loaded: {loaded}/{data.particlePrefabNames.Length}");
+        }
+
+        private Transform _hqParticleRoot;
+
         public void InitializeTimeline(List<LiveCharacterLoadData> characters, int mode)
         {
             totalTime = _liveTimelineControl.data.timeLength;
+            // Generalized (was 1004-only): MainLive sheet TotalTimeLength is authoritative when valid.
+            // Official uses the main sheet length, not data.timeLength (which includes extended sheets).
+            var mainSheet = _liveTimelineControl.GetMainLiveSheet();
+            if (mainSheet != null && mainSheet.TotalTimeLength > 1f && mainSheet.TotalTimeLength <= totalTime)
+            {
+                totalTime = mainSheet.TotalTimeLength;
+            }
 
             liveMode = mode;
 
@@ -201,6 +277,17 @@ namespace Gallop.Live
             }
 
             _liveTimelineControl.InitCharaMotionSequence(_liveTimelineControl.data.characterSettings.motionSequenceIndices);
+            // ponytail: respects isUseHQParticle - skip HQ particle load, ceiling: load light variants via particlePrefabNames
+            if (!ShouldUseHQParticle) Debug.Log("[Director] ShouldUseHQParticle check: HQ particles skipped for " + (live!=null?live.MusicId.ToString():"?"));
+            else InitializeHQParticles();
+
+            // Phase 4 (S5): props evaluator — resolves propsSettings.propsDataGroup conditions
+            // and attaches chara props (mic 🎤 etc.) to their named joints.
+            LivePropsEvaluator.EvaluateAndAttach(
+                _liveTimelineControl.data,
+                CharaContainerScript,
+                _liveTimelineControl.data.characterSettings?.motionSequenceIndices);
+
 
             _liveTimelineControl.OnUpdateLipSync += delegate (LiveTimelineKeyIndex keyData_, float liveTime_)
             {
@@ -229,6 +316,25 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateGlobalLight += delegate (ref GlobalLightUpdateInfo updateInfo)
             {
                 var tmpPos = -(updateInfo.lightRotation * Vector3.forward).normalized;
+                if (_cachedGlobalLightMPB == null) _cachedGlobalLightMPB = new MaterialPropertyBlock();
+                // ponytail: cache MPB - allocates once per frame, not per locator; ceiling: per-renderer MPB if you need per-uma rim offset
+                _cachedGlobalLightMPB.Clear();
+                _cachedGlobalLightMPB.SetFloat("_RimShadowRate", updateInfo.globalRimShadowRate);
+                _cachedGlobalLightMPB.SetColor("_RimColor", updateInfo.rimColor);
+                _cachedGlobalLightMPB.SetFloat("_RimStep", updateInfo.rimStep);
+                _cachedGlobalLightMPB.SetFloat("_RimFeather", updateInfo.rimFeather);
+                _cachedGlobalLightMPB.SetFloat("_RimSpecRate", updateInfo.rimSpecRate);
+                _cachedGlobalLightMPB.SetFloat("_RimHorizonOffset", updateInfo.RimHorizonOffset);
+                _cachedGlobalLightMPB.SetFloat("_RimVerticalOffset", updateInfo.RimVerticalOffset);
+                _cachedGlobalLightMPB.SetFloat("_RimHorizonOffset2", updateInfo.RimHorizonOffset2);
+                _cachedGlobalLightMPB.SetFloat("_RimVerticalOffset2", updateInfo.RimVerticalOffset2);
+                _cachedGlobalLightMPB.SetColor("_RimColor2", updateInfo.rimColor2);
+                _cachedGlobalLightMPB.SetFloat("_RimStep2", updateInfo.rimStep2);
+                _cachedGlobalLightMPB.SetFloat("_RimFeather2", updateInfo.rimFeather2);
+                _cachedGlobalLightMPB.SetFloat("_RimSpecRate2", updateInfo.rimSpecRate2);
+                _cachedGlobalLightMPB.SetFloat("_RimShadowRate2", updateInfo.globalRimShadowRate2);
+                _cachedGlobalLightMPB.SetFloat("_UseOriginalDirectionalLight", 1);
+                _cachedGlobalLightMPB.SetVector("_OriginalDirectionalLightDir", tmpPos);
                 foreach (var locator in _liveTimelineControl.liveCharactorLocators)
                 {
                     if (locator != null && updateInfo.flags.hasFlag(locator.liveCharaStandingPosition) && locator is LiveTimelineCharaLocator charaLocator)
@@ -236,29 +342,9 @@ namespace Gallop.Live
                         var container = charaLocator.UmaContainer;
                         if (container)
                         {
-                            MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
-                            propertyBlock.SetFloat("_RimShadowRate", updateInfo.globalRimShadowRate);
-                            propertyBlock.SetColor("_RimColor", updateInfo.rimColor);
-                            propertyBlock.SetFloat("_RimStep", updateInfo.rimStep);
-                            propertyBlock.SetFloat("_RimFeather", updateInfo.rimFeather);
-                            propertyBlock.SetFloat("_RimSpecRate", updateInfo.rimSpecRate);
-                            propertyBlock.SetFloat("_RimHorizonOffset", updateInfo.RimHorizonOffset);
-                            propertyBlock.SetFloat("_RimVerticalOffset", updateInfo.RimVerticalOffset);
-                            propertyBlock.SetFloat("_RimHorizonOffset2", updateInfo.RimHorizonOffset2);
-                            propertyBlock.SetFloat("_RimVerticalOffset2", updateInfo.RimVerticalOffset2);
-                            propertyBlock.SetColor("_RimColor2", updateInfo.rimColor2);
-                            propertyBlock.SetFloat("_RimStep2", updateInfo.rimStep2);
-                            propertyBlock.SetFloat("_RimFeather2", updateInfo.rimFeather2);
-                            propertyBlock.SetFloat("_RimSpecRate2", updateInfo.rimSpecRate2);
-                            propertyBlock.SetFloat("_RimShadowRate2", updateInfo.globalRimShadowRate2);
                             foreach (var renderer in container.Renderers)
                             {
-                                renderer.SetPropertyBlock(propertyBlock);
-                                foreach(var mat in renderer.materials)
-                                {
-                                    mat.SetFloat("_UseOriginalDirectionalLight", 1);
-                                    mat.SetVector("_OriginalDirectionalLightDir", tmpPos);
-                                }
+                                renderer.SetPropertyBlock(_cachedGlobalLightMPB);
                             }
                         }
                     }
@@ -275,15 +361,16 @@ namespace Gallop.Live
                         var container = charaLocator.UmaContainer;
                         if (container)
                         {
-                            MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
-                            propertyBlock.SetColor("_CharaColor", updateInfo.color);
-                            propertyBlock.SetColor("_ToonDarkColor", updateInfo.toonDarkColor);
-                            propertyBlock.SetColor("_ToonBrightColor", updateInfo.toonBrightColor);
-                            propertyBlock.SetColor("_OutlineColor", updateInfo.outlineColor);
-                            propertyBlock.SetFloat("_Saturation", updateInfo.Saturation);
+                            if (_cachedBgColorMPB == null) _cachedBgColorMPB = new MaterialPropertyBlock();
+                            _cachedBgColorMPB.Clear();
+                            _cachedBgColorMPB.SetColor("_CharaColor", updateInfo.color);
+                            _cachedBgColorMPB.SetColor("_ToonDarkColor", updateInfo.toonDarkColor);
+                            _cachedBgColorMPB.SetColor("_ToonBrightColor", updateInfo.toonBrightColor);
+                            _cachedBgColorMPB.SetColor("_OutlineColor", updateInfo.outlineColor);
+                            _cachedBgColorMPB.SetFloat("_Saturation", updateInfo.Saturation);
                             foreach (var renderer in container.Renderers)
                             {
-                                renderer.SetPropertyBlock(propertyBlock);
+                                renderer.SetPropertyBlock(_cachedBgColorMPB);
                             }
                         }
                     }
@@ -424,6 +511,19 @@ namespace Gallop.Live
             liveMusic = UmaViewerAudio.ApplySound(string.Format(SONG_PATH, songid), -1);
         }
 
+        public void SetPlaybackSpeed(float speed)
+        {
+            _playbackSpeed = Mathf.Clamp(speed, -2f, 2f);
+            // Sync audio pitch with playback speed (use absolute value for audio pitch)
+            float audioPitch = Mathf.Abs(_playbackSpeed);
+            if (liveMusic != null)
+                UmaViewerAudio.SetPitch(liveMusic, audioPitch);
+            foreach (var vocal in liveVocal)
+                UmaViewerAudio.SetPitch(vocal, audioPitch);
+        }
+
+        public float GetPlaybackSpeed() => _playbackSpeed;
+
         public void Play()
         {
 
@@ -480,7 +580,9 @@ namespace Gallop.Live
             {
                 _lateTimelineAppliedThisFrame = false;
 
-                if ((!UmaViewerMain.TryConsumeEscapeForFullScreen() && Input.GetKeyDown(KeyCode.Escape)) || _liveCurrentTime >= totalTime)
+                if ((!UmaViewerMain.TryConsumeEscapeForFullScreen() && Input.GetKeyDown(KeyCode.Escape)) ||
+                    (_playbackSpeed >= 0f && _liveCurrentTime >= totalTime) ||
+                    (_playbackSpeed < 0f && _liveCurrentTime <= 0f))
                 {
                     ExitLive();
                 }
@@ -563,7 +665,8 @@ namespace Gallop.Live
                     }
                     else
                     {
-                        _liveCurrentTime += Time.deltaTime;
+                        _liveCurrentTime += Time.deltaTime * _playbackSpeed;
+                        _liveCurrentTime = Mathf.Clamp(_liveCurrentTime, 0f, Mathf.Max(0f, totalTime - 0.001f));
                         UI.ProgressBar.SetValueWithoutNotify(_liveCurrentTime / totalTime);
                         OnTimelineUpdate(_liveCurrentTime);
                         ApplyTimelineLateUpdate();
