@@ -15,6 +15,13 @@ public class UISettingsModel : MonoBehaviour
     [SerializeField] private Toggle _lookAtCamera;
     [SerializeField] private Toggle _faceOverride;
     [SerializeField] private Slider _outlineWidthSlider;
+    
+    [Header("Physics Settings")]
+    [SerializeField] private Slider _hairStiffnessSlider;
+    [SerializeField] private Slider _skirtStiffnessSlider;
+    [SerializeField] private Slider _tailStiffnessSlider;
+    [SerializeField] private Slider _windIntensitySlider;
+    [SerializeField] private Slider _collisionScaleSlider;
 
     public ScrollRect MaterialsList;
 
@@ -26,6 +33,11 @@ public class UISettingsModel : MonoBehaviour
         _enableFaceOverride = true;
 
     private float _outlineWidth;
+    private float _hairStiffness = 0.75f;
+    private float _skirtStiffness = 0.9f;
+    private float _tailStiffness = 0.85f;
+    private float _windIntensity = 0.5f;
+    private float _collisionScale = 1.0f;
 
     public bool IsHeadFix
     {
@@ -95,6 +107,84 @@ public class UISettingsModel : MonoBehaviour
     {
         _outlineWidth = val;
         Shader.SetGlobalFloat("_GlobalOutlineWidth", val);
+    }
+    
+    // Physics settings methods
+    public void SetHairStiffness(float value)
+    {
+        _hairStiffness = value;
+        ApplyPhysicsToCurrentCharacter();
+    }
+    
+    public void SetSkirtStiffness(float value)
+    {
+        _skirtStiffness = value;
+        ApplyPhysicsToCurrentCharacter();
+    }
+    
+    public void SetTailStiffness(float value)
+    {
+        _tailStiffness = value;
+        ApplyPhysicsToCurrentCharacter();
+    }
+    
+    public void SetWindIntensity(float value)
+    {
+        _windIntensity = value;
+        ApplyPhysicsToCurrentCharacter();
+    }
+    
+    public void SetCollisionScale(float value)
+    {
+        _collisionScale = value;
+        ApplyPhysicsToCurrentCharacter();
+    }
+    
+    private void ApplyPhysicsToCurrentCharacter()
+    {
+        var container = Builder?.CurrentUMAContainer;
+        if (container == null) return;
+        
+        // Access the CySpring controller via reflection or public method
+        // For now, apply via LivePhysicsConfig if it exists
+        var liveConfig = Gallop.Live.LivePhysicsConfig.Instance;
+        if (liveConfig != null)
+        {
+            liveConfig.SetHairStiffness(_hairStiffness);
+            liveConfig.SetSkirtStiffness(_skirtStiffness);
+            liveConfig.SetTailStiffness(_tailStiffness);
+            liveConfig.SetWindIntensity(_windIntensity);
+            liveConfig.SetCollisionScale(_collisionScale);
+        }
+    }
+    
+    public void ApplyPhysicsPreset(string preset)
+    {
+        switch (preset)
+        {
+            case "energetic":
+                _hairStiffness = 1.2f;
+                _skirtStiffness = 1.4f;
+                _tailStiffness = 1.3f;
+                _windIntensity = 0.7f;
+                _collisionScale = 1.1f;
+                break;
+            case "gentle":
+                _hairStiffness = 0.6f;
+                _skirtStiffness = 0.7f;
+                _tailStiffness = 0.65f;
+                _windIntensity = 0.3f;
+                _collisionScale = 0.9f;
+                break;
+            default:
+                _hairStiffness = 0.75f;
+                _skirtStiffness = 0.9f;
+                _tailStiffness = 0.85f;
+                _windIntensity = 0.5f;
+                _collisionScale = 1.0f;
+                break;
+        }
+        ApplyPhysicsToCurrentCharacter();
     }
 
     public void ExportModel()

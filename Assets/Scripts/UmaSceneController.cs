@@ -2,6 +2,7 @@
 using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -14,6 +15,7 @@ public class UmaSceneController:MonoBehaviour
     public GameObject LoadingProgressPanel;
     public Slider LoadingProgressSlider;
     public TextMeshProUGUI LoadingProgressText;
+    private bool _isTransitioning; // ponytail: guard overlapping loads that destroy Animation
 
     private void Awake()
     {
@@ -33,20 +35,26 @@ public class UmaSceneController:MonoBehaviour
 
     public static void LoadScene(string name, Action OnSceneloaded = null, Action OnPrevSceneUnloaded = null)
     {
+        if (instance == null) return;
+        // ponytail: drop concurrent load to avoid destroying Animation mid-transition; upgrade path: queue it
+        if (instance._isTransitioning) return;
         instance.StartCoroutine(instance.LoadLiveSceneAsync(name, OnSceneloaded, OnPrevSceneUnloaded));
     }
 
     IEnumerator LoadLiveSceneAsync(string sceneName, Action OnSceneloaded, Action OnPrevSceneUnloaded)
     {
-
-        if (CavansInstance)
+        _isTransitioning = true;
+        GameObject transitionObj = null;
+        Animation animation = null;
+        try
         {
-            //Destroy(CavansInstance);
-        }
-        CavansInstance = Instantiate(CavansPrefab, transform);
-        var animation = CavansInstance.GetComponent<Animation>();
-        animation.Play("SceneTransition_s");
-        yield return new WaitUntil(() => !animation.isPlaying);
+        // ponytail: local instance avoids field clobber; always clean previous
+        if (CavansInstance) Destroy(CavansInstance);
+        if (!CavansPrefab) { _isTransitioning = false; yield break; }
+        transitionObj = CavansInstance = Instantiate(CavansPrefab, transform);
+        animation = transitionObj ? transitionObj.GetComponent<Animation>() : null;
+        if (animation) animation.Play("SceneTransition_s");
+        yield return new WaitUntil(() => animation == null || transitionObj == null || !animation.isPlaying);
 
         // Set the current Scene to be able to unload it later
         Scene currentScene = SceneManager.GetActiveScene();
@@ -57,17 +65,23 @@ public class UmaSceneController:MonoBehaviour
         // Wait until the last operation fully loads to return anything
         yield return new WaitUntil(()=> asyncLoad.isDone);
 
-        OnSceneloaded?.Invoke();
+        try { OnSceneloaded?.Invoke(); } catch (System.Exception e) { Debug.LogException(e); }
 
         // Unload the previous Scene
         AsyncOperation asyncUnLoad = SceneManager.UnloadSceneAsync(currentScene);
-        yield return new WaitUntil(() => asyncUnLoad.isDone);
+        yield return new WaitUntil(() => asyncUnLoad == null || asyncUnLoad.isDone);
 
-        OnPrevSceneUnloaded?.Invoke();
+        try { OnPrevSceneUnloaded?.Invoke(); } catch (System.Exception e) { Debug.LogException(e); }
 
-        animation.Play("SceneTransition_e");
-        yield return new WaitUntil(() => !animation.isPlaying);
-        Destroy(CavansInstance);
+        // ponytail: guard destroyed Animation (MissingReference from overlapping Unload)
+        if (animation && transitionObj && CavansInstance == transitionObj)
+        {
+            animation.Play("SceneTransition_e");
+            yield return new WaitUntil(() => animation == null || transitionObj == null || !animation.isPlaying);
+        }
+        if (transitionObj && CavansInstance == transitionObj) Destroy(transitionObj);
+        if (CavansInstance == transitionObj) CavansInstance = null;
+        } finally { _isTransitioning = false; }
     }
 
     public void LoadingProgressChange(int curren, int target, string message = null)

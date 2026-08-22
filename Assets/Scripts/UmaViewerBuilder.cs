@@ -3,6 +3,7 @@ using Gallop;
 using Gallop.Live;
 using NAudio.Wave;
 using System;
+#pragma warning disable CS0219 // ponytail: keep official field for parity
 using System.Collections;
 using System.Collections.Generic;
 using System.Data;
@@ -268,6 +269,7 @@ public string[] NormalBodyKeywords  = new[] { "skin", "body", "bdy", "face", "he
         Main.AbList.TryGetValue(head, out asset);
 
         bool isDefaultHead = false;
+                _ = isDefaultHead; // ponytail: keep for official head fallback
         //Some costumes don't have custom heads
         if (head_costumeId != "00" && asset == null)
         {
@@ -857,8 +859,12 @@ public string[] NormalBodyKeywords  = new[] { "skin", "body", "bdy", "face", "he
                 "LiveScene",
                 delegate
                 {
+                    if (LiveControllerPrefab == null) { Debug.LogError("[UmaViewerBuilder] LiveControllerPrefab not assigned - check inspector"); return; }
                     GameObject mainLive = Instantiate(LiveControllerPrefab);
+                    if (mainLive == null) { Debug.LogError("[UmaViewerBuilder] Instantiate LiveControllerPrefab failed (missing script?)"); return; }
+                    // Keep original missing components intact while their IL2CPP types are being recovered.
                     Director controller = mainLive.GetComponentInChildren<Director>();
+                    if (controller == null) { Debug.LogError("[UmaViewerBuilder] Director not found in LiveControllerPrefab - instantiate broken"); Destroy(mainLive); return; }
                     controller.live = live;
                     controller.IsRecordVMD = UI.isRecordVMD;
                     controller.RequireStage = requireStage;
@@ -1118,7 +1124,7 @@ public string[] NormalBodyKeywords  = new[] { "skin", "body", "bdy", "face", "he
         int missingCount = Gallop.Live.StageController.CountMissingScripts(go);
         if (missingCount > 0)
         {
-            Debug.LogWarning($"[LoadAssetPath] '{path}' 实例化后有 {missingCount} 个 missing script 组件（来自原始游戏的不可用脚本）");
+            Debug.LogWarning($"[LoadAssetPath] '{path}' instantiated with {missingCount} missing script component(s); original game-only components are unavailable in this viewer.");
         }
     }
    

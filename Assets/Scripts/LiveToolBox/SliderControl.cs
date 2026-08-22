@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class SliderControl : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
+public class SliderControl : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler
 {
     public bool is_Touched = false;
     public bool is_Outed = false;
@@ -14,7 +14,8 @@ public class SliderControl : MonoBehaviour, IPointerDownHandler, IPointerUpHandl
 
     private void Awake()
     {
-        PauseButton.onClick.AddListener(OnPauseButtonClick);
+        if (PauseButton != null)
+            PauseButton.onClick.AddListener(OnPauseButtonClick);
     }
 
     private void OnPauseButtonClick()
@@ -32,7 +33,7 @@ public class SliderControl : MonoBehaviour, IPointerDownHandler, IPointerUpHandl
     public void OnPointerDown(PointerEventData eventData)
     {
         is_Touched = true;
-        PauseButton.GetComponentInChildren<Text>().text = "¡ø";
+        SetPauseButtonText("ï¿½ï¿½");
         Debug.Log("Pause");
     }
 
@@ -40,8 +41,27 @@ public class SliderControl : MonoBehaviour, IPointerDownHandler, IPointerUpHandl
     {
         is_Touched = false;
         is_Outed = true;
-        PauseButton.GetComponentInChildren<Text>().text = "¡þ";
+        SetPauseButtonText("ï¿½ï¿½");
         Debug.Log("Play");
     }
 
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData == null || eventData.button == PointerEventData.InputButton.Left)
+        {
+            is_Touched = !is_Touched;
+            is_Outed = false;
+            SetPauseButtonText(is_Touched ? "ï¿½ï¿½" : "ï¿½ï¿½");
+        }
+    }
+
+    private void SetPauseButtonText(string text)
+    {
+        if (PauseButton == null)
+            return;
+
+        Text label = PauseButton.GetComponentInChildren<Text>();
+        if (label != null)
+            label.text = text;
+    }
 }

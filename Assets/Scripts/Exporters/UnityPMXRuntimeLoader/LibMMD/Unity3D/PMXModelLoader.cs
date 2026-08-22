@@ -1,5 +1,6 @@
 ﻿using LibMMD.Unity3D;
 using System;
+#pragma warning disable CS0168 // ponytail: keep official field for parity
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;

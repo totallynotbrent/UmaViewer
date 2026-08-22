@@ -44,7 +44,7 @@ public class Config
     public string AntiAliasingTip = "Display, screenshot antialiasing level. 0 - no AA, 1 - 2x MSAA, 2 - 4x MSAA, 3 - 8x MSAA";
     public int AntiAliasing = 2;
 
-    public string TargetFrameRateTip = "Limits application frame rate. Available values: 60, 30";
+    public string TargetFrameRateTip = "Limits application frame rate. Available values: 60, 30, -1 (unlimited)";
     public int TargetFrameRate = 60;
 
     public bool RegionDetectionPassed = false;
@@ -235,7 +235,9 @@ public class Config
 
     public int GetTargetFrameRate()
     {
-        return TargetFrameRate == 30 ? 30 : 60;
+        if (TargetFrameRate == 30) return 30;
+        if (TargetFrameRate == -1) return -1;
+        return 60;
     }
 
     private static string GetConfigPath()
