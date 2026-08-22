@@ -1,4 +1,5 @@
 using System;
+#pragma warning disable CS0414 // ponytail: keep official field for parity
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -493,6 +494,8 @@ namespace Gallop
             }
 
             SetShaderPropertyId();
+            // ponytail: enable GPU instancing for 3k crowd (Cyalume/MobShadow) - native platform feature over manual batching
+            try{ foreach(var m in Resources.FindObjectsOfTypeAll<Material>()) if(m && m.shader && (m.shader.name.Contains("Cyalume")||m.shader.name.Contains("MobShadow"))) m.enableInstancing=true; }catch{}
             _isInit = true;
         }
 
