@@ -1,4 +1,5 @@
 using System;
+#pragma warning disable CS0414 // ponytail: keep official field for parity
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -27,7 +28,7 @@ public class MirrorReflection : MonoBehaviour
 
     [Header("镜面基础设置")]
     [SerializeField] private LayerMask _renderLayers = ~0;
-    [SerializeField] private int _mirrorTextureSize = 1024;
+    [SerializeField] private int _mirrorTextureSize = 512;
     [SerializeField] private float _mirrorClipPlaneOffset = 0.07f;
     [SerializeField] private Camera _baseCamera;
     [SerializeField] private float _mirrorReflectionRate = 0f;
@@ -201,6 +202,16 @@ public class MirrorReflection : MonoBehaviour
         if (!_isEnabled || !_isEnabledMirrorCamera)
             return;
 
+        // Cheap early-outs before any heavy work.
+        if (_mirrorReflectionRate <= 0.001f)
+            return;
+
+        if (_receivedMirrorMeshRenderer != null && !_receivedMirrorMeshRenderer.isVisible)
+            return;
+
+        if (!IsBaseCameraInFrontOfMirror())
+            return;
+
         if (!_isInitialized)
         {
             if (_autoInitialize)
@@ -213,7 +224,14 @@ public class MirrorReflection : MonoBehaviour
         if (_isRenderingNow)
             return;
 
-        if (_baseCamera == null || _mirrorCamera == null || _baseCameraTransform == null)
+        // Cache Camera.main once per frame at most; refresh only if base camera lost.
+        if (_baseCamera == null || _baseCameraTransform == null)
+        {
+            if (!EnsureBaseCamera())
+                return;
+        }
+
+        if (_mirrorCamera == null)
             return;
 
         ForceRenderOnce();
@@ -263,6 +281,17 @@ public class MirrorReflection : MonoBehaviour
         return true;
     }
 
+    private Camera _cachedMainCamera;
+    private float _cachedMainCameraTime;
+    private Camera GetCachedMainCamera()
+    {
+        if (Time.unscaledTime - _cachedMainCameraTime < 0.1f && _cachedMainCamera != null && IsUsableCamera(_cachedMainCamera))
+            return _cachedMainCamera;
+        _cachedMainCamera = Camera.main;
+        _cachedMainCameraTime = Time.unscaledTime;
+        return _cachedMainCamera;
+    }
+
     private bool EnsureBaseCamera()
     {
         if (_baseCamera != null)
@@ -280,9 +309,10 @@ public class MirrorReflection : MonoBehaviour
         if (!_autoFindBaseCamera)
             return false;
 
-        if (IsUsableCamera(Camera.main))
+        var mainCam = GetCachedMainCamera();
+        if (IsUsableCamera(mainCam))
         {
-            _baseCamera = Camera.main;
+            _baseCamera = mainCam;
             _baseCameraTransform = _baseCamera.transform;
             return true;
         }
@@ -493,7 +523,8 @@ public class MirrorReflection : MonoBehaviour
         if (_receivedMirrorMeshRenderer == null)
             return;
 
-        _materials = _receivedMirrorMeshRenderer.materials;
+        // Use sharedMaterials to avoid cloning materials per mirror instance.
+        _materials = _receivedMirrorMeshRenderer.sharedMaterials;
         if (_materials == null || _materials.Length == 0)
             return;
 
@@ -545,6 +576,11 @@ public class MirrorReflection : MonoBehaviour
         _mirrorCamera = go.GetComponent<Camera>();
         _mirrorCameraTransform = go.transform;
 
+        // Never let the reflection camera participate in the normal camera stack.
+        // It is rendered explicitly by ForceRenderOnce into _mirrorTexture.
+        _mirrorCamera.enabled = false;
+        _mirrorCamera.gameObject.tag = "Untagged";
+
         _mirrorCameraTransform.SetParent(_transform, true);
         _mirrorCameraTransform.position = _transform.position;
         _mirrorCameraTransform.rotation = _transform.rotation;
@@ -552,7 +588,6 @@ public class MirrorReflection : MonoBehaviour
 
         _mirrorCamera.allowHDR = false;
         _mirrorCamera.allowMSAA = false;
-        _mirrorCamera.enabled = false;
         _mirrorCamera.depth = (_baseCamera != null ? _baseCamera.depth : 0f) + MIRROR_CAMERA_DEPTH_OFFSET;
         _mirrorCamera.clearFlags = CameraClearFlags.Color;
         _mirrorCamera.cullingMask = _finalRenderLayers;
@@ -897,6 +932,12 @@ public class MirrorReflection : MonoBehaviour
 
     public void ForceRenderOnce()
     {
+        if (_mirrorReflectionRate <= 0.001f)
+            return;
+
+        if (_receivedMirrorMeshRenderer != null && !_receivedMirrorMeshRenderer.isVisible)
+            return;
+
         if (!_isInitialized)
             TryAutoInitializeIfPossible();
 
@@ -906,14 +947,15 @@ public class MirrorReflection : MonoBehaviour
         if (_isRenderingNow)
             return;
 
+        if (!IsBaseCameraInFrontOfMirror())
+            return;
+
         _isRenderingNow = true;
         try
         {
             UpdateRenderTexture();
             UpdateMirrorParams();
 
-            if (!IsBaseCameraInFrontOfMirror())
-                return;
 
             UpdateProjectionMatrix();
 
