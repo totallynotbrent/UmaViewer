@@ -1,4 +1,5 @@
 using System;
+#pragma warning disable CS0414 // ponytail: keep official field for parity
 using Gallop.ImageEffect;
 using UnityEngine;
 using UnityEngine.Rendering;
