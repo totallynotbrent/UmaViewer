@@ -20,7 +20,7 @@ namespace Gallop
         private const int ENV_COLLISION_MAX_NUM = 3;
 
         private static float _dragForceRate = 1.6f;
-        private static float _gravityRate = 1.4f;
+        internal static float _gravityRate = 1.4f;  // Made internal for CySpringController access
 
         private float _stiffnessForceRate = 1.0f;
 
