@@ -82,6 +82,7 @@ namespace Gallop.Live.Cutt
         public event BgColor1UpdateInfoDelegate OnUpdateBgColor1;
 
         public event BgColor2UpdateInfoDelegate OnUpdateBgColor2;
+        public event PostFilmUpdateInfoDelegate OnUpdatePostFilm;
 
         public event TransformUpdateInfoDelegate OnUpdateTransform;
 
@@ -452,6 +453,7 @@ namespace Gallop.Live.Cutt
             //BgColor2属于全局舞台颜色控制，只使用主 worksheet。
             //不遍历所有 worksheet,避免同名LaserA/LaserB轨道在同一帧互相覆盖。
             AlterUpdate_BgColor2(camSheet, _currentFrame);
+            AlterUpdate_PostFilm(camSheet, _currentFrame);
 
             _isNowAlterUpdate = false;
 
@@ -2171,6 +2173,71 @@ namespace Gallop.Live.Cutt
 
                 OnUpdateBgColor2?.Invoke(ref updateInfo);
             }
+        }
+
+        // 后处理(歌曲封面/胶片)属于全局画面效果，只使用主 worksheet，与BgColor2同层级。
+        private void AlterUpdate_PostFilm(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            if (OnUpdatePostFilm == null) return;
+            if (sheet == null || sheet.postFilmKeys == null) return;
+
+            var keyList = sheet.postFilmKeys;
+            if (keyList.Count == 0) return;
+            if (keyList.HasAttribute(LiveTimelineKeyDataListAttr.Disable)) return;
+            if (!keyList.EnablePlayModeTimeline(_playMode)) return;
+
+            FindTimelineKey(out var curKey, out var nextKey, keyList, currentFrame);
+            var cur = curKey as LiveTimelineKeyPostFilmData;
+            var next = nextKey as LiveTimelineKeyPostFilmData;
+            if (cur == null) return;
+
+            PostFilmUpdateInfo updateInfo = default;
+            updateInfo.TimelineName = keyList.Description;
+            updateInfo.TimelineNameHash = !string.IsNullOrEmpty(keyList.Description)
+                ? Animator.StringToHash(keyList.Description)
+                : 0;
+            updateInfo.filmMode = cur.filmMode;
+            updateInfo.colorType = cur.colorType;
+            updateInfo.filmPower = cur.filmPower;
+            updateInfo.filmOffsetParam = cur.filmOffsetParam;
+            updateInfo.filmOptionParam = cur.filmOptionParam;
+            updateInfo.color0 = cur.color0;
+            updateInfo.color1 = cur.color1;
+            updateInfo.color2 = cur.color2;
+            updateInfo.color3 = cur.color3;
+            updateInfo.depthPower = cur.depthPower;
+            updateInfo.DepthClip = cur.DepthClip;
+            updateInfo.RollAngle = cur.RollAngle;
+            updateInfo.FilmScale = cur.FilmScale;
+            updateInfo.loopType = cur.loopType;
+            updateInfo.loopCount = cur.loopCount;
+            updateInfo.loopExecutedCount = cur.loopExecutedCount;
+            updateInfo.loopIntervalFrame = cur.loopIntervalFrame;
+            updateInfo.isPasteLoopUnit = cur.isPasteLoopUnit;
+            updateInfo.isChangeLoopInterpolate = cur.isChangeLoopInterpolate;
+            updateInfo.layerMode = cur.layerMode;
+            updateInfo.movieResId = cur.movieResId;
+            updateInfo.movieFrameOffset = cur.movieFrameOffset;
+            updateInfo.movieSpeed = cur.movieSpeed;
+            updateInfo.colorBlend = cur.colorBlend;
+            updateInfo.colorBlendFactor = cur.colorBlendFactor;
+
+            if (next != null && next.interpolateType != 0)
+            {
+                var n = (LiveTimelineKeyPostFilmData)next;
+                float t = CalculateInterpolationValue(cur, n, currentFrame);
+                updateInfo.filmPower = LerpWithoutClamp(cur.filmPower, n.filmPower, t);
+                updateInfo.filmOffsetParam = Vector2.Lerp(cur.filmOffsetParam, n.filmOffsetParam, t);
+                updateInfo.filmOptionParam = Vector4.Lerp(cur.filmOptionParam, n.filmOptionParam, t);
+                updateInfo.color0 = Color.Lerp(cur.color0, n.color0, t);
+                updateInfo.color1 = Color.Lerp(cur.color1, n.color1, t);
+                updateInfo.color2 = Color.Lerp(cur.color2, n.color2, t);
+                updateInfo.color3 = Color.Lerp(cur.color3, n.color3, t);
+                updateInfo.depthPower = LerpWithoutClamp(cur.depthPower, n.depthPower, t);
+                updateInfo.colorBlendFactor = LerpWithoutClamp(cur.colorBlendFactor, n.colorBlendFactor, t);
+            }
+
+            OnUpdatePostFilm(cur, ref updateInfo, currentFrame);
         }
 
         private void AlterUpdate_MobControl(LiveTimelineWorkSheet sheet, float currentFrame)

@@ -70,4 +70,10 @@ namespace Gallop.Live.Cutt
         public LiveTimelineKeyPostFilmData.ColorBlend colorBlend; // 0xCC
         public float colorBlendFactor; // 0xD0
     }
+
+    [System.Serializable]
+    public class LiveTimelineKeyPostFilmDataList
+        : LiveTimelineKeyDataListTemplate<LiveTimelineKeyPostFilmData>
+    {
+    }
 }
