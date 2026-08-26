@@ -1291,6 +1291,8 @@ namespace Gallop.Live.Cutt
             {
                 camera.cacheTransform.position = pos;
 
+                // TODO �����õĻ���CGSS��layerö�٣�Ҫ�����滻
+                /*
                 int num = liveTimelineKeyCameraPositionData.GetCullingMask();
                 if (num == 0)
                 {
@@ -1304,6 +1306,7 @@ namespace Gallop.Live.Cutt
                     updateInfo.characterLODMask = (int)liveTimelineKeyCameraPositionData.characterLODMask;
                     OnUpdateCameraPos(ref updateInfo);
                 }
+                */
             }
         }
 
