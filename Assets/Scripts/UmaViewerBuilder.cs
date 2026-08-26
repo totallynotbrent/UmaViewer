@@ -1105,7 +1105,7 @@ public string[] NormalBodyKeywords  = new[] { "skin", "body", "bdy", "face", "he
                 {
                     UmaLyricsData lyricsData = new UmaLyricsData()
                     {
-                        time = float.Parse(words[0], System.Globalization.CultureInfo.InvariantCulture) / 1000,
+                        time = float.Parse(words[0]) / 1000,
                         text = (words.Length > 1) ? words[1] : ""
                     };
                     CurrentLyrics.Add(lyricsData);
