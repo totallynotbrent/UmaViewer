@@ -58,6 +58,13 @@ jobs:
           restore-keys: |
             Library-${{ runner.os }}-StandaloneWindows64-
 
+      - name: Free disk space (IL2CPP Windows editor image is large)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: true
+          swap-storage: false
+
       - name: Build Windows player with IL2CPP
         uses: game-ci/unity-builder@v4
         env:
