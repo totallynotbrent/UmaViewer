@@ -37,13 +37,10 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
           $missing = @()
-          if ([string]::IsNullOrWhiteSpace($env:UNITY_LICENSE) -and [string]::IsNullOrWhiteSpace($env:UNITY_SERIAL)) {
-            $missing += "UNITY_LICENSE or UNITY_SERIAL"
-          }
           if ([string]::IsNullOrWhiteSpace($env:UNITY_EMAIL)) { $missing += "UNITY_EMAIL" }
           if ([string]::IsNullOrWhiteSpace($env:UNITY_PASSWORD)) { $missing += "UNITY_PASSWORD" }
           if ($missing.Count -gt 0) {
-            Write-Error "Missing repository secrets: $($missing -join ', '). See .github/UNITY_LICENSE_SETUP.md."
+            Write-Error "Missing repository secrets: $($missing -join ', '). Personal license needs only UNITY_EMAIL + UNITY_PASSWORD (serial optional for Plus/Pro). See .github/UNITY_LICENSE_SETUP.md."
             exit 1
           }
 
