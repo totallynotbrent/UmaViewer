@@ -1064,7 +1064,7 @@ namespace Gallop
 
             try
             {
-                dst = Convert.ToSingle(value);
+                dst = Convert.ToSingle(value, System.Globalization.CultureInfo.InvariantCulture);
             }
             catch
             {
@@ -1135,7 +1135,7 @@ namespace Gallop
 
             try
             {
-                return Convert.ToSingle(value);
+                return Convert.ToSingle(value, System.Globalization.CultureInfo.InvariantCulture);
             }
             catch
             {

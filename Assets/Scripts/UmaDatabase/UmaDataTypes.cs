@@ -107,6 +107,16 @@ public class LiveEntry
 
 public class PartEntry
 {
+    private static string NormalizePartName(string name)
+    {
+        string temp = name ?? string.Empty;
+        temp = temp.Replace("rrright", "right3");
+        temp = temp.Replace("llleft", "left3");
+        temp = temp.Replace("rright", "right2");
+        temp = temp.Replace("lleft", "left2");
+        return temp;
+    }
+
     public Dictionary<string, List<float>> PartSettings = new Dictionary<string, List<float>>();
     public int SingerCount = 0;
     public PartEntry(string data)
@@ -117,11 +127,7 @@ public class PartEntry
 
         foreach (var name in names)
         {
-            var temp = name;
-            temp.Replace("lleft", "left2");
-            temp.Replace("rright", "right2");
-            temp.Replace("llleft", "left3");
-            temp.Replace("rrright", "right3");
+            var temp = NormalizePartName(name);
             PartSettings[temp] = new List<float>();
         }
 
@@ -130,7 +136,16 @@ public class PartEntry
             var values = lines[i].Split(',');
             for (int j = 0; j < names.Length; j++)
             {
-                PartSettings[names[j]].Add((float)Convert.ToDouble(values[j]));
+                if (j >= values.Length || string.IsNullOrWhiteSpace(values[j]))
+                    continue;
+
+                string key = NormalizePartName(names[j]);
+                if (!PartSettings.TryGetValue(key, out var list))
+                {
+                    PartSettings[key] = new List<float>();
+                    list = PartSettings[key];
+                }
+                list.Add((float)Convert.ToDouble(values[j], System.Globalization.CultureInfo.InvariantCulture));
             }
         }
 
