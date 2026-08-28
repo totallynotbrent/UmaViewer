@@ -65,3 +65,11 @@ Thumbs.db
 
 # Contains machine-specific game paths and preferences
 /Config.json
+
+# Local dev / research (not part of viewer)
+/.memory/
+/research/
+/AGENT_HANDOFF.md
+/docs/live80k-full-imitation-plan.md
+/docs/il2cpp-analysis-notes.md
+/docs/PHASE7_VIEWERSIDE_DRIVERS.md
