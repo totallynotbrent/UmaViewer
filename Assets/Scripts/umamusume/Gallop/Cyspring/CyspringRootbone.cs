@@ -548,7 +548,7 @@ namespace Gallop
             TrueNativesCount = NativeArray.Length;
         }
 
-        public void FindCySpringBone(List<CySpringBoneBase> resultBoneList, Func<string, bool> checkFunc, bool firstHitBreak)
+        public new void FindCySpringBone(List<CySpringBoneBase> resultBoneList, Func<string, bool> checkFunc, bool firstHitBreak)
         {
             if (resultBoneList == null || checkFunc == null)
                 return;
