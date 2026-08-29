@@ -289,7 +289,7 @@ namespace Gallop.Live
                 Material[] materials;
                 try
                 {
-                    materials = renderer.materials;
+                    materials = renderer.sharedMaterials;
                 }
                 catch (Exception ex)
                 {
@@ -913,19 +913,35 @@ namespace Gallop.Live
         private void ApplyShaderState(MonitorMaterialBinding binding, MonitorShaderState state)
         {
             Material material = binding.material;
-            if (material == null)
+            Renderer renderer = binding.renderer;
+            if (material == null || renderer == null)
                 return;
+
+            // Use sharedMaterials + MPB to avoid per-frame material clone (keep visual identical, enable batching where possible)
+            // MPB cannot SetTexture(null) and Unity 2022.3 has no per-property clear, so when the
+            // fade texture must be removed the block is rebuilt from scratch and all properties
+            // re-applied, leaving _FadeTex out so the material's own value shows through.
+            bool forceRebuild = clearFadeTextureWhenUnused &&
+                                !state.hasFadeTexture &&
+                                HasTextureProperty(material, fadeTexProperty) &&
+                                (!binding.hasAppliedState || binding.appliedState.hasFadeTexture);
+
+            var block = new MaterialPropertyBlock();
+            if (!forceRebuild)
+                renderer.GetPropertyBlock(block);
+            bool hasAnyMPB = false;
 
             if (state.hasMainTexture && HasTextureProperty(material, mainTexProperty))
             {
-                if (!binding.hasAppliedState ||
+                if (forceRebuild ||
+                    !binding.hasAppliedState ||
                     binding.appliedState.main.texture != state.main.texture ||
                     !Approximately(binding.appliedState.main.scale, state.main.scale) ||
                     !Approximately(binding.appliedState.main.offset, state.main.offset))
                 {
-                    material.SetTexture(mainTexProperty, state.main.texture);
-                    material.SetTextureScale(mainTexProperty, state.main.scale);
-                    material.SetTextureOffset(mainTexProperty, state.main.offset);
+                    block.SetTexture(Shader.PropertyToID(mainTexProperty), state.main.texture);
+                    block.SetVector(Shader.PropertyToID(mainTexProperty + "_ST"), new Vector4(state.main.scale.x, state.main.scale.y, state.main.offset.x, state.main.offset.y));
+                    hasAnyMPB = true;
                 }
             }
 
@@ -933,42 +949,42 @@ namespace Gallop.Live
             {
                 if (state.hasFadeTexture)
                 {
-                    if (!binding.hasAppliedState ||
+                    if (forceRebuild ||
+                        !binding.hasAppliedState ||
                         !binding.appliedState.hasFadeTexture ||
                         binding.appliedState.fade.texture != state.fade.texture ||
                         !Approximately(binding.appliedState.fade.scale, state.fade.scale) ||
                         !Approximately(binding.appliedState.fade.offset, state.fade.offset))
                     {
-                        material.SetTexture(fadeTexProperty, state.fade.texture);
-                        material.SetTextureScale(fadeTexProperty, state.fade.scale);
-                        material.SetTextureOffset(fadeTexProperty, state.fade.offset);
+                        block.SetTexture(Shader.PropertyToID(fadeTexProperty), state.fade.texture);
+                        block.SetVector(Shader.PropertyToID(fadeTexProperty + "_ST"), new Vector4(state.fade.scale.x, state.fade.scale.y, state.fade.offset.x, state.fade.offset.y));
+                        hasAnyMPB = true;
                     }
                 }
                 else if (clearFadeTextureWhenUnused &&
                          (!binding.hasAppliedState || binding.appliedState.hasFadeTexture))
                 {
-                    material.SetTexture(fadeTexProperty, null);
-                    material.SetTextureScale(fadeTexProperty, Vector2.one);
-                    material.SetTextureOffset(fadeTexProperty, Vector2.zero);
+                    // No SetTexture here: MPB rejects null, and forceRebuild rebuilds the block
+                    // from scratch this frame so _FadeTex is simply absent (material default).
+                    hasAnyMPB = true;
                 }
             }
 
             if (HasTextureProperty(material, filterTexProperty))
             {
                 Vector2 filterScale = binding.baseFilterScale * state.filterTexScale;
-                if (assignMaskTextureToFilterTex &&
-                    (!binding.hasAppliedState || binding.appliedState.filterTexture != state.filterTexture))
-                    material.SetTexture(filterTexProperty, state.filterTexture);
-
-                if (!binding.hasAppliedState ||
+                if (assignMaskTextureToFilterTex && state.filterTexture != null &&
+                    (forceRebuild || !binding.hasAppliedState || binding.appliedState.filterTexture != state.filterTexture))
+                {
+                    block.SetTexture(Shader.PropertyToID(filterTexProperty), state.filterTexture);
+                    hasAnyMPB = true;
+                }
+                if (forceRebuild ||
+                    !binding.hasAppliedState ||
                     !Approximately(binding.appliedState.filterTexScale, state.filterTexScale))
                 {
-                    material.SetTextureScale(filterTexProperty, filterScale);
-                }
-
-                if (!binding.hasAppliedState)
-                {
-                    material.SetTextureOffset(filterTexProperty, binding.baseFilterOffset);
+                    block.SetVector(Shader.PropertyToID(filterTexProperty + "_ST"), new Vector4(filterScale.x, filterScale.y, binding.baseFilterOffset.x, binding.baseFilterOffset.y));
+                    hasAnyMPB = true;
                 }
             }
 
@@ -976,18 +992,33 @@ namespace Gallop.Live
             Color appliedColorFade = state.colorFade;
             Color appliedBaseColor = state.useBaseColor ? state.baseColor : binding.baseColor;
 
-            if (!binding.hasAppliedState || !Approximately(binding.appliedState.alpha, appliedAlpha))
-                TrySetFloat(material, alphaProperty, appliedAlpha);
-            if (!binding.hasAppliedState || !Approximately(binding.appliedState.colorFade, appliedColorFade))
-                TrySetColor(material, colorFadeProperty, appliedColorFade);
-            if (!binding.hasAppliedState || !Approximately(binding.appliedState.baseColor, appliedBaseColor))
-                TrySetColor(material, baseColorProperty, appliedBaseColor);
-            if (!binding.hasAppliedState || !Approximately(binding.appliedState.width, state.width))
-                TrySetFloat(material, monitorWidthProperty, state.width);
-            if (!binding.hasAppliedState || !Approximately(binding.appliedState.height, state.height))
-                TrySetFloat(material, monitorHeightProperty, state.height);
-            if (!binding.hasAppliedState || !Approximately(binding.appliedState.crossFadeRate, state.crossFadeRate))
-                TrySetFloat(material, crossFadeRateProperty, state.crossFadeRate);
+            if (forceRebuild || !binding.hasAppliedState || !Approximately(binding.appliedState.alpha, appliedAlpha))
+            {
+                if (material.HasProperty(alphaProperty)) { block.SetFloat(Shader.PropertyToID(alphaProperty), appliedAlpha); hasAnyMPB = true; }
+            }
+            if (forceRebuild || !binding.hasAppliedState || !Approximately(binding.appliedState.colorFade, appliedColorFade))
+            {
+                if (material.HasProperty(colorFadeProperty)) { block.SetColor(Shader.PropertyToID(colorFadeProperty), appliedColorFade); hasAnyMPB = true; }
+            }
+            if (forceRebuild || !binding.hasAppliedState || !Approximately(binding.appliedState.baseColor, appliedBaseColor))
+            {
+                if (material.HasProperty(baseColorProperty)) { block.SetColor(Shader.PropertyToID(baseColorProperty), appliedBaseColor); hasAnyMPB = true; }
+            }
+            if (forceRebuild || !binding.hasAppliedState || !Approximately(binding.appliedState.width, state.width))
+            {
+                if (material.HasProperty(monitorWidthProperty)) { block.SetFloat(Shader.PropertyToID(monitorWidthProperty), state.width); hasAnyMPB = true; }
+            }
+            if (forceRebuild || !binding.hasAppliedState || !Approximately(binding.appliedState.height, state.height))
+            {
+                if (material.HasProperty(monitorHeightProperty)) { block.SetFloat(Shader.PropertyToID(monitorHeightProperty), state.height); hasAnyMPB = true; }
+            }
+            if (forceRebuild || !binding.hasAppliedState || !Approximately(binding.appliedState.crossFadeRate, state.crossFadeRate))
+            {
+                if (material.HasProperty(crossFadeRateProperty)) { block.SetFloat(Shader.PropertyToID(crossFadeRateProperty), state.crossFadeRate); hasAnyMPB = true; }
+            }
+
+            if (hasAnyMPB)
+                renderer.SetPropertyBlock(block);
 
             if (applyBlendModeProperties)
             {

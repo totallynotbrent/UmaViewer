@@ -96,6 +96,8 @@ namespace Gallop.Live
         private Transform _cachedTransform;
         private int _raycastLayerMask;
         private Material _washLightMaterial;
+        private Renderer _washLightRenderer;
+        private MaterialPropertyBlock _washLightMPB;
 
         private bool _isEnabledRaycastChara;
         private float _raycastDistance;
@@ -301,7 +303,11 @@ namespace Gallop.Live
 
             Renderer renderer = GetComponent<Renderer>();
             if (renderer != null)
-                _washLightMaterial = renderer.material;
+            {
+                _washLightRenderer = renderer;
+                _washLightMaterial = renderer.sharedMaterial;
+                if (_washLightMPB == null) _washLightMPB = new MaterialPropertyBlock();
+            }
 
             _raycastLayerMask =
                 GetCullingLayer(1) |
@@ -408,18 +414,22 @@ namespace Gallop.Live
 
             RaycastCharaModel(_isEnabledRaycastChara, _distance, _raycastDistance);
 
-            if (_isEnabledFadeout && _washLightMaterial != null)
+            if (_isEnabledFadeout && _washLightMaterial != null && _washLightRenderer != null)
             {
-                if (_washLightMaterial.HasProperty(PropFadeoutHeightStart))
-                    _washLightMaterial.SetFloat(PropFadeoutHeightStart, _fadeoutHeightStart);
-
-                if (_washLightMaterial.HasProperty(PropFadeoutHeightEnd))
-                    _washLightMaterial.SetFloat(PropFadeoutHeightEnd, _fadeoutHeightEnd);
-
-                if (_washLightMaterial.HasProperty(PropFadeoutHeightLength))
+                bool hasAny = _washLightMaterial.HasProperty(PropFadeoutHeightStart) || _washLightMaterial.HasProperty(PropFadeoutHeightEnd) || _washLightMaterial.HasProperty(PropFadeoutHeightLength);
+                if (hasAny)
                 {
-                    float length = Mathf.Max(_fadeoutHeightStart - _fadeoutHeightEnd, FADEOUT_LENGTH_MIN);
-                    _washLightMaterial.SetFloat(PropFadeoutHeightLength, length);
+                    _washLightRenderer.GetPropertyBlock(_washLightMPB);
+                    if (_washLightMaterial.HasProperty(PropFadeoutHeightStart))
+                        _washLightMPB.SetFloat(PropFadeoutHeightStart, _fadeoutHeightStart);
+                    if (_washLightMaterial.HasProperty(PropFadeoutHeightEnd))
+                        _washLightMPB.SetFloat(PropFadeoutHeightEnd, _fadeoutHeightEnd);
+                    if (_washLightMaterial.HasProperty(PropFadeoutHeightLength))
+                    {
+                        float length = Mathf.Max(_fadeoutHeightStart - _fadeoutHeightEnd, FADEOUT_LENGTH_MIN);
+                        _washLightMPB.SetFloat(PropFadeoutHeightLength, length);
+                    }
+                    _washLightRenderer.SetPropertyBlock(_washLightMPB);
                 }
             }
 
@@ -475,10 +485,14 @@ namespace Gallop.Live
             if (!_isInitializedProjection || !_isEnabledProjection)
                 return;
 
-            if (!_isEnabledFadeout && _washLightMaterial != null)
+            if (!_isEnabledFadeout && _washLightMaterial != null && _washLightRenderer != null)
             {
                 if (_washLightMaterial.HasProperty(PropCutoffHeight))
-                    _washLightMaterial.SetFloat(PropCutoffHeight, _projectionHeight);
+                {
+                    _washLightRenderer.GetPropertyBlock(_washLightMPB);
+                    _washLightMPB.SetFloat(PropCutoffHeight, _projectionHeight);
+                    _washLightRenderer.SetPropertyBlock(_washLightMPB);
+                }
             }
 
             SetupProjectionRays(_floorProjectionVertexOffsetArray);
@@ -663,11 +677,10 @@ namespace Gallop.Live
 
         private void DestroyInternal()
         {
-            if (_washLightMaterial != null)
-            {
-                DestroyRuntimeObject(_washLightMaterial);
-                _washLightMaterial = null;
-            }
+            // _washLightMaterial is the renderer's sharedMaterial (an asset owned by the
+            // bundle), not a runtime instance. Destroying it throws "Destroying assets is
+            // not permitted", so only release the reference and let the bundle own it.
+            _washLightMaterial = null;
 
             if (_projectionMesh != null)
             {

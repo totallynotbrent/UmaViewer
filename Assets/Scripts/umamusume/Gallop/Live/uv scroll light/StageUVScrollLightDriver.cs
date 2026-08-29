@@ -181,7 +181,7 @@ namespace Gallop.Live
 
                 try
                 {
-                    materials = renderer.materials;
+                    materials = renderer.sharedMaterials;
                 }
                 catch (Exception e)
                 {

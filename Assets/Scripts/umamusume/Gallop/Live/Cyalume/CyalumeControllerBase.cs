@@ -26,7 +26,7 @@ namespace Gallop.Cyalume
         [Header("Runtime shader override")]
         [SerializeField] protected bool _useCustomCyalumeShader = true;
         [SerializeField] protected Shader _customCyalumeShader;
-        [SerializeField] protected string _customCyalumeShaderName = "Custom/CyalumeSimple_OfficialLike";
+        [SerializeField] protected string _customCyalumeShaderName = "Custom/CyalumeGroup";
         [SerializeField] protected string _cyalumeNameKeyword = "cyalume";
         [SerializeField] protected string _cyalumeShaderKeyword = "Cyalume";
         [SerializeField] protected string _officialCyalumeShaderName = "Gallop_3D_Live_Cyalume_CyalumeDefault";
@@ -57,6 +57,12 @@ namespace Gallop.Cyalume
         protected int _mainTexStPropertyId = -1;
 
         protected CyalumePlaybackProvider _playbackProvider;
+        protected bool _playbackProviderResolved;
+        // Cache for expensive FindObjects scans to avoid per-frame overhead
+        private Renderer[] _cachedSceneRenderers;
+        private float _cachedSceneRenderersTime;
+        private Material[] _cachedAllMaterials;
+        private float _cachedAllMaterialsTime;
         protected int _musicIdOverride;
         protected int _lastAppliedPatternId = -1;
         protected float _lastAppliedScrollOffset = float.NaN;
@@ -112,6 +118,7 @@ namespace Gallop.Cyalume
         public void SetPlaybackProvider(CyalumePlaybackProvider provider)
         {
             _playbackProvider = provider;
+            _playbackProviderResolved = provider != null;
         }
 
         public void SetVerboseLog(bool enabled)
@@ -149,13 +156,15 @@ namespace Gallop.Cyalume
 
         protected void RefreshRendererEnabledState()
         {
+            // If a CrowdDistanceCuller is present, respect its distance+frustum culling so distant renderers stay disabled
+            var culler = GetComponentInChildren<CrowdDistanceCuller>(true);
+            if (culler == null) culler = GetComponent<CrowdDistanceCuller>();
             for (int i = 0; i < _allRendererList.Count; i++)
             {
                 var renderer = _allRendererList[i];
-                if (!renderer)
-                    continue;
-
+                if (!renderer) continue;
                 bool shouldEnable = _isEnabledCyalume && _targetRendererList.Contains(renderer);
+                if (shouldEnable && culler != null && !culler.ShouldBeEnabled(renderer)) shouldEnable = false;
                 renderer.enabled = shouldEnable;
             }
         }
@@ -186,13 +195,23 @@ namespace Gallop.Cyalume
         {
             if (_playbackProvider != null)
                 return _playbackProvider;
+            if (_playbackProviderResolved)
+                return _playbackProvider;
 
             _playbackProvider = GetComponent<CyalumePlaybackProvider>();
-            if (_playbackProvider == null)
-                _playbackProvider = FindObjectOfType<CyalumePlaybackProvider>(true);
-            if (_playbackProvider == null)
-                _playbackProvider = gameObject.AddComponent<CyalumePlaybackProvider>();
-
+            if (_playbackProvider != null)
+            {
+                _playbackProviderResolved = true;
+                return _playbackProvider;
+            }
+            _playbackProvider = FindObjectOfType<CyalumePlaybackProvider>(true);
+            if (_playbackProvider != null)
+            {
+                _playbackProviderResolved = true;
+                return _playbackProvider;
+            }
+            _playbackProviderResolved = true;
+            _playbackProvider = gameObject.AddComponent<CyalumePlaybackProvider>();
             return _playbackProvider;
         }
 
@@ -268,6 +287,7 @@ namespace Gallop.Cyalume
 
                 if (material.shader == replacementShader)
                 {
+                    if (!material.enableInstancing) material.enableInstancing = true;
                     replacedMaterials[i] = material;
                     continue;
                 }
@@ -293,7 +313,8 @@ namespace Gallop.Cyalume
         {
             var replacementMaterial = new Material(replacementShader)
             {
-                name = sourceMaterial != null ? $"{sourceMaterial.name}_CustomCyalume" : "Cyalume_Custom"
+                name = sourceMaterial != null ? $"{sourceMaterial.name}_CustomCyalume" : "Cyalume_Custom",
+                enableInstancing = true
             };
 
             string sourceTextureProperty = ResolveTextureProperty(sourceMaterial);
@@ -398,7 +419,13 @@ namespace Gallop.Cyalume
                 return 0;
 
             int replacedCount = 0;
-            var renderers = UnityEngine.Object.FindObjectsOfType<Renderer>(true);
+            // Cache FindObjectsOfType result for 1 second to avoid per-frame scan pathology
+            if (_cachedSceneRenderers == null || Time.unscaledTime - _cachedSceneRenderersTime > 1f)
+            {
+                _cachedSceneRenderers = UnityEngine.Object.FindObjectsOfType<Renderer>(true);
+                _cachedSceneRenderersTime = Time.unscaledTime;
+            }
+            var renderers = _cachedSceneRenderers;
             for (int i = 0; i < renderers.Length; i++)
             {
                 var renderer = renderers[i];
@@ -423,7 +450,12 @@ namespace Gallop.Cyalume
                 return 0;
 
             int replacedCount = 0;
-            var materials = Resources.FindObjectsOfTypeAll<Material>();
+            if (_cachedAllMaterials == null || Time.unscaledTime - _cachedAllMaterialsTime > 1f)
+            {
+                _cachedAllMaterials = Resources.FindObjectsOfTypeAll<Material>();
+                _cachedAllMaterialsTime = Time.unscaledTime;
+            }
+            var materials = _cachedAllMaterials;
             for (int i = 0; i < materials.Length; i++)
             {
                 var material = materials[i];
@@ -613,7 +645,7 @@ namespace Gallop.Cyalume
                 if (renderer == null)
                     continue;
 
-                var materials = renderer.materials;
+                var materials = renderer.sharedMaterials;
                 var shaderNames = new List<string>();
                 if (materials != null)
                 {
@@ -799,7 +831,7 @@ namespace Gallop.Cyalume
                 if (mf != null)
                     meshFilters.Add(mf);
 
-                var slots = renderer.materials;
+                var slots = renderer.sharedMaterials;
                 if (slots == null)
                     continue;
 
@@ -898,7 +930,7 @@ namespace Gallop.Cyalume
                 if (!renderer)
                     continue;
 
-                var materials = renderer.materials;
+                var materials = renderer.sharedMaterials;
                 if (materials == null)
                     continue;
 
@@ -912,7 +944,7 @@ namespace Gallop.Cyalume
                     if (string.IsNullOrEmpty(prop))
                         continue;
 
-                    material.SetTexture(prop, texture);
+                    // Use MPB only to avoid material instance cloning (SRP Batcher friendly)
 #if UNITY_2021_2_OR_NEWER
                     renderer.GetPropertyBlock(_mpb, slot);
                     _mpb.SetTexture(prop, texture);
@@ -939,7 +971,7 @@ namespace Gallop.Cyalume
                 if (!renderer)
                     continue;
 
-                var materials = renderer.materials;
+                var materials = renderer.sharedMaterials;
                 if (materials == null)
                     continue;
 
@@ -953,7 +985,7 @@ namespace Gallop.Cyalume
                     if (string.IsNullOrEmpty(prop) || !material.HasProperty(prop))
                         continue;
 
-                    material.SetTextureOffset(prop, new Vector2(0f, yOffset));
+                    // Use MPB only to avoid material instance cloning
 
 #if UNITY_2021_2_OR_NEWER
                     if (_mainTexStPropertyId >= 0)

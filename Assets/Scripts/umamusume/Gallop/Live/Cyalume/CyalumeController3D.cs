@@ -22,6 +22,7 @@ namespace Gallop.Live.Cyalume
         private bool _usingRandomTarget;
         private Coroutine _setupCoroutine;
         private Coroutine _forceReplaceCoroutine;
+        private bool _warmupActive;
 
         [Header("Mob")]
         [SerializeField] private bool _enableMobController = true;
@@ -39,6 +40,7 @@ namespace Gallop.Live.Cyalume
         private readonly Vector3[] _mobScales = new Vector3[11];
         private readonly bool[] _mobDirtySlots = new bool[11];
         private bool _mobHasDirty;
+        private CrowdDistanceCuller _crowdCuller;
 
         public bool UsingRandomTarget => _usingRandomTarget;
 
@@ -136,22 +138,43 @@ namespace Gallop.Live.Cyalume
 
             bool preferRandom = _playbackProvider != null && _playbackProvider.IsRandomPattern(patternId);
             bool targetChanged = ApplyTargetSelection(preferRandom);
-            bool shaderChanged = EnsureCustomShaderOnCurrentTargets() > 0;
-            bool memoryChanged = ForceReplaceOfficialMaterialsInMemory() > 0;
-            if (targetChanged)
+            // Gate heavy full-scene scans to warmup only; after warmup only handle local target changes without global scans
+            if (_warmupActive)
             {
-                ForceReplaceOfficialMaterialsInMemory();
-                ForceReplaceCustomShaderInHierarchy(transform, true);
-                ForceReplaceOfficialShaderAcrossLoadedScene();
-                CollectTargetMeshAndMaterials();
-                CreateVertexColorCacheOfficialConservative();
-                InitializeAudienceUvSpreadOfficialConservative();
+                bool shaderChanged = EnsureCustomShaderOnCurrentTargets() > 0;
+                bool memoryChanged = ForceReplaceOfficialMaterialsInMemory() > 0;
+                if (targetChanged)
+                {
+                    ForceReplaceOfficialMaterialsInMemory();
+                    ForceReplaceCustomShaderInHierarchy(transform, true);
+                    ForceReplaceOfficialShaderAcrossLoadedScene();
+                    CollectTargetMeshAndMaterials();
+                    CreateVertexColorCacheOfficialConservative();
+                    InitializeAudienceUvSpreadOfficialConservative();
+                }
+                else if (shaderChanged || memoryChanged)
+                {
+                    CollectTargetMeshAndMaterials();
+                    ForceReplaceOfficialShaderAcrossLoadedScene();
+                    LogTargetShaderSummary(memoryChanged ? "ForceReplaceOfficialMaterialsInMemory" : "EnsureCustomShaderOnCurrentTargets");
+                }
             }
-            else if (shaderChanged || memoryChanged)
+            else
             {
-                CollectTargetMeshAndMaterials();
-                ForceReplaceOfficialShaderAcrossLoadedScene();
-                LogTargetShaderSummary(memoryChanged ? "ForceReplaceOfficialMaterialsInMemory" : "EnsureCustomShaderOnCurrentTargets");
+                if (targetChanged)
+                {
+                    CollectTargetMeshAndMaterials();
+                    CreateVertexColorCacheOfficialConservative();
+                    InitializeAudienceUvSpreadOfficialConservative();
+                }
+                else
+                {
+                    bool shaderChangedLocal = EnsureCustomShaderOnCurrentTargets() > 0;
+                    if (shaderChangedLocal)
+                    {
+                        CollectTargetMeshAndMaterials();
+                    }
+                }
             }
 
             UpdateCyalumeOfficialConservative(false);
@@ -176,6 +199,11 @@ namespace Gallop.Live.Cyalume
             if (_forceReplaceWarmupSeconds <= 0f)
                 return;
 
+            // Don't start coroutine if the object is inactive
+            if (!gameObject.activeInHierarchy)
+                return;
+
+            _warmupActive = true;
             _forceReplaceCoroutine = StartCoroutine(ForceReplaceWarmupCoroutine());
         }
 
@@ -191,13 +219,13 @@ namespace Gallop.Live.Cyalume
                 if (replacedCount > 0)
                 {
                     CollectTargetMeshAndMaterials();
-                    LogTargetShaderSummary("ForceReplaceWarmup");
-                    WriteCyalumeSceneSnapshot("ForceReplaceWarmup");
+                    // Snapshot and shader summary gated to setup only to avoid per-frame File IO
                 }
 
                 yield return null;
             }
 
+            _warmupActive = false;
             _forceReplaceCoroutine = null;
         }
 
@@ -230,6 +258,16 @@ namespace Gallop.Live.Cyalume
 
             _allRendererList.AddRange(_defaultRenderers);
             _allRendererList.AddRange(_randomRenderers);
+            // Shadow culling: crowd should not cast shadows (saves shadow map passes) and enable GPU instancing for 3000 instances
+            foreach (var r in _allRendererList) if (r != null) { r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; r.receiveShadows = false; foreach (var m in r.sharedMaterials) if (m != null) m.enableInstancing = true; }
+            // Distance culling for crowd (80m) - keeps 75-batch perf even when wide, fixes 30k stall
+            if (_crowdCuller == null)
+            {
+                var cullerObj = new GameObject("CrowdDistanceCuller");
+                cullerObj.transform.SetParent(transform, false);
+                _crowdCuller = cullerObj.AddComponent<CrowdDistanceCuller>();
+            }
+            _crowdCuller.SetRenderers(_allRendererList, Camera.main);
             RefreshRendererEnabledState();
 
             _initializedObjects = true;
@@ -357,6 +395,8 @@ namespace Gallop.Live.Cyalume
             _mobShadowController.Initialize(mobRoot);
             _mobShadowController.SetMobColor(_mobColor);
             _mobShadowController.SetAmbientColor(_mobAmbientColor);
+            // Enable GPU instancing for mob shadow crowd (same material, many instances)
+            foreach (var r in mobRoot.GetComponentsInChildren<Renderer>(true)) if (r != null) foreach (var m in r.sharedMaterials) if (m != null) m.enableInstancing = true;
 
             if (_mobVerboseLog)
                 Debug.Log($"[CyalumeController3D] Mob controller initialized on '{mobRoot.name}'.");
@@ -467,6 +507,8 @@ namespace Gallop.Live.Cyalume
             {
                 var renderers = instance.GetComponentsInChildren<Renderer>(true);
                 ApplyCustomShaderOverrideToRenderers(renderers);
+                // Enable GPU instancing and disable shadow casting for crowd instances (3000 crowd batching)
+                for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) { renderers[i].shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; renderers[i].receiveShadows = false; foreach (var m in renderers[i].sharedMaterials) if (m != null) m.enableInstancing = true; }
                 destination.AddRange(renderers);
             }
 

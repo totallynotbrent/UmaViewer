@@ -1,5 +1,6 @@
 using Gallop.Live.Cutt;
 using System;
+#pragma warning disable CS0414 // ponytail: keep official field for parity
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -71,6 +72,18 @@ namespace Gallop.Live
         public Dictionary<string, Transform> StageParentMap = new Dictionary<string, Transform>();
         [SerializeField] private bool _autoAddBlinkDriver = true;
 
+        private static readonly int PID_CharaColor = Shader.PropertyToID("_CharaColor");
+        private static readonly int PID_ToonDarkColor = Shader.PropertyToID("_ToonDarkColor");
+        private static readonly int PID_ToonBrightColor = Shader.PropertyToID("_ToonBrightColor");
+        private static readonly int PID_OutlineColor = Shader.PropertyToID("_OutlineColor");
+        private static readonly int PID_Saturation = Shader.PropertyToID("_Saturation");
+        private static readonly int PID_ColorPower = Shader.PropertyToID("_ColorPower");
+        private static readonly int PID_MulColor0 = Shader.PropertyToID("_MulColor0");
+        private static readonly int PID_MulColor1 = Shader.PropertyToID("_MulColor1");
+        private static readonly int PID_BlinkLightColor = Shader.PropertyToID("_BlinkLightColor");
+        private static readonly int PID_Color = Shader.PropertyToID("_Color");
+        private static readonly int PID_ColorPowerMultiply = Shader.PropertyToID("_ColorPowerMultiply");
+
         [Header("Official-like BgColor2 material sources")]
         [SerializeField] private Material[] _washLightMaterials;
         [SerializeField]
@@ -128,6 +141,9 @@ namespace Gallop.Live
         [SerializeField] private bool _mirrorAutoAttachLog = true;
         private readonly Dictionary<int, MirrorReflection> _mirrorByTimelineHash = new Dictionary<int, MirrorReflection>();
         private LiveTimelineControl _boundTimelineControl;
+        private MirrorReflection[] _cachedGlobalMirrorScan;
+        private float _cachedGlobalMirrorScanTime;
+        private Gallop.Live.Cyalume.CrowdDistanceCuller _stageCrowdCuller;
 
         private void Awake()
         {
@@ -136,6 +152,17 @@ namespace Gallop.Live
             AutoAddDriver("StageUVScrollLightDriver");
             //AutoAddDriver("StageLaserDriver");
             AutoAddDriver("StageLensFlareDriver");
+            AutoAddDriver("StageProjectorDriver");
+            AutoAddDriver("StageConfettiDriver");
+            AutoAddDriver("StageLedDriver");
+            AutoAddDriver("StagePropsDriver");
+            AutoAddDriver("StageBillboardCleanup");
+            //AutoAddDriver("StageHideBillboards");
+            AutoAddDriver("StageHideWhiteRectangles");
+            AutoAddDriver("StageFindWhiteRectangles");
+            AutoAddDriver("StageCameraTimelineDriver");
+            AutoAddDriver("CySpringTuner");
+            AutoAddDriver("LivePhysicsConfig");
 
             InitializeStage();
             RebuildMirrorReflectionCache();
@@ -632,7 +659,9 @@ namespace Gallop.Live
                     return cam.transform;
             }
 
-            Camera anyCam = FindObjectOfType<Camera>();
+            // ponytail: cache Camera.main (native platform feature) over FindObjectOfType
+            Camera anyCam = Camera.main;
+            if (anyCam == null) anyCam = FindObjectOfType<Camera>();
             return anyCam != null ? anyCam.transform : null;
         }
 
@@ -947,7 +976,12 @@ namespace Gallop.Live
 
             if (_environmentMirrorTargets.Count == 0)
             {
-                var allMirrors = FindObjectsOfType<MirrorReflection>(true);
+                if (_cachedGlobalMirrorScan == null || Time.unscaledTime - _cachedGlobalMirrorScanTime > 1f)
+                {
+                    _cachedGlobalMirrorScan = FindObjectsOfType<MirrorReflection>(true);
+                    _cachedGlobalMirrorScanTime = Time.unscaledTime;
+                }
+                var allMirrors = _cachedGlobalMirrorScan;
                 if (allMirrors != null)
                 {
                     for (int i = 0; i < allMirrors.Length; i++)
@@ -1132,6 +1166,36 @@ namespace Gallop.Live
             }
 
             AutoAttachMirrorReflectionComponents();
+            // Stage crowd culling - only stand/crowd/audience/mob subset at 80m, keeps distant city visible
+            try
+            {
+                var allStageRenderers = GetComponentsInChildren<Renderer>(true);
+                var cullList = new System.Collections.Generic.List<Renderer>();
+                for (int i = 0; i < allStageRenderers.Length; i++)
+                {
+                    var r = allStageRenderers[i];
+                    if (r == null) continue;
+                    string n = r.name.ToLowerInvariant();
+                    string p = r.transform.parent != null ? r.transform.parent.name.ToLowerInvariant() : "";
+                    bool isCrowd = n.Contains("stand") || n.Contains("crowd") || n.Contains("audience") || n.Contains("mob") || p.Contains("stand") || p.Contains("crowd") || p.Contains("audience") || p.Contains("mob");
+                    if (!isCrowd) continue;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    r.receiveShadows = false;
+                    cullList.Add(r);
+                }
+                if (cullList.Count > 0)
+                {
+                    if (_stageCrowdCuller == null)
+                    {
+                        var cullerObj = new GameObject("StageCrowdCuller");
+                        cullerObj.transform.SetParent(transform, false);
+                        _stageCrowdCuller = cullerObj.AddComponent<Gallop.Live.Cyalume.CrowdDistanceCuller>();
+                    }
+                    _stageCrowdCuller.SetCullDistance(80f);
+                    _stageCrowdCuller.SetRenderers(cullList, Camera.main);
+                }
+            }
+            catch { }
         }
 
         public void UpdateObject(ref ObjectUpdateInfo updateInfo)
@@ -1231,23 +1295,33 @@ namespace Gallop.Live
                 var r = targets[i];
                 if (r == null) continue;
 
-                Material[] mats;
-                try { mats = r.materials; }
-                catch { continue; }
-                if (mats == null) continue;
+                var sharedMats = r.sharedMaterials;
+                if (sharedMats == null || sharedMats.Length == 0) continue;
 
-                for (int m = 0; m < mats.Length; m++)
+                bool hasChara = false, hasDark = false, hasBright = false, hasOutline = false, hasSat = false, hasPower = false;
+                for (int s = 0; s < sharedMats.Length; s++)
                 {
-                    var mat = mats[m];
-                    if (mat == null) continue;
-
-                    if (mat.HasProperty("_CharaColor")) mat.SetColor("_CharaColor", updateInfo.color);
-                    if (mat.HasProperty("_ToonDarkColor")) mat.SetColor("_ToonDarkColor", updateInfo.toonDarkColor);
-                    if (mat.HasProperty("_ToonBrightColor")) mat.SetColor("_ToonBrightColor", updateInfo.toonBrightColor);
-                    if (mat.HasProperty("_OutlineColor")) mat.SetColor("_OutlineColor", updateInfo.outlineColor);
-                    if (mat.HasProperty("_Saturation")) mat.SetFloat("_Saturation", updateInfo.Saturation);
-                    if (mat.HasProperty("_ColorPower") && updateInfo.colorPower > 0f) mat.SetFloat("_ColorPower", updateInfo.colorPower);
+                    var sm = sharedMats[s];
+                    if (sm == null) continue;
+                    if (!hasChara && sm.HasProperty(PID_CharaColor)) hasChara = true;
+                    if (!hasDark && sm.HasProperty(PID_ToonDarkColor)) hasDark = true;
+                    if (!hasBright && sm.HasProperty(PID_ToonBrightColor)) hasBright = true;
+                    if (!hasOutline && sm.HasProperty(PID_OutlineColor)) hasOutline = true;
+                    if (!hasSat && sm.HasProperty(PID_Saturation)) hasSat = true;
+                    if (!hasPower && sm.HasProperty(PID_ColorPower)) hasPower = true;
+                    if (hasChara && hasDark && hasBright && hasOutline && hasSat && hasPower) break;
                 }
+                if (!hasChara && !hasDark && !hasBright && !hasOutline && !hasSat && !hasPower) continue;
+
+                var block = new MaterialPropertyBlock();
+                r.GetPropertyBlock(block);
+                if (hasChara) block.SetColor(PID_CharaColor, updateInfo.color);
+                if (hasDark) block.SetColor(PID_ToonDarkColor, updateInfo.toonDarkColor);
+                if (hasBright) block.SetColor(PID_ToonBrightColor, updateInfo.toonBrightColor);
+                if (hasOutline) block.SetColor(PID_OutlineColor, updateInfo.outlineColor);
+                if (hasSat) block.SetFloat(PID_Saturation, updateInfo.Saturation);
+                if (hasPower && updateInfo.colorPower > 0f) block.SetFloat(PID_ColorPower, updateInfo.colorPower);
+                r.SetPropertyBlock(block);
             }
         }
 
@@ -1264,34 +1338,22 @@ namespace Gallop.Live
                 for (int i = 0; i < groups.Count; i++)
                 {
                     var group = groups[i];
-                    if (group == null) continue;
-                    for (int j = 0; j < group.bindings.Count; j++)
+                    if (group == null || group.renderers.Count == 0) continue;
+                    for (int k = 0; k < group.renderers.Count; k++)
                     {
-                        var binding = group.bindings[j];
-                        if (binding == null) continue;
-
-                        var r = binding.renderer;
+                        var r = group.renderers[k];
                         if (r == null) continue;
-
-                        Material[] mats;
-                        try { mats = r.materials; }
-                        catch { continue; }
-                        if (mats == null) continue;
-
-                        if (binding.materialIndex < 0 || binding.materialIndex >= mats.Length)
-                            continue;
-
-                        var mat = mats[binding.materialIndex];
-                        if (mat == null) continue;
-
-                        ApplyBgColor2ToRuntimeGroup(group.kind, mat, ref updateInfo, extra);
+                        var sharedMats = r.sharedMaterials;
+                        if (sharedMats == null || sharedMats.Length == 0) continue;
+                        var block = new MaterialPropertyBlock();
+                        r.GetPropertyBlock(block);
+                        ApplyBgColor2ToRuntimeGroupBlock(group.kind, block, sharedMats, ref updateInfo, extra);
+                        r.SetPropertyBlock(block);
                     }
                 }
                 return;
             }
 
-            // 退回到旧的名字匹配，仅作为最后兜底。
-            var legacyTargets = ResolveBgColorRenderers(updateInfo.TimelineName, wantBgColor2Style: true, allowAllEligibleFallback: false);
             var legacyRendererTargets = ResolveBgColorRenderers(updateInfo.TimelineName, wantBgColor2Style: true, allowAllEligibleFallback: false);
             if (legacyRendererTargets == null || legacyRendererTargets.Count == 0)
                 return;
@@ -1300,19 +1362,107 @@ namespace Gallop.Live
             {
                 var r = legacyRendererTargets[i];
                 if (r == null) continue;
-
-                Material[] mats;
-                try { mats = r.materials; }
-                catch { continue; }
-                if (mats == null) continue;
-
-                for (int m = 0; m < mats.Length; m++)
-                {
-                    var mat = mats[m];
-                    if (mat == null) continue;
-                    ApplyBgColor2ToRuntimeGroup(BgColor2RuntimeKind.LegacyFallback, mat, ref updateInfo, extra);
-                }
+                var sharedMats = r.sharedMaterials;
+                if (sharedMats == null || sharedMats.Length == 0) continue;
+                var block = new MaterialPropertyBlock();
+                r.GetPropertyBlock(block);
+                ApplyBgColor2ToRuntimeGroupBlock(BgColor2RuntimeKind.LegacyFallback, block, sharedMats, ref updateInfo, extra);
+                r.SetPropertyBlock(block);
             }
+        }
+
+        private void ApplyBgColor2ToRuntimeGroupBlock(BgColor2RuntimeKind kind, MaterialPropertyBlock block, Material[] sharedMats, ref BgColor2UpdateInfo updateInfo, float extra)
+        {
+            if (block == null || sharedMats == null) return;
+            switch (kind)
+            {
+                case BgColor2RuntimeKind.Wash:
+                    ApplyOrdinaryBgColor2ToBlock(block, sharedMats, updateInfo.color1, updateInfo.color2, updateInfo.power, false, extra);
+                    break;
+                case BgColor2RuntimeKind.Laser:
+                    ApplyOrdinaryBgColor2ToBlock(block, sharedMats, updateInfo.color1, updateInfo.color2, updateInfo.power, true, extra);
+                    break;
+                case BgColor2RuntimeKind.Foot:
+                    ApplyOrdinaryBgColor2ToBlock(block, sharedMats, updateInfo.color1, updateInfo.color2, updateInfo.power, false, extra);
+                    break;
+                case BgColor2RuntimeKind.NeonMain:
+                    ApplyNeonMainBgColor2ToBlock(block, sharedMats, updateInfo.color1, updateInfo.color2, updateInfo.power);
+                    break;
+                case BgColor2RuntimeKind.NeonBack:
+                    ApplyNeonBackBgColor2ToBlock(block, sharedMats, updateInfo.color1, updateInfo.power);
+                    break;
+                default:
+                    ApplyLegacyBgColor2ToBlock(block, sharedMats, updateInfo.color1, updateInfo.color2, updateInfo.power, extra);
+                    break;
+            }
+        }
+
+        private static bool HasAnyProperty(Material[] mats, int pid)
+        {
+            for (int i = 0; i < mats.Length; i++) { var m = mats[i]; if (m != null && m.HasProperty(pid)) return true; }
+            return false;
+        }
+
+        private static void ApplyOrdinaryBgColor2ToBlock(MaterialPropertyBlock block, Material[] mats, Color color1, Color color2, float power, bool setExtraMultiply, float extraValue)
+        {
+            bool hasMul0 = HasAnyProperty(mats, PID_MulColor0);
+            bool hasMul1 = HasAnyProperty(mats, PID_MulColor1);
+            bool hasBlink = HasAnyProperty(mats, PID_BlinkLightColor);
+            bool hasPower = HasAnyProperty(mats, PID_ColorPower);
+            bool hasMultiply = HasAnyProperty(mats, PID_ColorPowerMultiply);
+            bool hasColor = HasAnyProperty(mats, PID_Color);
+            bool hasAny = false;
+            if (hasMul0) { block.SetColor(PID_MulColor0, color1); hasAny = true; }
+            if (hasMul1) { block.SetColor(PID_MulColor1, color2); hasAny = true; }
+            if (hasBlink && !hasMul0 && !hasMul1) { block.SetColor(PID_BlinkLightColor, color1); hasAny = true; }
+            if (hasPower) { block.SetFloat(PID_ColorPower, power); hasAny = true; }
+            if (setExtraMultiply && hasMultiply) { block.SetFloat(PID_ColorPowerMultiply, extraValue); hasAny = true; }
+            if (!hasAny && hasColor) block.SetColor(PID_Color, color1);
+        }
+
+        private static void ApplyNeonMainBgColor2ToBlock(MaterialPropertyBlock block, Material[] mats, Color color1, Color color2, float power)
+        {
+            bool hasMul0 = HasAnyProperty(mats, PID_MulColor0);
+            bool hasMul1 = HasAnyProperty(mats, PID_MulColor1);
+            bool hasBlink = HasAnyProperty(mats, PID_BlinkLightColor);
+            bool hasPower = HasAnyProperty(mats, PID_ColorPower);
+            bool hasColor = HasAnyProperty(mats, PID_Color);
+            bool wroteAny = false;
+            if (hasMul0) { block.SetColor(PID_MulColor0, color2); wroteAny = true; }
+            if (hasMul1) { block.SetColor(PID_MulColor1, color1); wroteAny = true; }
+            if (hasBlink && !hasMul1) { block.SetColor(PID_BlinkLightColor, color1); wroteAny = true; }
+            if (hasPower) { block.SetFloat(PID_ColorPower, power); wroteAny = true; }
+            if (!wroteAny && hasColor) block.SetColor(PID_Color, color1);
+        }
+
+        private static void ApplyNeonBackBgColor2ToBlock(MaterialPropertyBlock block, Material[] mats, Color color1, float power)
+        {
+            bool hasMul1 = HasAnyProperty(mats, PID_MulColor1);
+            bool hasMul0 = HasAnyProperty(mats, PID_MulColor0);
+            bool hasBlink = HasAnyProperty(mats, PID_BlinkLightColor);
+            bool hasPower = HasAnyProperty(mats, PID_ColorPower);
+            bool hasColor = HasAnyProperty(mats, PID_Color);
+            bool wroteAny = false;
+            if (hasMul1) { block.SetColor(PID_MulColor1, color1); wroteAny = true; }
+            else if (hasMul0) { block.SetColor(PID_MulColor0, color1); wroteAny = true; }
+            if (hasBlink) { block.SetColor(PID_BlinkLightColor, color1); wroteAny = true; }
+            if (hasPower) { block.SetFloat(PID_ColorPower, power); wroteAny = true; }
+            if (!wroteAny && hasColor) block.SetColor(PID_Color, color1);
+        }
+
+        private static void ApplyLegacyBgColor2ToBlock(MaterialPropertyBlock block, Material[] mats, Color color1, Color color2, float power, float extra)
+        {
+            bool hasMul0 = HasAnyProperty(mats, PID_MulColor0);
+            bool hasMul1 = HasAnyProperty(mats, PID_MulColor1);
+            bool hasPower = HasAnyProperty(mats, PID_ColorPower);
+            bool hasMultiply = HasAnyProperty(mats, PID_ColorPowerMultiply);
+            bool hasBlink = HasAnyProperty(mats, PID_BlinkLightColor);
+            if (!hasMul0 && !hasMul1 && !hasPower && !hasMultiply && !hasBlink) return;
+            if (hasMul0) block.SetColor(PID_MulColor0, color1);
+            if (hasMul1) block.SetColor(PID_MulColor1, color2);
+            if (hasBlink && !hasMul0 && !hasMul1) block.SetColor(PID_BlinkLightColor, color1);
+            if (hasPower) block.SetFloat(PID_ColorPower, power);
+            if (hasMultiply) block.SetFloat(PID_ColorPowerMultiply, extra);
         }
 
         private void ApplyBgColor2ToRuntimeGroup(BgColor2RuntimeKind kind, Material mat, ref BgColor2UpdateInfo updateInfo, float extra)

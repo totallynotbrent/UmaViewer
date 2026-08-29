@@ -634,7 +634,9 @@ namespace Gallop.Live
                     DetectType(r, out isBlinkSimple, out isUvAlphaMask, out isLightAdd1, out hasColorPowerMultiply, out isLightBlinkBlend);
 
                     var wash = go.GetComponent<WashLightController>();
+                    // ponytail: bundle uses Gallop.Live.UnityLensFlareController, viewer has both global and Gallop.Live stub - check both
                     var flare = go.GetComponent<UnityLensFlareController>();
+                    if (flare == null) { var c = go.GetComponent("Gallop.Live.UnityLensFlareController") as Component; if (c != null) { /* found Gallop.Live stub */ } }
                     var runtimeMat = r.material;
                     var mats = r.sharedMaterials;
                     pendingRenderers.Add(new RendererEntry
