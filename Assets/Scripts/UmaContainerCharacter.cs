@@ -531,20 +531,21 @@ public class UmaContainerCharacter : UmaContainer
 
         _cySpringController.Reset();
         
-        // Natural physics feel (soft, flowing hair/skirt)
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.75f);  // Hair
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.9f);   // Skirt
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Tail, 0.85f);  // Tail
-        _cySpringController.AdditionalWindTimeScale = 0.5f;  // Natural wind
+        // Soft, flowing physics with more gravity to prevent ride-up
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.6f);   // Hair (soft)
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.7f);   // Skirt (soft)
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Tail, 0.65f);  // Tail (soft)
+        _cySpringController.AdditionalWindTimeScale = 0.4f;  // Less wind
+        
+        // INCREASE GRAVITY: Skirts fall down instead of riding up
+        CySpringController.GravityRate = 2.0f;  // Higher than default 1.4f
         
         // FIX CLIPPING: Increase collision scale to prevent penetration
-        // This makes collision spheres bigger so hair/skirt don't go through body
-        // while keeping the physics soft and flowing
         try
         {
-            _cySpringController.SetScale(CySpringController.Parts.Head, 1.8f);   // Much bigger head collisions
-            _cySpringController.SetScale(CySpringController.Parts.Body, 1.8f);   // Much bigger body collisions
-            _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);   // Much bigger tail collisions
+            _cySpringController.SetScale(CySpringController.Parts.Head, 1.8f);   // Bigger head collisions
+            _cySpringController.SetScale(CySpringController.Parts.Body, 1.8f);   // Bigger body collisions
+            _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);   // Bigger tail collisions
         }
         catch (System.Exception e)
         {

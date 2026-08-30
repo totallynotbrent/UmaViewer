@@ -205,6 +205,17 @@ namespace Gallop
             set => _windPowerRate = value;
         }
 
+        /// <summary>
+        /// Set gravity rate globally for all CySpring instances.
+        /// Higher = more gravity (skirts fall down faster).
+        /// Default is 1.4f.
+        /// </summary>
+        public static float GravityRate
+        {
+            get => CySpring._gravityRate;
+            set => CySpring._gravityRate = value;
+        }
+
         public float[] WindPowerScaleArrayRate
         {
             get => _windPowerScaleArrayRate;
