@@ -128,8 +128,10 @@ public class TearController
     {
         if (speed == Speed) return;
         Speed = speed;
-        Animator_0.speed = speed;
-        Animator_1.speed = speed;
+        // Animator.speed cannot be negative unless recorder mode is enabled
+        float safeSpeed = speed >= 0f ? speed : 0f;
+        Animator_0.speed = safeSpeed;
+        Animator_1.speed = safeSpeed;
     }
 
     public void UpdateOffset()

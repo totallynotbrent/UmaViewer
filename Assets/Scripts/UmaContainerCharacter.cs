@@ -499,7 +499,7 @@ public class UmaContainerCharacter : UmaContainer
 
         var slots = SplitCySpringContainers(cySpringDataContainers);
         
-        // Debug: Log container classification
+        // Debug: Log container classification and collision data
         Debug.Log($"[UmaContainerCharacter] Physics containers: {cySpringDataContainers.Count}");
         for (int i = 0; i < cySpringDataContainers.Count; i++)
         {
@@ -509,7 +509,18 @@ public class UmaContainerCharacter : UmaContainer
                 string path = GetTransformPath(container.transform);
                 int kind = GuessCySpringContainerKind(container);
                 string kindName = kind == 0 ? "HEAD" : kind == 1 ? "BODY" : kind == 2 ? "BUST" : "TAIL";
-                Debug.Log($"  [{i}] {container.name} -> path={path} -> kind={kindName}");
+                
+                // Log collision data count
+                int collisionCount = container.collisionParam != null ? container.collisionParam.Count : 0;
+                int springCount = container.springParam != null ? container.springParam.Count : 0;
+                Debug.Log($"  [{i}] {container.name} -> kind={kindName} collisions={collisionCount} springs={springCount}");
+                
+                // Log collision names
+                if (container.collisionParam != null && container.collisionParam.Count > 0)
+                {
+                    string collisionNames = string.Join(", ", container.collisionParam.Select(c => c != null ? c.CollisionName : "null"));
+                    Debug.Log($"      Collision names: {collisionNames}");
+                }
             }
         }
         Debug.Log($"[UmaContainerCharacter] Slots: head={slots.head?.name}, body={slots.body?.name}, bust={slots.bust?.name}, tail={slots.tail?.name}");
@@ -545,6 +556,10 @@ public class UmaContainerCharacter : UmaContainer
 
         _cySpringController.Reset();
         
+        // SHARE BODY COLLISIONS WITH HEAD - this prevents hair from passing through body
+        _cySpringController.ShareCollisionToPart(CySpringController.Parts.Body, CySpringController.Parts.Head);
+        Debug.Log("[UmaContainerCharacter] Shared body collisions with head spring");
+        
         // Set default physics - CySpringForceLoose will override these
         _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.4f);
         _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.7f);
@@ -553,15 +568,18 @@ public class UmaContainerCharacter : UmaContainer
         
         // Set hair stiffness to very low value - this controls _stiffnessForceRate
         // which is passed directly to the native plugin
-        _cySpringController.SetStiffnessRate(CySpringController.Parts.Head, 0.01f);
+        _cySpringController.SetStiffnessRate(CySpringController.Parts.Head, 0.15f);
         
         // Default gravity
         CySpringController.GravityRate = 5.0f;
         
+        // Reduce drag so hair flows more freely (default is 1.6)
+        CySpringController.DragForceRate = 1.0f;
+        
         // Default collision
         try
         {
-            _cySpringController.SetScale(CySpringController.Parts.Head, 1.2f);
+            _cySpringController.SetScale(CySpringController.Parts.Head, 1.5f);
             _cySpringController.SetScale(CySpringController.Parts.Body, 1.0f);
             _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);
         }
