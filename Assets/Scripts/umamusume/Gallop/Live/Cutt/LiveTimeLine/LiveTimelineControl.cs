@@ -1,4 +1,5 @@
 using System;
+#pragma warning disable CS0067 // ponytail: keep official field for parity
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
@@ -274,6 +275,43 @@ namespace Gallop.Live.Cutt
             }
         }
 
+        // ponytail: helper to find MainLive sheet; used only for 1004 non-extended fix
+        public LiveTimelineWorkSheet GetMainLiveSheet()
+        {
+            if (data?.worksheetList == null || data.worksheetList.Count == 0) return null;
+            foreach (var ws in data.worksheetList) if (ws != null && ws.SheetType == LiveTimelineDefine.SheetIndex.MainLive) return ws;
+            return data.worksheetList[0];
+        }
+
+        // ponytail: motion-sequence keys must come from the MainLive sheet. worksheetList[0] is
+        // PreLiveSkit when an extended (skit) sheet is present, which desyncs chara motion from
+        // the main timeline and manifests as the "神秘平移 / wrong T-pose" bug on 1004-class lives.
+        private LiveTimelineKeyCharaMotionSeqDataList[] _charaMotSeqKeys;
+
+        public LiveTimelineKeyCharaMotionSeqDataList[] GetCharaMotSeqKeys()
+        {
+            if (_charaMotSeqKeys != null) return _charaMotSeqKeys;
+            var main = GetMainLiveSheet();
+            var sheet = main ?? (data?.worksheetList != null && data.worksheetList.Count > 0 ? data.worksheetList[0] : null);
+            var list = sheet?.charaMotSeqList;
+            int count = list?.Count ?? 0;
+            _charaMotSeqKeys = new LiveTimelineKeyCharaMotionSeqDataList[count];
+            for (int i = 0; i < count; i++) _charaMotSeqKeys[i] = list[i].keys;
+            return _charaMotSeqKeys;
+        }
+
+        // ponytail: timescale keys ride the same sheet as the motion sequence (MainLive),
+        // not worksheetList[0] — keeps motion timing consistent across the extended/main split.
+        private LiveTimelineKeyTimescaleDataList _charaMotTimescaleKeys;
+
+        public LiveTimelineKeyTimescaleDataList GetCharaMotSeqTimescaleKeys()
+        {
+            if (_charaMotTimescaleKeys != null) return _charaMotTimescaleKeys;
+            var main = GetMainLiveSheet();
+            var sheet = main ?? (data?.worksheetList != null && data.worksheetList.Count > 0 ? data.worksheetList[0] : null);
+            _charaMotTimescaleKeys = sheet?.timescaleKeys;
+            return _charaMotTimescaleKeys;
+        }
         public void InitializeTimeLineData()
         {
             //var LoadData = gameObject.AddComponent<LiveTimelineData>();
@@ -299,13 +337,14 @@ namespace Gallop.Live.Cutt
             }
 
             //Get KeyArray
-            var listCount = data.worksheetList[0].charaMotSeqList.Count;
+            var keyArray = GetCharaMotSeqKeys();
+            var listCount = keyArray.Length;
 
             _keyArray = new LiveTimelineKeyCharaMotionSeqDataList[listCount];
 
             for (int i = 0; i < listCount; i++)
             {
-                _keyArray[i] = data.worksheetList[0].charaMotSeqList[i].keys;
+                _keyArray[i] = keyArray[i];
             }
 
             if (Director.instance.liveMode == 1)
@@ -393,7 +432,6 @@ namespace Gallop.Live.Cutt
             AlterUpdate_PostEffect_BloomDiffusion(camSheet, Mathf.RoundToInt(_currentFrame));
 
             AlterUpdate_BgColor1(camSheet, _currentFrame);
-            AlterUpdate_BgColor1(camSheet, _currentFrame);
             _laserRuntimeIndexOffset = 0;
             int wsCount = data.worksheetList.Count;
             for (int w = 0; w < wsCount; w++)
@@ -449,7 +487,7 @@ namespace Gallop.Live.Cutt
         {
             foreach (var motion in _motionSequenceArray)
             {
-                motion.AlterUpdate(liveTime, data.worksheetList[0].timescaleKeys);
+                motion.AlterUpdate(liveTime, GetCharaMotSeqTimescaleKeys());
             }
         }
 
@@ -744,16 +782,13 @@ namespace Gallop.Live.Cutt
         
         public void LateUpdateFormationOffset_Transform(int targetIndex, LiveTimelineKeyIndex curKeyIndex, float time)
         {
-            bool ControlMode = UmaViewerUI.Instance != null && UmaViewerUI.Instance.isControlMode;
-
             LiveTimelineKeyFormationOffsetData curKey = curKeyIndex.key as LiveTimelineKeyFormationOffsetData;
             LiveTimelineKeyFormationOffsetData nextKey = curKeyIndex.nextKey as LiveTimelineKeyFormationOffsetData;
-
             var chara = Director.instance.CharaContainerScript[targetIndex];
-            if (!chara) return;
-
-
-            if (ControlMode)
+            if (!chara || curKey == null) return;
+            // ponytail: ControlMode gate removed - positions must always apply; visibility still respects toggle
+            bool isControlMode = UmaViewerUI.Instance == null || UmaViewerUI.Instance.isControlMode;
+            if (isControlMode)
             {
                 if (chara.LiveVisible != curKey.visible)
                 {
@@ -767,72 +802,44 @@ namespace Gallop.Live.Cutt
                     });
                     chara.LiveVisible = curKey.visible;
                 }
-
-
-                if (curKey.visible || IsRecordVMD)
-                {
-                    if (!string.IsNullOrEmpty(curKey.ParentObjectName))
-                    {
-                        var parent_transform = curKey.GetParentObjectTransform(this);
-                        if (parent_transform)
-                        {
-                            if (chara.transform.parent != parent_transform)
-                            {
-                                chara.transform.SetParent(parent_transform);
-                            }
-                        }
-                    }
-                    else if (chara.transform.parent)
-                    {
-                        chara.transform.SetParent(null);
-                    }
-
-                    if (nextKey != null && nextKey.interpolateType != LiveCameraInterpolateType.None)
-                    {
-                        float ratio = CalculateInterpolationValue(curKey, nextKey, time * 60);
-                        chara.transform.localPosition = Vector3.Lerp(curKey.Position, nextKey.Position, ratio);
-                        var x = chara.transform.eulerAngles.x;
-                        var z = chara.transform.eulerAngles.z;
-                        chara.transform.eulerAngles = new Vector3(x, Mathf.Lerp(curKey.RotationY, nextKey.RotationY, ratio), z);
-
-                        var local_x = chara.Position.localEulerAngles.x;
-                        var local_z = chara.Position.localEulerAngles.z;
-                        chara.Position.localEulerAngles = new Vector3(local_x, Mathf.Lerp(curKey.LocalRotationY, nextKey.LocalRotationY, ratio), local_z);
-                    }
-                    else
-                    {
-                        chara.transform.localPosition = curKey.Position;
-                        var x = chara.transform.eulerAngles.x;
-                        var z = chara.transform.eulerAngles.z;
-                        chara.transform.eulerAngles = new Vector3(x, curKey.RotationY, z);
-
-                        var local_x = chara.Position.localEulerAngles.x;
-                        var local_z = chara.Position.localEulerAngles.z;
-                        chara.Position.localEulerAngles = new Vector3(local_x, curKey.LocalRotationY, local_z);
-                    }
-                }
-            }
-            else
+            } else { chara.LiveVisible = curKey.visible; }
+            if (!curKey.visible && !IsRecordVMD) return;
+            Transform parentTransform = null;
+            bool hasParent = !string.IsNullOrEmpty(curKey.ParentObjectName);
+            if (hasParent) { parentTransform = curKey.GetParentObjectTransform(this); if (parentTransform && chara.transform.parent != parentTransform) chara.transform.SetParent(parentTransform, true); }
+            else if (chara.transform.parent != null) chara.transform.SetParent(null, true);
+            // ponytail: IsWorldSpace was ignored - newer cutt use it
+            if (curKey.IsWorldSpace)
             {
-                if (curKey.visible || IsRecordVMD)
+                Vector3 worldPos; float worldRotY; float localY;
+                if (nextKey != null && nextKey.interpolateType != LiveCameraInterpolateType.None && nextKey.IsWorldSpace)
                 {
-                    if (!string.IsNullOrEmpty(curKey.ParentObjectName))
-                    {
-                        var parent_transform = curKey.GetParentObjectTransform(this);
-                        if (parent_transform && chara.transform.parent != parent_transform)
-                        {
-                            chara.transform.SetParent(parent_transform);
-                        }
-                    }
-                    else if (chara.transform.parent)
-                    {
-                        chara.transform.SetParent(null);
-                    }
-                }
+                    float ratio = CalculateInterpolationValue(curKey, nextKey, time * 60);
+                    worldPos = Vector3.Lerp(curKey.WorldSpaceOrigin + curKey.Position, nextKey.WorldSpaceOrigin + nextKey.Position, ratio);
+                    worldRotY = Mathf.LerpAngle(curKey.WorldRotationY, nextKey.WorldRotationY, ratio);
+                    localY = Mathf.LerpAngle(curKey.LocalRotationY, nextKey.LocalRotationY, ratio);
+                } else { worldPos = curKey.WorldSpaceOrigin + curKey.Position; worldRotY = curKey.WorldRotationY; localY = curKey.LocalRotationY; }
+                chara.transform.position = worldPos;
+                var e = chara.transform.eulerAngles; chara.transform.eulerAngles = new Vector3(e.x, worldRotY, e.z);
+                if (curKey.IsLookAtWorldOrigin) { Vector3 dir = curKey.WorldSpaceOrigin - chara.transform.position; dir.y = 0; if (dir.sqrMagnitude > 0.0001f) { var lookY = Quaternion.LookRotation(dir).eulerAngles.y; var e2 = chara.transform.eulerAngles; chara.transform.eulerAngles = new Vector3(e2.x, lookY, e2.z); } }
+                var lp2 = chara.Position.localEulerAngles; chara.Position.localEulerAngles = new Vector3(lp2.x, localY, lp2.z);
+                return;
+            }
+            if (nextKey != null && nextKey.interpolateType != LiveCameraInterpolateType.None)
+            {
+                float ratio = CalculateInterpolationValue(curKey, nextKey, time * 60);
+                Vector3 pos = Vector3.Lerp(curKey.Position, nextKey.Position, ratio);
+                float rotY = Mathf.LerpAngle(curKey.RotationY, nextKey.RotationY, ratio);
+                float localRotY = Mathf.LerpAngle(curKey.LocalRotationY, nextKey.LocalRotationY, ratio);
+                chara.transform.localPosition = pos;
+                var e = chara.transform.eulerAngles; chara.transform.eulerAngles = new Vector3(e.x, rotY, e.z);
+                var lp = chara.Position.localEulerAngles; chara.Position.localEulerAngles = new Vector3(lp.x, localRotY, lp.z);
+            } else {
+                chara.transform.localPosition = curKey.Position;
+                var e = chara.transform.eulerAngles; chara.transform.eulerAngles = new Vector3(e.x, curKey.RotationY, e.z);
+                var lp = chara.Position.localEulerAngles; chara.Position.localEulerAngles = new Vector3(lp.x, curKey.LocalRotationY, lp.z);
             }
         }
-
-
 
         public static void FindTimelineKeyCurrent(out LiveTimelineKey curKey, ILiveTimelineKeyDataList keys, float curFrame)
         {
