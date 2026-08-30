@@ -176,7 +176,8 @@ namespace Gallop
             set => _timescale = value;
         }
 
-        public float AdditionalWindTimeScale { get; set; } = 1.0f;
+        private float _additionalWindTimeScale = 0.5f;
+        public float AdditionalWindTimeScale { get => _additionalWindTimeScale; set => _additionalWindTimeScale = Mathf.Clamp(value, 0f, 0.5f); }
 
         public float BlendRate
         {
@@ -562,7 +563,7 @@ namespace Gallop
 
         public void BeginSimulation(float elapsedTime, bool isUseThread = true)
         {
-    
+            elapsedTime = Mathf.Clamp(elapsedTime, 0f, 1f / 30f);
             if (_springArray == null || !_initialized || !_isPlaying)
                 return;
 
@@ -617,6 +618,8 @@ namespace Gallop
 
             for (int i = 0; i < PARTS_NUM; i++)
             {
+                if (i == (int)Parts.Tail && !IsApplyTailTransform)
+                    continue;
                 CySpring spring = _springArray[i];
                 if (spring == null)
                     continue;
@@ -635,10 +638,8 @@ namespace Gallop
                 //     owner.vtable + 456 = GetBodyScale()
                 float legacyScale = _isCalcCorrectScale ? _modelController.GetTotalScale() : _modelController.GetBodyScale();
 
-                // official:
-                // owner.vtable + 440 = GetCySpringCorrectScale(bool)
-                // bool 参数是 i == 0，所以只有 Head 是 true
-                float scale = _modelController.GetCySpringCorrectScale(i == (int)Parts.Head);
+                // uniform BodyScale for stability (fix non-uniform wonky)
+                float scale = _modelController.GetBodyScale();
 
                 spring.GatherSpring(elapsedTime, scale, legacyScale, AdditionalWindTimeScale, IsUpdateScale);
             }
@@ -933,26 +934,28 @@ namespace Gallop
                 {
                     if (_simulationTimeOutError)
                     {
-                        _isPlaying = false;
+                        // recoverable: clear latch instead of permanent kill
+                        _simulationTimeOutError = false;
+                        _isPlaying = true;
                         _doneUpdate = true;
                         break;
                     }
 
-                    Thread.Sleep(0);
+                    // WaitHandle WaitOne 16ms instead of busy spin
+                    new System.Threading.ManualResetEvent(false).WaitOne(16);
 
                     float elapsed = Time.realtimeSinceStartup - startTime;
                     if (elapsed > 10.0f)
                     {
-                        _simulationTimeOutError = true;
-
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                Debug.LogError(
-                    "[CySpringController] SimulationTimeOutError elapsed=" + elapsed,
+                Debug.LogWarning(
+                    "[CySpringController] SimulationTimeOutWarning elapsed=" + elapsed + " - recovering",
                     this
                 );
 #endif
-
-                        _isPlaying = false;
+                        // recoverable - do not latch static flag forever
+                        _simulationTimeOutError = false;
+                        _isPlaying = true;
                         _doneUpdate = true;
                         LogTimeOutError(elapsed);
                         break;
@@ -963,43 +966,48 @@ namespace Gallop
     // 官方这里等价内联 PostSpringAll：
     // Head/Body 只要 spring != null 就 PostSpring。
     // Tail 受 IsApplyTailTransform 控制。
-            if (_springArray != null)
+            try
             {
-                for (int i = 0; i < _springArray.Length; i++)
+                if (_springArray != null)
                 {
-                    CySpring spring = _springArray[i];
-                    if (spring == null)
-                        continue;
+                    for (int i = 0; i < _springArray.Length; i++)
+                    {
+                        CySpring spring = _springArray[i];
+                        if (spring == null)
+                            continue;
 
-                    if (i == (int)Parts.Tail && !IsApplyTailTransform)
-                        continue;
+                        if (i == (int)Parts.Tail && !IsApplyTailTransform)
+                            continue;
 
-                    spring.PostSpring();
+                        spring.PostSpring();
+                    }
                 }
             }
+            finally
+            {
+                if (_hipTransform != null)
+                    _hipPrePosition = _hipTransform.position;
 
-            if (_hipTransform != null)
-                _hipPrePosition = _hipTransform.position;
+                if (_ownerTransform == null)
+                    _ownerTransform = transform;
 
-            if (_ownerTransform == null)
-                _ownerTransform = transform;
+                if (_ownerTransform == null)
+                    throw new NullReferenceException();
 
-            if (_ownerTransform == null)
-                throw new NullReferenceException();
+                if (!IsAffectOwnerPotision)
+                    _ownerTransform.position = _ownerTransformPosition;
 
-            if (!IsAffectOwnerPotision)
-                _ownerTransform.position = _ownerTransformPosition;
+                if (!IsAffectOwnerRotation)
+                    _ownerTransform.rotation = _ownerTransformRotation;
 
-            if (!IsAffectOwnerRotation)
-                _ownerTransform.rotation = _ownerTransformRotation;
+                if (!IsAffectOwnerScale)
+                    _ownerTransform.localScale = _ownerTransformLocalScale;
 
-            if (!IsAffectOwnerScale)
-                _ownerTransform.localScale = _ownerTransformLocalScale;
-
-    // 官方 EndSimulation 这里只更新 ownerPrePosition / ownerPreRotation。
-    // 不要在这里写 _previousPos / _previousRot / _prevLocalScale。
-            _ownerPrePosition = _ownerTransform.position;
-            _ownerPreRotation = _ownerTransform.rotation;
+        // 官方 EndSimulation 这里只更新 ownerPrePosition / ownerPreRotation。
+        // 不要在这里写 _previousPos / _previousRot / _prevLocalScale。
+                _ownerPrePosition = _ownerTransform.position;
+                _ownerPreRotation = _ownerTransform.rotation;
+            }
         }
 
         private void LogTimeOutError(float elapsedTime)
@@ -1146,14 +1154,19 @@ namespace Gallop
 
         private void WarmUpCySpring(float warmUpTime = DEFAULT_WARMUPTIME)
         {
-            int frameCount = Mathf.Max(1, Mathf.CeilToInt(warmUpTime * 60.0f));
+            int frameCount = Mathf.Max(1, Mathf.CeilToInt(warmUpTime * 15.0f));
             float dt = 1.0f / 60.0f;
-
+            float originalBlend = 1f;
+            // eased BlendRate 0->1 over warmup to hide pop (SmoothStep)
             for (int i = 0; i < frameCount; i++)
             {
+                float t = (float)i / Mathf.Max(1, frameCount - 1);
+                t = t * t * (3f - 2f * t);
+                BlendRate = Mathf.Lerp(0f, 1f, t);
                 BeginSimulation(dt, false);
                 EndSimulation();
             }
+            BlendRate = originalBlend;
         }
 
         private float GetTargetCySpringFPS()
@@ -1181,32 +1194,46 @@ namespace Gallop
             _previousPos = Gallop.Math.VECTOR3_ZERO;
             _previousRot = Gallop.Math.QUATERNION_IDENTITY;
 
-            if (!IsAffectOwnerPotision)
+            try
             {
-                _previousPos = _ownerTransformPosition;
-                _ownerTransform.position = Gallop.Math.VECTOR3_ZERO;
-            }
+                if (!IsAffectOwnerPotision)
+                {
+                    _previousPos = _ownerTransformPosition;
+                    _ownerTransform.position = Gallop.Math.VECTOR3_ZERO;
+                }
 
-            if (!IsAffectOwnerRotation)
+                if (!IsAffectOwnerRotation)
+                {
+                    _previousRot = _ownerTransformRotation;
+                    _ownerTransform.rotation = Gallop.Math.QUATERNION_IDENTITY;
+                }
+
+                if (IsAffectOwnerScale)
+                    return;
+
+                _prevLocalScale = _ownerTransformLocalScale;
+
+                float scale = _ownerTransform.lossyScale.x;
+                // use uniform BodyScale guard for non-uniform
+                if (Mathf.Abs(_ownerTransform.lossyScale.x - _ownerTransform.lossyScale.y) > 0.01f ||
+                    Mathf.Abs(_ownerTransform.lossyScale.x - _ownerTransform.lossyScale.z) > 0.01f)
+                {
+                    Debug.LogWarning("[CySpringController] Non-uniform scale detected, using uniform BodyScale");
+                    scale = _modelController != null ? _modelController.GetBodyScale() : scale;
+                }
+                if (Gallop.Math.IsFloatEqualLight(scale, 0.0f))
+                    scale = 0.000001f;
+
+                    _ownerTransform.localScale = new Vector3(
+                    _ownerTransformLocalScale.x / scale,
+                    _ownerTransformLocalScale.y / scale,
+                    _ownerTransformLocalScale.z / scale
+                );
+            }
+            finally
             {
-                _previousRot = _ownerTransformRotation;
-                _ownerTransform.rotation = Gallop.Math.QUATERNION_IDENTITY;
+                // restore is handled in EndSimulation, but ensure no exception leaves transform zeroed without recovery
             }
-
-            if (IsAffectOwnerScale)
-                return;
-
-            _prevLocalScale = _ownerTransformLocalScale;
-
-            float scale = _ownerTransform.lossyScale.x;
-            if (Gallop.Math.IsFloatEqualLight(scale, 0.0f))
-                scale = 0.000001f;
-
-                _ownerTransform.localScale = new Vector3(
-                _ownerTransformLocalScale.x / scale,
-                _ownerTransformLocalScale.y / scale,
-                _ownerTransformLocalScale.z / scale
-            );
         }
 
         public void ResetNativeCloth()
@@ -1265,16 +1292,16 @@ namespace Gallop
 
             bool isHead = parts == Parts.Head;
 
-            float scale = _modelController.GetCySpringCorrectScale(isHead);
-            float addScale = _modelController.GetCySpringCorrectScale(false);
-
-            if (isHead && _isCalcCorrectScale)
-                addScale = _modelController.GetCySpringCorrectScale(false);
+            // uniform BodyScale for stability
+            float scale = _modelController.GetBodyScale();
+            float addScale = _modelController.GetBodyScale();
 
             collision.SetScale(scale, addScale);
             spring.ResetScale(scale, addScale, IsUpdateScale);
             spring.UpdateScaleConnectBone(scale);
             spring.UpdateNativeCollision(scale);
+            // recompute BoneAxis on scale change already via UpdateScaleConnectBone
+            spring.UpdateScaleConnectBone(scale);
         }
 
         public bool GetIsCalcCorrectScale()
