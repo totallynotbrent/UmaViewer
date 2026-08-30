@@ -120,7 +120,7 @@ public class UISettingsOther : MonoBehaviour
         FrameRateDropdown = _runtimeFrameRateRow.GetComponentInChildren<TMP_Dropdown>(true);
         FrameRateDropdown.name = "FrameRateDropdown";
         FrameRateDropdown.ClearOptions();
-        FrameRateDropdown.AddOptions(new List<string> { "60 FPS", "30 FPS" });
+        FrameRateDropdown.AddOptions(new List<string> { "60 FPS", "30 FPS", "Unlimited" });
         FrameRateDropdown.onValueChanged = new TMP_Dropdown.DropdownEvent();
         FrameRateDropdown.onValueChanged.AddListener(ChangeFrameRate);
 
@@ -135,11 +135,14 @@ public class UISettingsOther : MonoBehaviour
 
     private int FrameRateToDropdownValue(int frameRate)
     {
-        return frameRate == 30 ? 1 : 0;
+        if (frameRate == 30) return 1;
+        if (frameRate == -1) return 2;
+        return 0;
     }
 
     private int DropdownValueToFrameRate(int value)
     {
+        if (value == 2) return -1;
         return value == 1 ? 30 : 60;
     }
 
