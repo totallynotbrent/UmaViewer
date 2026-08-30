@@ -525,6 +525,20 @@ public class UmaContainerCharacter : UmaContainer
         }
         Debug.Log($"[UmaContainerCharacter] Slots: head={slots.head?.name}, body={slots.body?.name}, bust={slots.bust?.name}, tail={slots.tail?.name}");
 
+        // katboi d50b283 physics restore: drive HAIR (head) + TAIL with katboi's
+        // DynamicBone path (CySpringDataContainer.InitializePhysics) — the working hair.
+        // The rewrite CySpringController is scoped to BODY-only below, which drives the skirt.
+        {
+            var bodyColliders = new Dictionary<string, Transform>();
+            foreach (var c in cySpringDataContainers)
+            {
+                if (c == null) continue;
+                bodyColliders = UmaUtility.MergeDictionaries(bodyColliders, c.InitiallizeCollider(transformCacheDic));
+            }
+            if (slots.head != null) slots.head.InitializePhysics(transformCacheDic, bodyColliders);
+            if (slots.tail != null) slots.tail.InitializePhysics(transformCacheDic, bodyColliders);
+        }
+
         _cySpringOwner = new UmaViewerCySpringOwner(this);
         _cySpringController = CySpringController.AddController(gameObject, hip, _cySpringOwner);
 
@@ -542,10 +556,10 @@ public class UmaContainerCharacter : UmaContainer
 
         _cySpringController.LoadFromDataContainers(
             transformCacheDic,
-            slots.head,
+            null,          // head — hair now driven by katboi DynamicBone, not the rewrite
             slots.body,
-            slots.bust,
-            slots.tail,
+            null,          // bust
+            null,          // tail — tail driven by katboi DynamicBone
             null,
             null,
             null,
@@ -555,40 +569,34 @@ public class UmaContainerCharacter : UmaContainer
         );
 
         _cySpringController.Reset();
-        
-        // SHARE BODY COLLISIONS WITH HEAD - this prevents hair from passing through body
-        _cySpringController.ShareCollisionToPart(CySpringController.Parts.Body, CySpringController.Parts.Head);
-        Debug.Log("[UmaContainerCharacter] Shared body collisions with head spring");
-        
-        // Set default physics - CySpringForceLoose will override these
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.4f);
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.7f);
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Tail, 0.5f);
-        _cySpringController.AdditionalWindTimeScale = 0.4f;
-        
-        // Set hair stiffness to very low value - this controls _stiffnessForceRate
-        // which is passed directly to the native plugin
-        _cySpringController.SetStiffnessRate(CySpringController.Parts.Head, 0.15f);
-        
-        // Default gravity
-        CySpringController.GravityRate = 5.0f;
-        
-        // Reduce drag so hair flows more freely (default is 1.6)
-        CySpringController.DragForceRate = 1.0f;
-        
-        // Default collision
+
+        // katboi restore: the rewrite now simulates BODY-only (drives the skirt).
+        // Stiffer body spring + force-disable hip-motion impulse => less flowy,
+        // less skirt rise on spins.
+        _cySpringController.SetStiffnessRate(CySpringController.Parts.Body, 1.6f);
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.55f);
         try
         {
-            _cySpringController.SetScale(CySpringController.Parts.Head, 1.5f);
-            _cySpringController.SetScale(CySpringController.Parts.Body, 1.0f);
-            _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);
+            _cySpringController.SetForceDisableHipMoveParam(true);
         }
-        catch (System.Exception e)
+        catch (System.Exception)
         {
-            Debug.LogWarning($"[UmaContainerCharacter] Failed to set collision scale: {e.Message}");
+            // optional knob; not fatal if a given body lacks the hip-param flag
         }
         
-        foreach (var db in GetComponentsInChildren<DynamicBone>(true)) db.enabled = false;
+        // Disable non-katboi DynamicBone only. The katboi driver-managed hair/tail DynamicBone
+        // (created above via slots.head/tail.InitializePhysics) must stay ENABLED — the old
+        // blanket `db.enabled = false` is what suppressed katboi's working hair in this fork.
+        {
+            var managed = new HashSet<DynamicBone>();
+            if (cySpringDataContainers != null)
+                foreach (var c in cySpringDataContainers)
+                    if (c != null && c.DynamicBones != null)
+                        managed.UnionWith(c.DynamicBones);
+            foreach (var db in GetComponentsInChildren<DynamicBone>(true))
+                if (db != null && !managed.Contains(db))
+                    db.enabled = false;
+        }
         _cySpringLoaded = true;
 
         LinkSkirtControllerToCySpring();
@@ -1029,6 +1037,11 @@ public class UmaContainerCharacter : UmaContainer
             if (isOn)
                 _cySpringController.Reset();
         }
+
+        if (cySpringDataContainers != null)
+            foreach (var c in cySpringDataContainers)
+                if (c != null)
+                    c.EnablePhysics(isOn);
     }
 
     public void ConfigureLivePhysics()
