@@ -86,7 +86,10 @@ public class UmaContainerCharacter : UmaContainer
     public bool FlipFaceForward = false;
 
     private Material[] _faceMaterials;
+    private MaterialPropertyBlock _faceMPB;
+    private bool[] _faceMaterialIsToonFace;
     private bool _faceLightInitialized;
+    private Camera _cachedMainCamera;
 
     private static readonly int ID_FaceCenterPos = Shader.PropertyToID("_FaceCenterPos");
     private static readonly int ID_FaceUp = Shader.PropertyToID("_FaceUp");
@@ -258,7 +261,7 @@ public class UmaContainerCharacter : UmaContainer
 
         if (FaceRenderer != null)
         {
-            _faceMaterials = FaceRenderer.materials;
+            _faceMaterials = FaceRenderer.sharedMaterials;
 
             foreach (var mat in _faceMaterials)
             {
@@ -527,6 +530,28 @@ public class UmaContainerCharacter : UmaContainer
         );
 
         _cySpringController.Reset();
+        
+        // Natural physics feel (soft, flowing hair/skirt)
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.75f);  // Hair
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.9f);   // Skirt
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Tail, 0.85f);  // Tail
+        _cySpringController.AdditionalWindTimeScale = 0.5f;  // Natural wind
+        
+        // FIX CLIPPING: Increase collision scale to prevent penetration
+        // This makes collision spheres bigger so hair/skirt don't go through body
+        // while keeping the physics soft and flowing
+        try
+        {
+            _cySpringController.SetScale(CySpringController.Parts.Head, 1.8f);   // Much bigger head collisions
+            _cySpringController.SetScale(CySpringController.Parts.Body, 1.8f);   // Much bigger body collisions
+            _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);   // Much bigger tail collisions
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[UmaContainerCharacter] Failed to set collision scale: {e.Message}");
+        }
+        
+        foreach (var db in GetComponentsInChildren<DynamicBone>(true)) db.enabled = false;
         _cySpringLoaded = true;
 
         LinkSkirtControllerToCySpring();
@@ -995,7 +1020,17 @@ public class UmaContainerCharacter : UmaContainer
     {
         if (EnablePhysics && _cySpringLoaded && _cySpringController != null)
         {
-            _cySpringController.BeginSimulation(Time.deltaTime, false);
+            float dt = Mathf.Clamp(Time.deltaTime, 0f, 1f / 30f);
+            // ensure single driver: disable auto-update on controller/updater
+            var fi = typeof(Gallop.CySpringController).GetField("_autoUpdateInLateUpdate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (fi != null) fi.SetValue(_cySpringController, false);
+            var updater = _cySpringController.GetComponent<Gallop.CySpringUpdater>();
+            if (updater != null)
+            {
+                var fi2 = typeof(Gallop.CySpringUpdater).GetField("_autoUpdateInLateUpdate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (fi2 != null) fi2.SetValue(updater, false);
+            }
+            _cySpringController.BeginSimulation(dt, false);
         }
     }
 
@@ -1023,22 +1058,17 @@ public class UmaContainerCharacter : UmaContainer
 
         if (FaceRenderer != null)
         {
-            _faceMaterials = FaceRenderer.materials;
-
-            FaceMaterial = null;
-            foreach (var mat in _faceMaterials)
+            _faceMaterials = FaceRenderer.sharedMaterials;
+            _faceMaterialIsToonFace = new bool[_faceMaterials.Length];
+            for (int i = 0; i < _faceMaterials.Length; i++)
             {
-                if (mat == null || mat.shader == null)
-                    continue;
-
+                var mat = _faceMaterials[i];
+                if (mat == null || mat.shader == null) { _faceMaterialIsToonFace[i] = false; continue; }
                 string matName = mat.name.ToLower();
                 string shaderName = mat.shader.name;
-
-                if (shaderName.Contains("ToonFace") || matName.Contains("face"))
-                {
-                    FaceMaterial = mat;
-                    break;
-                }
+                bool isToon = shaderName.Contains("ToonFace") || matName.Contains("face");
+                _faceMaterialIsToonFace[i] = isToon;
+                if (isToon && FaceMaterial == null) FaceMaterial = mat;
             }
         }
 
@@ -1087,7 +1117,16 @@ public class UmaContainerCharacter : UmaContainer
             return;
 
         if (_faceMaterials == null || _faceMaterials.Length == 0)
-            _faceMaterials = FaceRenderer.materials;
+        {
+            _faceMaterials = FaceRenderer.sharedMaterials;
+            _faceMaterialIsToonFace = new bool[_faceMaterials.Length];
+            for (int i = 0; i < _faceMaterials.Length; i++)
+            {
+                var mat = _faceMaterials[i];
+                if (mat == null || mat.shader == null) { _faceMaterialIsToonFace[i] = false; continue; }
+                _faceMaterialIsToonFace[i] = mat.shader.name.Contains("ToonFace") || mat.name.ToLower().Contains("face");
+            }
+        }
 
         Vector3 pos = HeadToonBaseTransform.position;
         Vector3 up = HeadToonBaseTransform.up.normalized;
@@ -1103,22 +1142,20 @@ public class UmaContainerCharacter : UmaContainer
 
         Matrix4x4 headMat = HeadToonBaseTransform.worldToLocalMatrix;
 
-        foreach (var mat in _faceMaterials)
+        bool hasAnyToon = false;
+        for (int i = 0; i < _faceMaterials.Length; i++)
         {
-            if (mat == null || mat.shader == null)
-                continue;
-
-            string matName = mat.name.ToLower();
-            string shaderName = mat.shader.name;
-
-            if (!shaderName.Contains("ToonFace") && !matName.Contains("face"))
-                continue;
-
-            mat.SetVector(ID_FaceCenterPos, faceCenter);
-            mat.SetVector(ID_FaceUp, up);
-            mat.SetVector(ID_FaceForward, forward);
-            mat.SetMatrix(ID_FaceShadowHeadMat, headMat);
+            bool isToon = _faceMaterialIsToonFace != null && i < _faceMaterialIsToonFace.Length ? _faceMaterialIsToonFace[i] : true;
+            if (isToon) { hasAnyToon = true; break; }
         }
+        if (!hasAnyToon) return;
+        if (_faceMPB == null) _faceMPB = new MaterialPropertyBlock();
+        FaceRenderer.GetPropertyBlock(_faceMPB);
+        _faceMPB.SetVector(ID_FaceCenterPos, faceCenter);
+        _faceMPB.SetVector(ID_FaceUp, up);
+        _faceMPB.SetVector(ID_FaceForward, forward);
+        _faceMPB.SetMatrix(ID_FaceShadowHeadMat, headMat);
+        FaceRenderer.SetPropertyBlock(_faceMPB);
     }
 
     private static Transform FindTransformByName(Transform root, string name)
@@ -1164,8 +1201,9 @@ public class UmaContainerCharacter : UmaContainer
             var finalRotation = FaceDrivenKeyTarget.GetEyeTrackRotation(TrackTarget.transform.position);
             FaceDrivenKeyTarget.SetEyeTrack(finalRotation);
 
-            var cam = Camera.main;
-            //LookAt Camera
+            if (_cachedMainCamera == null) _cachedMainCamera = Camera.main;
+            var cam = _cachedMainCamera;
+            if (cam == null) return;
             TrackTarget.position = Vector3.Lerp(TrackTarget.position, cam.transform.position, Time.fixedDeltaTime * 3);
         }
         else
@@ -1183,7 +1221,7 @@ public class UmaContainerCharacter : UmaContainer
 
         
 
-        TearControllers.ForEach(a => a.UpdateOffset());
+        for (int i = 0; i < TearControllers.Count; i++) TearControllers[i].UpdateOffset();
 
         //Apply UV Animation
 

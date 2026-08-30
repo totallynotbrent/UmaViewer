@@ -57,6 +57,15 @@ public class UmaViewerAudio
             this.pan = pan;
             activeSource.panStereo = pan;
         }
+
+        public void SetPitch(float pitch)
+        {
+            foreach (var source in sourceList)
+            {
+                if (source != null)
+                    source.pitch = pitch;
+            }
+        }
     }
 
     static public UmaSoundInfo getSoundPath(string name)
@@ -111,6 +120,12 @@ public class UmaViewerAudio
         {
             source.Stop();
         }
+    }
+
+    public static void SetPitch(CuteAudioSource sourceList, float pitch)
+    {
+        if (sourceList == null) return;
+        sourceList.SetPitch(pitch);
     }
 
     public static void SetTime(CuteAudioSource sourceList, float time)

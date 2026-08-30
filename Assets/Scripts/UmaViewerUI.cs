@@ -162,9 +162,13 @@ public class UmaViewerUI : MonoBehaviour
 
     private void OnDestroy()
     {
-        UmaAssetManager.OnLoadedBundleUpdate -= AssetSettings.LoadedAssetsAdd;
-        UmaAssetManager.OnLoadedBundleRemove -= AssetSettings.LoadedAssetsRemove;
-        UmaAssetManager.OnLoadedBundleClear -= AssetSettings.LoadedAssetsClear;
+        try
+        {
+            UmaAssetManager.OnLoadedBundleUpdate -= AssetSettings.LoadedAssetsAdd;
+            UmaAssetManager.OnLoadedBundleRemove -= AssetSettings.LoadedAssetsRemove;
+            UmaAssetManager.OnLoadedBundleClear -= AssetSettings.LoadedAssetsClear;
+        }
+        catch { }
     }
 
     private void Update()
