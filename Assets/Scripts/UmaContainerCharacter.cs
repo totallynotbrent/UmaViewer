@@ -498,7 +498,21 @@ public class UmaContainerCharacter : UmaContainer
         }
 
         var slots = SplitCySpringContainers(cySpringDataContainers);
-
+        
+        // Debug: Log container classification
+        Debug.Log($"[UmaContainerCharacter] Physics containers: {cySpringDataContainers.Count}");
+        for (int i = 0; i < cySpringDataContainers.Count; i++)
+        {
+            var container = cySpringDataContainers[i];
+            if (container != null)
+            {
+                string path = GetTransformPath(container.transform);
+                int kind = GuessCySpringContainerKind(container);
+                string kindName = kind == 0 ? "HEAD" : kind == 1 ? "BODY" : kind == 2 ? "BUST" : "TAIL";
+                Debug.Log($"  [{i}] {container.name} -> path={path} -> kind={kindName}");
+            }
+        }
+        Debug.Log($"[UmaContainerCharacter] Slots: head={slots.head?.name}, body={slots.body?.name}, bust={slots.bust?.name}, tail={slots.tail?.name}");
 
         _cySpringOwner = new UmaViewerCySpringOwner(this);
         _cySpringController = CySpringController.AddController(gameObject, hip, _cySpringOwner);
@@ -531,21 +545,25 @@ public class UmaContainerCharacter : UmaContainer
 
         _cySpringController.Reset();
         
-        // Soft, flowing physics with more gravity to prevent ride-up
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.6f);   // Hair (soft)
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.7f);   // Skirt (soft)
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Tail, 0.65f);  // Tail (soft)
-        _cySpringController.AdditionalWindTimeScale = 0.4f;  // Less wind
+        // Set default physics - CySpringForceLoose will override these
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.4f);
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.7f);
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Tail, 0.5f);
+        _cySpringController.AdditionalWindTimeScale = 0.4f;
         
-        // INCREASE GRAVITY: Skirts fall down instead of riding up
-        CySpringController.GravityRate = 2.0f;  // Higher than default 1.4f
+        // Set hair stiffness to very low value - this controls _stiffnessForceRate
+        // which is passed directly to the native plugin
+        _cySpringController.SetStiffnessRate(CySpringController.Parts.Head, 0.01f);
         
-        // FIX CLIPPING: Increase collision scale to prevent penetration
+        // Default gravity
+        CySpringController.GravityRate = 5.0f;
+        
+        // Default collision
         try
         {
-            _cySpringController.SetScale(CySpringController.Parts.Head, 1.8f);   // Bigger head collisions
-            _cySpringController.SetScale(CySpringController.Parts.Body, 1.8f);   // Bigger body collisions
-            _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);   // Bigger tail collisions
+            _cySpringController.SetScale(CySpringController.Parts.Head, 1.2f);
+            _cySpringController.SetScale(CySpringController.Parts.Body, 1.0f);
+            _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);
         }
         catch (System.Exception e)
         {
@@ -869,19 +887,42 @@ public class UmaContainerCharacter : UmaContainer
             return 1;
 
         string path = GetTransformPath(container.transform).ToLowerInvariant();
+        string name = container.name.ToLowerInvariant();
 
+        // CHECK NAME FIRST - this is more reliable than path
+        // Body containers: pfb_bdy*
+        if (name.StartsWith("pfb_bdy") || name.Contains("_bdy"))
+            return 1;  // BODY
+
+        // Bust containers: pfb_bdy*bust*
+        if (name.Contains("bust") || name.Contains("breast") || name.Contains("mune"))
+            return 2;  // BUST
+
+        // Tail containers: pfb_tail*
+        if (name.StartsWith("pfb_tail") || name.Contains("_tail"))
+            return 3;  // TAIL
+
+        // Head containers: pfb_chr* (not bdy)
+        if (name.StartsWith("pfb_chr") && !name.Contains("bdy"))
+            return 0;  // HEAD
+
+        // Check path for tail
         if (path.Contains("tail"))
             return 3;
 
+        // Check path for bust
         if (path.Contains("bust") || path.Contains("breast") || path.Contains("mune"))
             return 2;
 
+        // Check path for head/hair
         if (path.Contains("head") || path.Contains("hair") || path.Contains("ear"))
             return 0;
 
+        // Check path for body/cloth
         if (path.Contains("body") || path.Contains("cloth") || path.Contains("skirt"))
             return 1;
 
+        // Check bone names as fallback
         if (container.springParam != null)
         {
             for (int i = 0; i < container.springParam.Count; i++)
