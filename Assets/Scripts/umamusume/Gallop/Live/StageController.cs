@@ -155,7 +155,7 @@ namespace Gallop.Live
             AutoAddDriver("StageProjectorDriver");
             AutoAddDriver("StageConfettiDriver");
             AutoAddDriver("StageLedDriver");
-            AutoAddDriver("StagePropsDriver");
+            // AutoAddDriver("StagePropsDriver"); // SUPERSEDED by Director->LivePropsEvaluator
             AutoAddDriver("StageBillboardCleanup");
             //AutoAddDriver("StageHideBillboards");
             AutoAddDriver("StageHideWhiteRectangles");
