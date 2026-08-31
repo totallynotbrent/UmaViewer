@@ -1035,6 +1035,9 @@ namespace Gallop.Live
                         .AddComponent<GallopImageEffect>();
             }
 
+            // Post-FX only runs if the camera renders post-processing.
+            mainCamera.renderPostProcessing = true;
+
             return _mainGallopImageEffect;
         }
         private void OnUpdatePostEffect_BloomDiffusion(PostEffectUpdateInfo_BloomDiffusion updateInfo)
