@@ -20,6 +20,7 @@ namespace Gallop
                 new DofDiffusionBloomOverlayParam();
 
         private Bloom _bloom;
+        private ColorAdjustments _colorAdjust;
 
         public DofDiffusionBloomOverlayParam
             DofDiffusionBloomOverlayParam
@@ -66,11 +67,14 @@ namespace Gallop
 
             if (!_runtimeProfile.TryGet(out _bloom))
                 _bloom = _runtimeProfile.Add<Bloom>(true);
+
+            if (!_runtimeProfile.TryGet(out _colorAdjust))
+                _colorAdjust = _runtimeProfile.Add<ColorAdjustments>(true);
         }
 
         public void ApplyBloomParameter()
         {
-            if (_bloom == null)
+            if (_bloom == null || _colorAdjust == null)
                 InitializeVolume();
 
             if (_bloom == null)
@@ -97,7 +101,31 @@ namespace Gallop
              * URP scatter 范围通常是 0~1。
              * 这是渲染后端适配，不是 Timeline 算法改动。
              */
-            _bloom.scatter.value = Mathf.Clamp01(param.BloomBlurSize / 10f);
+            _bloom.scatter.value =
+                Mathf.Clamp01(param.BloomBlurSize / 10f);
+
+            if (_colorAdjust != null)
+            {
+                _colorAdjust.saturation.overrideState = true;
+                _colorAdjust.contrast.overrideState = true;
+                _colorAdjust.postExposure.overrideState = true;
+
+                _colorAdjust.saturation.value =
+                    Mathf.Clamp(param.DiffusionSaturation, -100f, 100f);
+                _colorAdjust.contrast.value =
+                    Mathf.Clamp(param.DiffusionContrast, -100f, 100f);
+                _colorAdjust.postExposure.value =
+                    Mathf.Clamp(param.DiffusionBright - 1f, -1f, 1f);
+            }
+
+            if (param.IsEnableDiffusion)
+            {
+                _bloom.active = true;
+                _bloom.threshold.value =
+                    Mathf.Max(0f, Mathf.Min(_bloom.threshold.value, param.DiffusionThreshold * 0.5f));
+                _bloom.scatter.value =
+                    Mathf.Clamp01(Mathf.Max(_bloom.scatter.value, Mathf.Clamp01(param.DiffusionBlurSize / 10f)));
+            }
         }
     }
 }
