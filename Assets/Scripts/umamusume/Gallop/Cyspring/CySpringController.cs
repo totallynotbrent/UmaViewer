@@ -205,6 +205,28 @@ namespace Gallop
             set => _windPowerRate = value;
         }
 
+        /// <summary>
+        /// Set gravity rate globally for all CySpring instances.
+        /// Higher = more gravity (skirts fall down faster).
+        /// Default is 1.4f.
+        /// </summary>
+        public static float GravityRate
+        {
+            get => CySpring._gravityRate;
+            set => CySpring._gravityRate = value;
+        }
+
+        /// <summary>
+        /// Set drag force rate globally for all CySpring instances.
+        /// Higher = more air resistance (hair/skirt moves slower).
+        /// Default is 1.6f.
+        /// </summary>
+        public static float DragForceRate
+        {
+            get => CySpring._dragForceRate;
+            set => CySpring._dragForceRate = value;
+        }
+
         public float[] WindPowerScaleArrayRate
         {
             get => _windPowerScaleArrayRate;
@@ -1476,6 +1498,36 @@ namespace Gallop
                 return;
 
             _springArray[index]?.ApplyEnvCollision(envColArray);
+        }
+
+        /// <summary>
+        /// Get collision runtime data for a specific part.
+        /// Used to share collisions between parts (e.g., body collisions for head).
+        /// </summary>
+        public CySpringCollisionRuntimeData[] GetCollisionRuntimeData(Parts parts)
+        {
+            int index = (int)parts;
+            if (!IsValidPart(index) || _collisionArray == null || _collisionArray[index] == null)
+                return null;
+            
+            return _collisionArray[index].RuntimeDataList?.ToArray();
+        }
+
+        /// <summary>
+        /// Apply collision data from one part to another as environment collisions.
+        /// This allows hair to collide with body collision shapes.
+        /// </summary>
+        public void ShareCollisionToPart(Parts sourcePart, Parts targetPart)
+        {
+            CySpringCollisionRuntimeData[] sourceCollisions = GetCollisionRuntimeData(sourcePart);
+            if (sourceCollisions == null || sourceCollisions.Length == 0)
+                return;
+            
+            int targetIndex = (int)targetPart;
+            if (!IsValidPart(targetIndex) || _springArray == null)
+                return;
+            
+            _springArray[targetIndex]?.ApplyEnvCollision(sourceCollisions);
         }
 
         public void SetEnableEnvCollision(bool enable)

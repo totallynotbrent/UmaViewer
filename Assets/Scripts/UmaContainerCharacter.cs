@@ -498,7 +498,32 @@ public class UmaContainerCharacter : UmaContainer
         }
 
         var slots = SplitCySpringContainers(cySpringDataContainers);
-
+        
+        // Debug: Log container classification and collision data
+        Debug.Log($"[UmaContainerCharacter] Physics containers: {cySpringDataContainers.Count}");
+        for (int i = 0; i < cySpringDataContainers.Count; i++)
+        {
+            var container = cySpringDataContainers[i];
+            if (container != null)
+            {
+                string path = GetTransformPath(container.transform);
+                int kind = GuessCySpringContainerKind(container);
+                string kindName = kind == 0 ? "HEAD" : kind == 1 ? "BODY" : kind == 2 ? "BUST" : "TAIL";
+                
+                // Log collision data count
+                int collisionCount = container.collisionParam != null ? container.collisionParam.Count : 0;
+                int springCount = container.springParam != null ? container.springParam.Count : 0;
+                Debug.Log($"  [{i}] {container.name} -> kind={kindName} collisions={collisionCount} springs={springCount}");
+                
+                // Log collision names
+                if (container.collisionParam != null && container.collisionParam.Count > 0)
+                {
+                    string collisionNames = string.Join(", ", container.collisionParam.Select(c => c != null ? c.CollisionName : "null"));
+                    Debug.Log($"      Collision names: {collisionNames}");
+                }
+            }
+        }
+        Debug.Log($"[UmaContainerCharacter] Slots: head={slots.head?.name}, body={slots.body?.name}, bust={slots.bust?.name}, tail={slots.tail?.name}");
 
         _cySpringOwner = new UmaViewerCySpringOwner(this);
         _cySpringController = CySpringController.AddController(gameObject, hip, _cySpringOwner);
@@ -531,20 +556,32 @@ public class UmaContainerCharacter : UmaContainer
 
         _cySpringController.Reset();
         
-        // Natural physics feel (soft, flowing hair/skirt)
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.75f);  // Hair
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.9f);   // Skirt
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Tail, 0.85f);  // Tail
-        _cySpringController.AdditionalWindTimeScale = 0.5f;  // Natural wind
+        // SHARE BODY COLLISIONS WITH HEAD - this prevents hair from passing through body
+        _cySpringController.ShareCollisionToPart(CySpringController.Parts.Body, CySpringController.Parts.Head);
+        Debug.Log("[UmaContainerCharacter] Shared body collisions with head spring");
         
-        // FIX CLIPPING: Increase collision scale to prevent penetration
-        // This makes collision spheres bigger so hair/skirt don't go through body
-        // while keeping the physics soft and flowing
+        // Set default physics - CySpringForceLoose will override these
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Head, 0.4f);
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.7f);
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Tail, 0.5f);
+        _cySpringController.AdditionalWindTimeScale = 0.4f;
+        
+        // Set hair stiffness to very low value - this controls _stiffnessForceRate
+        // which is passed directly to the native plugin
+        _cySpringController.SetStiffnessRate(CySpringController.Parts.Head, 0.15f);
+        
+        // Default gravity
+        CySpringController.GravityRate = 5.0f;
+        
+        // Reduce drag so hair flows more freely (default is 1.6)
+        CySpringController.DragForceRate = 1.0f;
+        
+        // Default collision
         try
         {
-            _cySpringController.SetScale(CySpringController.Parts.Head, 1.8f);   // Much bigger head collisions
-            _cySpringController.SetScale(CySpringController.Parts.Body, 1.8f);   // Much bigger body collisions
-            _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);   // Much bigger tail collisions
+            _cySpringController.SetScale(CySpringController.Parts.Head, 1.5f);
+            _cySpringController.SetScale(CySpringController.Parts.Body, 1.0f);
+            _cySpringController.SetScale(CySpringController.Parts.Tail, 1.5f);
         }
         catch (System.Exception e)
         {
@@ -868,19 +905,42 @@ public class UmaContainerCharacter : UmaContainer
             return 1;
 
         string path = GetTransformPath(container.transform).ToLowerInvariant();
+        string name = container.name.ToLowerInvariant();
 
+        // CHECK NAME FIRST - this is more reliable than path
+        // Body containers: pfb_bdy*
+        if (name.StartsWith("pfb_bdy") || name.Contains("_bdy"))
+            return 1;  // BODY
+
+        // Bust containers: pfb_bdy*bust*
+        if (name.Contains("bust") || name.Contains("breast") || name.Contains("mune"))
+            return 2;  // BUST
+
+        // Tail containers: pfb_tail*
+        if (name.StartsWith("pfb_tail") || name.Contains("_tail"))
+            return 3;  // TAIL
+
+        // Head containers: pfb_chr* (not bdy)
+        if (name.StartsWith("pfb_chr") && !name.Contains("bdy"))
+            return 0;  // HEAD
+
+        // Check path for tail
         if (path.Contains("tail"))
             return 3;
 
+        // Check path for bust
         if (path.Contains("bust") || path.Contains("breast") || path.Contains("mune"))
             return 2;
 
+        // Check path for head/hair
         if (path.Contains("head") || path.Contains("hair") || path.Contains("ear"))
             return 0;
 
+        // Check path for body/cloth
         if (path.Contains("body") || path.Contains("cloth") || path.Contains("skirt"))
             return 1;
 
+        // Check bone names as fallback
         if (container.springParam != null)
         {
             for (int i = 0; i < container.springParam.Count; i++)

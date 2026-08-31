@@ -19,8 +19,8 @@ namespace Gallop
         public const int CHARA_COLLISION_MAX_NUM = 10;
         private const int ENV_COLLISION_MAX_NUM = 3;
 
-        private static float _dragForceRate = 1.6f;
-        private static float _gravityRate = 1.4f;
+        internal static float _dragForceRate = 1.6f;
+        internal static float _gravityRate = 1.4f;  // Made internal for CySpringController access
 
         private float _stiffnessForceRate = 1.0f;
 
@@ -598,11 +598,11 @@ namespace Gallop
             // Gallop.Math.IsFloatEqualLight(deltaTime, 0.0f)
             _isDeltaTimeZero = Gallop.Math.IsFloatEqualLight(deltaTime, 0.0f);
 
-            // 只有 flag == true 时才更新 Native Collision Env
-            if (isUpdateScale)
-            {
-                UpdateEnvNativeCollisions();
-            }
+            // Update ALL collision positions every frame (character + env)
+            // Without this, collision shapes stay at their initial positions
+            // and hair/skirt pass through the body.
+            UpdateNativeCollision(legacyScale);
+            UpdateEnvNativeCollisions();
 
             NativeRootParentWork[] parentArray = _rootParentWork != null ? _rootParentWork.NativeParentWorkArray : null;
 
