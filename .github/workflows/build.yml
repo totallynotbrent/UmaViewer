@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - "prerelease/*"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -102,4 +104,23 @@ jobs:
             "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
             --target "$GITHUB_SHA" \
             --title "UmaViewer $RELEASE_TAG" \
+            --generate-notes
+
+      - name: Publish GitHub Pre-release (prerelease/* branch)
+        if: startsWith(github.ref, 'refs/heads/prerelease/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH_SUFFIX="${{ github.ref_name }}"
+          # prerelease/cyspring-hair-fix -> cyspring-hair-fix
+          TAG="pre-${BRANCH_SUFFIX##*/}"
+          ZIP="UmaViewer-Windows-x64.zip"
+          # delete any prior rolling prerelease for this tag so assets don't accumulate
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            "$ZIP#UmaViewer prerelease ($BRANCH_SUFFIX)" \
+            --target "$GITHUB_SHA" \
+            --title "UmaViewer pre ($BRANCH_SUFFIX)" \
+            --prerelease \
             --generate-notes
