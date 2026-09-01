@@ -918,17 +918,17 @@ namespace Gallop.Live
                     }
                     if (targetType == typeof(int))
                     {
-                        converted[i] = Convert.ToInt32(value, System.Globalization.CultureInfo.InvariantCulture);
+                        converted[i] = Convert.ToInt32(value);
                         continue;
                     }
                     if (targetType == typeof(float))
                     {
-                        converted[i] = Convert.ToSingle(value, System.Globalization.CultureInfo.InvariantCulture);
+                        converted[i] = Convert.ToSingle(value);
                         continue;
                     }
                     if (targetType.IsEnum)
                     {
-                        converted[i] = Enum.ToObject(targetType, Convert.ToInt32(value, System.Globalization.CultureInfo.InvariantCulture));
+                        converted[i] = Enum.ToObject(targetType, Convert.ToInt32(value));
                         continue;
                     }
                 }
@@ -1029,10 +1029,10 @@ namespace Gallop.Live
                 return Convert.ToBoolean(value);
 
             if (targetType == typeof(int))
-                return Convert.ToInt32(value, System.Globalization.CultureInfo.InvariantCulture);
+                return Convert.ToInt32(value);
 
             if (targetType == typeof(float))
-                return Convert.ToSingle(value, System.Globalization.CultureInfo.InvariantCulture);
+                return Convert.ToSingle(value);
 
             return value;
         }
