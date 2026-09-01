@@ -437,6 +437,8 @@ namespace Gallop.Live.Cutt
         [SerializeField]
         public LiveTimelineKeyPostEffectBloomDiffusionDataList postEffectBloomDiffusionKeys;
         [SerializeField]
+        public LiveTimelineKeyPostFilmDataList postFilmKeys;
+        [SerializeField]
         public List<LiveTimelineHdrBloomData> hdrBloomList;
 
         [SerializeField] public List<LiveTimelineCharaMotSeqData> charaMotSeqList;

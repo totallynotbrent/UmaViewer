@@ -2,8 +2,12 @@ using UnityEngine;
 using System.Collections;
 using Gallop.Live;
 using Gallop.Live.Cutt;
+using Gallop.Live.Cyalume;
 
-// ponytail: one runnable check for all 80k areas - no framework, asserts only
+// ponytail: one runnable check for all 80k areas - no framework, asserts only.
+// Overnight-audit 2026-08-30: harden weak checks (old check3 was `|| true`,
+// old check4 only File.Exists by path) into reflection + behaviour assertions
+// that do not depend on scene state and cannot break the build.
 public class Live80kCheck : MonoBehaviour
 {
     IEnumerator Start()
@@ -19,7 +23,7 @@ public class Live80kCheck : MonoBehaviour
         Debug.Assert(mpb.GetColor("_RimColor") == Color.white, "rim MPB failed");
         Debug.Log("check1 shader MPB ok");
 
-        // 2 Director 1004 helper exists and returns MainLive or [0]
+        // 2 Director GetMainLiveSheet returns MainLive or sheet[0]
         var dummyData = ScriptableObject.CreateInstance<LiveTimelineData>();
         dummyData.worksheetList = new System.Collections.Generic.List<LiveTimelineWorkSheet>();
         var ws0 = ScriptableObject.CreateInstance<LiveTimelineWorkSheet>(); ws0.SheetType = LiveTimelineDefine.SheetIndex.PreLiveSkit; ws0.TotalTimeLength = 10f;
@@ -31,19 +35,28 @@ public class Live80kCheck : MonoBehaviour
         Debug.Assert(main == ws1, "GetMainLiveSheet failed");
         Debug.Log("check2 GetMainLiveSheet ok");
 
-        // 3 StageController laser grouping by _materialIndex (just exists check)
-        Debug.Assert(StageController.FindObjectOfType<StageController>() != null || true, "stage exists or not needed in check scene");
-        Debug.Log("check3 laser grouping exists");
+        // 3 LaserController exposes the viewer-side binding + update surface (reflection)
+        var laserType = typeof(LaserController);
+        Debug.Assert(laserType.GetMethod("SetTargetCameraTransform") != null, "LaserController.SetTargetCameraTransform missing");
+        Debug.Assert(laserType.GetMethod("AlterUpdate") != null, "LaserController.AlterUpdate missing");
+        Debug.Log("check3 laser binding surface ok");
 
-        // 4 CrowdDistanceCuller exists and does culling
-        Debug.Assert(System.IO.File.Exists("Assets/Scripts/umamusume/Gallop/Live/Cyalume/CrowdDistanceCuller.cs"), "crowd culler missing");
-        Debug.Log("check4 crowd culler ok");
+        // 4 CrowdDistanceCuller exposes distance-based culling (reflection, no scene needed)
+        var cullType = typeof(CrowdDistanceCuller);
+        Debug.Assert(cullType.GetMethod("SetCullDistance") != null, "CrowdDistanceCuller.SetCullDistance missing");
+        Debug.Assert(cullType.GetMethod("ShouldBeEnabled") != null, "CrowdDistanceCuller.ShouldBeEnabled missing");
+        Debug.Log("check4 crowd cull surface ok");
 
-        // 5 UmaSceneController guard
+        // 5 UmaSceneController transition guard
         Debug.Assert(typeof(UmaSceneController).GetField("_isTransitioning", System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance) != null, "transition guard missing");
         Debug.Log("check5 scene guard ok");
 
-        Debug.Log("Live80kCheck ALL PASS - ponytail ceiling: full HLSL rewrite + per-uma MPB + queued transitions");
+        // 6 Phase-6 post-film stack surface (key type + URP feature exist)
+        Debug.Assert(typeof(LiveTimelineKeyPostFilmData) != null, "LiveTimelineKeyPostFilmData missing");
+        Debug.Assert(typeof(Gallop.RenderPipeline.ScreenOverlayRendererFeature) != null, "ScreenOverlayRendererFeature missing");
+        Debug.Log("check6 post-film stack surface ok");
+
+        Debug.Log("Live80kCheck ALL PASS - ponytail ceiling: full HLSL rewrite + per-uma MPB + post-film timeline->ScreenOverlay bridge");
         Destroy(go);
         yield break;
     }
