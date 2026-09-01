@@ -80,12 +80,9 @@ jobs:
           buildsPath: build
 
       - name: Package Windows build
-        shell: pwsh
-        run: >-
-          Compress-Archive
-          -Path "build/StandaloneWindows64/*"
-          -DestinationPath "UmaViewer-Windows-x64.zip"
-          -CompressionLevel Optimal
+        shell: bash
+        run: |
+          cd build/StandaloneWindows64 && zip -r ../../"UmaViewer-Windows-x64.zip" .
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
