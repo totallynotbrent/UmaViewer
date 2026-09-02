@@ -58,8 +58,6 @@ namespace Gallop.Live
         public bool _syncTime = false;
         public bool _soloMode = false;
 
-        private float _playbackSpeed = 1f;
-
         public int characterCount = 0;
         public int allowCount = 0;
 
@@ -513,19 +511,6 @@ namespace Gallop.Live
             liveMusic = UmaViewerAudio.ApplySound(string.Format(SONG_PATH, songid), -1);
         }
 
-        public void SetPlaybackSpeed(float speed)
-        {
-            _playbackSpeed = Mathf.Clamp(speed, -2f, 2f);
-            // Sync audio pitch with playback speed (use absolute value for audio pitch)
-            float audioPitch = Mathf.Abs(_playbackSpeed);
-            if (liveMusic != null)
-                UmaViewerAudio.SetPitch(liveMusic, audioPitch);
-            foreach (var vocal in liveVocal)
-                UmaViewerAudio.SetPitch(vocal, audioPitch);
-        }
-
-        public float GetPlaybackSpeed() => _playbackSpeed;
-
         public void Play()
         {
 
@@ -583,8 +568,7 @@ namespace Gallop.Live
                 _lateTimelineAppliedThisFrame = false;
 
                 if ((!UmaViewerMain.TryConsumeEscapeForFullScreen() && Input.GetKeyDown(KeyCode.Escape)) ||
-                    (_playbackSpeed >= 0f && _liveCurrentTime >= totalTime) ||
-                    (_playbackSpeed < 0f && _liveCurrentTime <= 0f))
+                    _liveCurrentTime >= totalTime)
                 {
                     ExitLive();
                 }
@@ -667,7 +651,7 @@ namespace Gallop.Live
                     }
                     else
                     {
-                        _liveCurrentTime += Time.deltaTime * _playbackSpeed;
+                        _liveCurrentTime += Time.deltaTime;
                         _liveCurrentTime = Mathf.Clamp(_liveCurrentTime, 0f, Mathf.Max(0f, totalTime - 0.001f));
                         UI.ProgressBar.SetValueWithoutNotify(_liveCurrentTime / totalTime);
                         OnTimelineUpdate(_liveCurrentTime);
@@ -1100,9 +1084,9 @@ namespace Gallop.Live
             if (updateInfo.enable)
             {
                 param.BloomIntensity =
-                    Mathf.Max(param.BloomIntensity, updateInfo.intensity);
+                    Mathf.Min(6f, Mathf.Max(param.BloomIntensity, updateInfo.intensity * 0.7f));
                 param.BloomBlurSize =
-                    Mathf.Max(param.BloomBlurSize, Mathf.Clamp(updateInfo.blurSpread * 2f, 0f, 10f));
+                    Mathf.Max(param.BloomBlurSize, Mathf.Clamp(updateInfo.blurSpread * 1.5f, 0f, 8f));
                 param.IsEnableBloom = true;
             }
         }
