@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using Gallop.ImageEffect;
 
 namespace Gallop.Live
@@ -1037,7 +1038,7 @@ namespace Gallop.Live
             }
 
             // Post-FX only runs if the camera renders post-processing.
-            mainCamera.renderPostProcessing = true;
+            mainCamera.GetUniversalAdditionalCameraData().renderPostProcessing = true;
 
             return _mainGallopImageEffect;
         }
