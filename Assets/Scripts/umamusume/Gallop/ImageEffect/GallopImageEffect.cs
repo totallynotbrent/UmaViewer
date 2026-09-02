@@ -21,6 +21,7 @@ namespace Gallop
 
         private Bloom _bloom;
         private ColorAdjustments _colorAdjust;
+        private Tonemapping _tonemapping;
 
         public DofDiffusionBloomOverlayParam
             DofDiffusionBloomOverlayParam
@@ -70,6 +71,12 @@ namespace Gallop
 
             if (!_runtimeProfile.TryGet(out _colorAdjust))
                 _colorAdjust = _runtimeProfile.Add<ColorAdjustments>(true);
+
+            if (!_runtimeProfile.TryGet(out _tonemapping))
+                _tonemapping = _runtimeProfile.Add<Tonemapping>(true);
+
+            _tonemapping.mode.overrideState = true;
+            _tonemapping.mode.value = TonemappingMode.ACES;
         }
 
         public void ApplyBloomParameter()
