@@ -391,6 +391,7 @@ namespace Gallop.Live
                 }
             }
             _liveTimelineControl.OnUpdatePostEffect_BloomDiffusion += OnUpdatePostEffect_BloomDiffusion;
+            _liveTimelineControl.OnUpdateHdrBloom += OnUpdateHdrBloom;
 
 
             _liveTimelineControl.OnUpdateCameraSwitcher += delegate (int cameraIndex_)
@@ -1085,10 +1086,26 @@ namespace Gallop.Live
 
             param.DiffusionContrast =
                 updateInfo.diffusionContrast;
-    //         Debug.Log(
-    // $"[BloomDirector] activeCameraIndex={_activeCameraIndex}, " +
-    // $"imageEffect={(imageEffect != null ? imageEffect.name : "null")}");
         }
+
+        private void OnUpdateHdrBloom(ref HdrBloomUpdateInfo updateInfo)
+        {
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null) return;
+
+            DofDiffusionBloomOverlayParam param =
+                imageEffect.DofDiffusionBloomOverlayParam;
+
+            if (updateInfo.enable)
+            {
+                param.BloomIntensity =
+                    Mathf.Max(param.BloomIntensity, updateInfo.intensity);
+                param.BloomBlurSize =
+                    Mathf.Max(param.BloomBlurSize, Mathf.Clamp(updateInfo.blurSpread * 2f, 0f, 10f));
+                param.IsEnableBloom = true;
+            }
+        }
+
         private void OnDestroy()
         {
             UnbindTimelineEvents();
@@ -1103,6 +1120,9 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdatePostEffect_BloomDiffusion -=
                 OnUpdatePostEffect_BloomDiffusion;
+
+            _liveTimelineControl.OnUpdateHdrBloom -=
+                OnUpdateHdrBloom;
         }
     }
 
