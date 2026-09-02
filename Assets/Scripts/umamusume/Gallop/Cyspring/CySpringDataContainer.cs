@@ -246,5 +246,17 @@ namespace Gallop
                 dynamic.ResetParticlesPosition();
             }
         }
+
+        // Nested type kept for rename-compat: ClothAsset.cs binds cloth slots by Category.
+        // (data-only; not used by the DynamicBone driver above)
+        public enum Category
+        {
+            Invalid = -1,
+            Live = 0,
+            Race = 1,
+            Story = 2,
+            Home = 3,
+            Training = 4
+        }
     }
 }
