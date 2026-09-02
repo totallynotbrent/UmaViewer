@@ -17,16 +17,16 @@ namespace Gallop
     {
         private const string None = "None";
 
-        [SerializeField] private string _collisionName;
-        [SerializeField] private string _targetObjectName;
+        [SerializeField] public string _collisionName;
+        [SerializeField] public string _targetObjectName;
         [SerializeField] private bool _isOtherTarget;
-        [SerializeField] private Vector3 _offset;
-        [SerializeField] private Vector3 _offset2;
-        [SerializeField] private float _radius;
-        [SerializeField] private float _distance;
+        [SerializeField] public Vector3 _offset;
+        [SerializeField] public Vector3 _offset2;
+        [SerializeField] public float _radius;
+        [SerializeField] public float _distance;
         [SerializeField] private Vector3 _normal;
-        [SerializeField] private CollisionType _type;
-        [SerializeField] private bool _isInner;
+        [SerializeField] public CollisionType _type;
+        [SerializeField] public bool _isInner;
 
         private CySpringCollisionRuntimeData _runtimeData;
 
