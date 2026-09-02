@@ -70,3 +70,4 @@ Thumbs.db
 /.memory/
 # ponytail: research + handoff docs now tracked for hermes agent; keep .memory ignored (ephemeral pi sessions, 793K/225 files, re-creatable). To track .memory: `git add -f .memory/`
 .hermes/plans/
+docs/GIT_MODEL.md
