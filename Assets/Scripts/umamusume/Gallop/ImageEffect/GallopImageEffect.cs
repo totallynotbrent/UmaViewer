@@ -48,7 +48,7 @@ namespace Gallop
             if (_volume == null)
                 _volume = gameObject.AddComponent<Volume>();
 
-            _volume.isGlobal = false;
+            _volume.isGlobal = true;
             _volume.priority = 100f;
             _volume.weight = 1f;
 
