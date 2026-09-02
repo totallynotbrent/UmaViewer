@@ -137,6 +137,7 @@ public class UmaDatabaseController
         }
         catch (Exception ex)
         {
+            try { System.IO.File.WriteAllText("/work/UmaViewer/Logs/db_exception.txt", ex.ToString()); } catch { }
             Debug.LogError("Database initialization failed: " + ex);
             CloseAllConnection();
 #if UNITY_ANDROID || UNITY_IOS || UNITY_IPHONE
