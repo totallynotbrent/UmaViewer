@@ -130,8 +130,8 @@ namespace Gallop
                 var dynamic = bone.gameObject.AddComponent<DynamicBone>();
                 dynamic.m_Root = bone;
         
-                // 设置重力
-                dynamic.m_Gravity = new Vector3(0, Mathf.Clamp01(-30f / spring._gravity), 0);
+                // 设置重力 (2x per user: hair shouldn't fly around)
+                dynamic.m_Gravity = new Vector3(0, Mathf.Clamp01(-60f / spring._gravity), 0);
                 dynamic.m_LimitAngel_Min = spring._limitAngleMin;
                 dynamic.m_LimitAngel_Max = spring._limitAngleMax;
         
