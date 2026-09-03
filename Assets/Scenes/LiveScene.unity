@@ -838,7 +838,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 2017920249}
         m_TargetAssemblyTypeName: LiveViewerUI, umamusume
-        m_MethodName: SetFrameRateOrPlaybackSpeed
+        m_MethodName: SetFrameRate
         m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

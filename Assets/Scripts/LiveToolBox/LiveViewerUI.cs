@@ -16,8 +16,6 @@ public class LiveViewerUI : MonoBehaviour
 
     public Dropdown FrameRateDropDown;
 
-    public Dropdown PlaybackSpeedDropDown;
-
     public GameObject RecordingUI;
 
     public Text RecordingText;
@@ -31,7 +29,6 @@ public class LiveViewerUI : MonoBehaviour
     private float _lastPointerActivityTime;
     private bool _pointerWasInsideWindow;
     private const float PointerIdleHideDelay = 2.5f;
-    private static readonly float[] PlaybackSpeeds = { -2f, -1.5f, -1f, -0.75f, -0.5f, -0.25f, 0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f };
 
     private void Awake()
     {
@@ -169,39 +166,6 @@ public class LiveViewerUI : MonoBehaviour
         targetHeight = -height;
     }
 
-    public void SetPlaybackSpeed(int option)
-    {
-        if (Director.instance != null)
-            Director.instance.SetPlaybackSpeed(GetPlaybackSpeedForOption(option));
-    }
-
-    private float GetPlaybackSpeedForOption(int option)
-    {
-        return option >= 0 && option < PlaybackSpeeds.Length ? PlaybackSpeeds[option] : 1f;
-    }
-
-    private void ApplyPlaybackSpeedOptions()
-    {
-        if (FrameRateDropDown == null)
-            return;
-
-        // LiveScene is not the runtime UI shown in the screenshot: the viewer uses
-        // the Canvas prefab. Add speed choices to that actual dropdown at runtime.
-        // The runtime scene uses this same dropdown; populate the actual component.
-        ApplyFrameRateOptions();
-    }
-
-    public void SetFrameRateOrPlaybackSpeed(int option)
-    {
-        if (option >= 4)
-        {
-            SetPlaybackSpeed(option - 4);
-            return;
-        }
-
-        SetFrameRate(option);
-    }
-
     public void SetFrameRate(int fps)
     {
         if (fps == 1) Config.Instance.TargetFrameRate = 30;
@@ -218,16 +182,13 @@ public class LiveViewerUI : MonoBehaviour
         FrameRateDropDown.ClearOptions();
         FrameRateDropDown.AddOptions(new List<string>
         {
-            "60", "30", "Unlimited",
-            "-2x", "-1.5x", "-1x", "-0.75x",
-            "-0.5x", "-0.25x", "+0.25x", "+0.5x",
-            "+0.75x", "+1x", "+1.25x", "+1.5x", "+2x"
+            "60", "30", "Unlimited"
         });
         int frameRate = Config.Instance.GetTargetFrameRate();
         FrameRateDropDown.SetValueWithoutNotify(frameRate == 30 ? 1 : (frameRate == -1 ? 2 : 0));
         FrameRateDropDown.RefreshShownValue();
-        FrameRateDropDown.onValueChanged.RemoveListener(SetFrameRateOrPlaybackSpeed);
-        FrameRateDropDown.onValueChanged.AddListener(SetFrameRateOrPlaybackSpeed);
+        FrameRateDropDown.onValueChanged.RemoveListener(SetFrameRate);
+        FrameRateDropDown.onValueChanged.AddListener(SetFrameRate);
     }
 
     public void UpdateLyrics(float time)
