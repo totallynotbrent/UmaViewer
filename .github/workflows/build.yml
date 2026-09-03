@@ -23,8 +23,10 @@ concurrency:
 jobs:
   build:
     name: Windows x64 IL2CPP
-    # unity-builder@v4 uses a Docker-based Unity image, so it must run on Linux.
-    runs-on: ubuntu-24.04
+    # IL2CPP for Windows requires the windows-il2cpp Unity image, which per GameCI
+    # can only run on a Windows runner (Mono-only builds worked on Linux, but that
+    # is not IL2CPP and could not import the packed CySpringPlugin.dll).
+    runs-on: windows-2022
     timeout-minutes: 120
 
     steps:
@@ -59,6 +61,7 @@ jobs:
             Library-${{ runner.os }}-StandaloneWindows64-
 
       - name: Free disk space (IL2CPP Windows editor image is large)
+        if: runner.os == 'Linux'
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
