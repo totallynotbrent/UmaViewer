@@ -103,11 +103,6 @@ namespace Gallop
 
             _bloom.intensity.value = Mathf.Max(0f, param.BloomIntensity);
 
-            /*
-             * 官方 BloomBlurSize 范围 0~10。
-             * URP scatter 范围通常是 0~1。
-             * 这是渲染后端适配，不是 Timeline 算法改动。
-             */
             _bloom.scatter.value =
                 Mathf.Clamp01(param.BloomBlurSize / 10f);
 
@@ -122,7 +117,7 @@ namespace Gallop
                 _colorAdjust.contrast.value =
                     Mathf.Clamp(param.DiffusionContrast, -100f, 100f);
                 _colorAdjust.postExposure.value =
-                    Mathf.Clamp(param.DiffusionBright - 1f, -1f, 1f);
+                    Mathf.Clamp((param.DiffusionBright - 1f) * 0.35f, -0.35f, 0.35f);
             }
 
             if (param.IsEnableDiffusion)
