@@ -65,6 +65,7 @@ public class MirrorReflection : MonoBehaviour
     [SerializeField, HideInInspector] private Material[] _materials;
     [SerializeField, HideInInspector] private LayerMask _finalRenderLayers = ~0;
     [SerializeField, HideInInspector] private int _objectLayer;
+    private bool _mirrorSkipFrame;
     [SerializeField, HideInInspector] private bool _isInitialized;
     [SerializeField, HideInInspector] private Vector4 _clipPlane;
     [SerializeField, HideInInspector] private Vector4 _initMirrorDistortionPower = DEFAULT_DIST_POWER_VALUE;
@@ -232,6 +233,10 @@ public class MirrorReflection : MonoBehaviour
         }
 
         if (_mirrorCamera == null)
+            return;
+
+        _mirrorSkipFrame = !_mirrorSkipFrame;
+        if (_mirrorSkipFrame)
             return;
 
         ForceRenderOnce();
