@@ -99,9 +99,9 @@ namespace Gallop
             _bloom.intensity.overrideState = true;
             _bloom.scatter.overrideState = true;
 
-            _bloom.threshold.value = Mathf.Max(0.4f, param.BloomThreshold);
+            _bloom.threshold.value = Mathf.Max(0.6f, param.BloomThreshold);
 
-            _bloom.intensity.value = Mathf.Min(9f, Mathf.Max(0f, param.BloomIntensity));
+            _bloom.intensity.value = Mathf.Min(6f, Mathf.Max(0f, param.BloomIntensity));
 
             _bloom.scatter.value =
                 Mathf.Clamp01(param.BloomBlurSize / 10f);
@@ -124,9 +124,9 @@ namespace Gallop
             {
                 _bloom.active = true;
                 _bloom.threshold.value =
-                    Mathf.Max(0.6f, param.DiffusionThreshold * 0.8f);
+                    Mathf.Max(0.8f, param.DiffusionThreshold * 0.9f);
                 _bloom.scatter.value =
-                    Mathf.Clamp01(Mathf.Max(_bloom.scatter.value, Mathf.Clamp01(param.DiffusionBlurSize / 12f)));
+                    Mathf.Clamp01(Mathf.Max(_bloom.scatter.value, Mathf.Clamp01(param.DiffusionBlurSize / 14f)));
             }
         }
     }
