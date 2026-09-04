@@ -556,10 +556,10 @@ public class UmaContainerCharacter : UmaContainer
 
         _cySpringController.LoadFromDataContainers(
             transformCacheDic,
-            null,          // head — hair now driven by katboi DynamicBone, not the rewrite
+            slots.head,
             slots.body,
-            null,          // bust
-            null,          // tail — tail driven by katboi DynamicBone
+            slots.bust,
+            slots.tail,
             null,
             null,
             null,
