@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using UnityEngine.Rendering;
 using Newtonsoft.Json.Linq;
+using System.Runtime.InteropServices;
 
 public class UmaViewerMain : MonoBehaviour
 {
@@ -17,6 +18,9 @@ public class UmaViewerMain : MonoBehaviour
     public static bool WasEscapeConsumedThisFrame { get; private set; }
     private UmaViewerUI UI => UmaViewerUI.Instance;
     private UmaViewerBuilder Builder => UmaViewerBuilder.Instance;
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern bool SetWindowText(IntPtr hwnd, string lpString);
 
     public RenderPipelineAsset DefaultRenderPipeline;
     public List<CharaEntry> Characters = new List<CharaEntry>();
@@ -45,6 +49,31 @@ public class UmaViewerMain : MonoBehaviour
         AbSounds = AbList.Where(ab => ab.Value.Type == UmaFileType.sound).Select(ab => ab.Value).ToList();
         var outgame = AbList.Where(ab => ab.Value.Type == UmaFileType.outgame).Select(ab => ab.Value).ToList();
         CostumeList = outgame.FindAll(e => e.Name.StartsWith(UmaDatabaseController.CostumePath));
+    }
+
+    private void Start()
+    {
+        StartCoroutine(SetWindowTitleRoutine());
+    }
+
+    private IEnumerator SetWindowTitleRoutine()
+    {
+        string title = $"UmaViewer v{Application.version}";
+        for (int i = 0; i < 60; i++)
+        {
+            try
+            {
+                IntPtr hwnd = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    SetWindowText(hwnd, title);
+                }
+            }
+            catch
+            {
+            }
+            yield return new WaitForSeconds(0.1f);
+        }
     }
 
     public static void ApplyFrameRateLimit()
