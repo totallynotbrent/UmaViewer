@@ -81,6 +81,7 @@ jobs:
           targetPlatform: StandaloneWindows64
           buildName: UmaViewer
           buildsPath: build
+          buildMethod: UnityBuilderAction.BuildScript.BuildWindowsIL2CPP
 
       - name: Package Windows build
         shell: pwsh
