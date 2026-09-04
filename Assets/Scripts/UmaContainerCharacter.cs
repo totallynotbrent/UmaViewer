@@ -558,7 +558,7 @@ public class UmaContainerCharacter : UmaContainer
             transformCacheDic,
             null,          // head — hair now driven by katboi DynamicBone, not the rewrite
             slots.body,
-            slots.bust,    // bust — restore working-era slot (c7e44dc); feeds body-scale/collision setup
+            null,          // bust
             null,          // tail — tail driven by katboi DynamicBone
             null,
             null,
