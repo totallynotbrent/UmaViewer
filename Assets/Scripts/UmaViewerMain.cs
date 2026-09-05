@@ -51,11 +51,6 @@ public class UmaViewerMain : MonoBehaviour
         CostumeList = outgame.FindAll(e => e.Name.StartsWith(UmaDatabaseController.CostumePath));
     }
 
-    private void Start()
-    {
-        StartCoroutine(SetWindowTitleRoutine());
-    }
-
     private IEnumerator SetWindowTitleRoutine()
     {
         string title = $"UmaViewer v{Application.version}";
@@ -101,6 +96,7 @@ public class UmaViewerMain : MonoBehaviour
 
     private IEnumerator Start()
     {
+        StartCoroutine(SetWindowTitleRoutine());
         if (AbList == null) yield break;
         int loadingStep = 0;
         int loadingStepsTotal = 10;
