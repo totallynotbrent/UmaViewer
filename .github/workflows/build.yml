@@ -2,8 +2,6 @@ name: Build and release Windows IL2CPP
 
 on:
   push:
-    branches:
-      - master
     tags:
       - "v*"
   workflow_dispatch:
@@ -37,13 +35,10 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
           $missing = @()
-          if ([string]::IsNullOrWhiteSpace($env:UNITY_LICENSE) -and [string]::IsNullOrWhiteSpace($env:UNITY_SERIAL)) {
-            $missing += "UNITY_LICENSE or UNITY_SERIAL"
-          }
           if ([string]::IsNullOrWhiteSpace($env:UNITY_EMAIL)) { $missing += "UNITY_EMAIL" }
           if ([string]::IsNullOrWhiteSpace($env:UNITY_PASSWORD)) { $missing += "UNITY_PASSWORD" }
           if ($missing.Count -gt 0) {
-            Write-Error "Missing repository secrets: $($missing -join ', '). See .github/UNITY_LICENSE_SETUP.md."
+            Write-Error "Missing repository secrets: $($missing -join ', '). Personal license needs only UNITY_EMAIL + UNITY_PASSWORD (serial optional for Plus/Pro). See .github/UNITY_LICENSE_SETUP.md."
             exit 1
           }
 
@@ -61,6 +56,13 @@ jobs:
           restore-keys: |
             Library-${{ runner.os }}-StandaloneWindows64-
 
+      - name: Free disk space (IL2CPP Windows editor image is large)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: true
+          swap-storage: false
+
       - name: Build Windows player with IL2CPP
         uses: game-ci/unity-builder@v4
         env:
@@ -70,37 +72,34 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: .
-          unityVersion: 2022.3.62f3
+          unityVersion: 2022.3.62f2
           targetPlatform: StandaloneWindows64
           buildName: UmaViewer
           buildsPath: build
 
       - name: Package Windows build
-        shell: pwsh
-        run: >-
-          Compress-Archive
-          -Path "build/StandaloneWindows64/*"
-          -DestinationPath "UmaViewer-Windows-x64.zip"
-          -CompressionLevel Optimal
+        shell: bash
+        run: |
+          cd build/StandaloneWindows64 && zip -r ../../"UmaViewer-Windows-x64.zip" .
 
-      - name: Upload workflow artifact
+      - name: Upload workflow artifact (single clean zip of the build)
         uses: actions/upload-artifact@v4
         with:
           name: UmaViewer-Windows-x64
-          path: UmaViewer-Windows-x64.zip
+          path: build/StandaloneWindows64
           if-no-files-found: error
           retention-days: 14
-          compression-level: 0
+          compression-level: 9
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: |
-          gh release create $env:RELEASE_TAG `
-            "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" `
-            --target $env:GITHUB_SHA `
-            --title "UmaViewer $env:RELEASE_TAG" `
+          gh release create "$RELEASE_TAG" \
+            "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
+            --target "$GITHUB_SHA" \
+            --title "UmaViewer $RELEASE_TAG" \
             --generate-notes
