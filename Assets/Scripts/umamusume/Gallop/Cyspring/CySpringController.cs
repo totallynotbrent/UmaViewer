@@ -210,6 +210,18 @@ namespace Gallop
             set => _windPowerScaleArrayRate = value;
         }
 
+        public static float GravityRate
+        {
+            get => CySpring._gravityRate;
+            set => CySpring._gravityRate = value;
+        }
+
+        public static float DragForceRate
+        {
+            get => CySpring._dragForceRate;
+            set => CySpring._dragForceRate = value;
+        }
+
         public CySpringOwner OwnerModelController => _modelController;
         public GameObject OwnerGameObject => _ownerObject;
 
