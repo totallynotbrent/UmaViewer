@@ -144,6 +144,7 @@ namespace Gallop.Live
         private MirrorReflection[] _cachedGlobalMirrorScan;
         private float _cachedGlobalMirrorScanTime;
         private Gallop.Live.Cyalume.CrowdDistanceCuller _stageCrowdCuller;
+        private bool _ambientParticlesScanned;
 
         private void Awake()
         {
@@ -1166,6 +1167,7 @@ namespace Gallop.Live
             }
 
             AutoAttachMirrorReflectionComponents();
+            EnableAmbientParticles();
             // Stage crowd culling - only stand/crowd/audience/mob subset at 80m, keeps distant city visible
             try
             {
@@ -1196,6 +1198,38 @@ namespace Gallop.Live
                 }
             }
             catch { }
+        }
+
+        public void EnableAmbientParticles()
+        {
+            if (_ambientParticlesScanned)
+                return;
+            _ambientParticlesScanned = true;
+
+            var all = GetComponentsInChildren<ParticleSystem>(true);
+            if (all == null || all.Length == 0)
+                return;
+
+            int enabledCount = 0;
+            foreach (var ps in all)
+            {
+                if (ps == null)
+                    continue;
+                if (!ps.gameObject.activeSelf)
+                    continue;
+                if (ps.isPlaying)
+                    continue;
+
+                var emission = ps.emission;
+                if (!emission.enabled)
+                    continue;
+
+                ps.Play();
+                enabledCount++;
+            }
+
+            if (enabledCount > 0)
+                Debug.Log($"[StageController] EnableAmbientParticles: started {enabledCount} stage particle system(s).");
         }
 
         public void UpdateObject(ref ObjectUpdateInfo updateInfo)

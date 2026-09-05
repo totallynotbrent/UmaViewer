@@ -556,10 +556,10 @@ public class UmaContainerCharacter : UmaContainer
 
         _cySpringController.LoadFromDataContainers(
             transformCacheDic,
-            null,          // head — hair now driven by katboi DynamicBone, not the rewrite
+            slots.head,
             slots.body,
-            null,          // bust
-            null,          // tail — tail driven by katboi DynamicBone
+            slots.bust,
+            slots.tail,
             null,
             null,
             null,
@@ -584,20 +584,7 @@ public class UmaContainerCharacter : UmaContainer
         {
             // optional knob; not fatal if a given body lacks the hip-param flag
         }
-        
-        // Disable non-katboi DynamicBone only. The katboi driver-managed hair/tail DynamicBone
-        // (created above via slots.head/tail.InitializePhysics) must stay ENABLED — the old
-        // blanket `db.enabled = false` is what suppressed katboi's working hair in this fork.
-        {
-            var managed = new HashSet<DynamicBone>();
-            if (cySpringDataContainers != null)
-                foreach (var c in cySpringDataContainers)
-                    if (c != null && c.DynamicBones != null)
-                        managed.UnionWith(c.DynamicBones);
-            foreach (var db in GetComponentsInChildren<DynamicBone>(true))
-                if (db != null && !managed.Contains(db))
-                    db.enabled = false;
-        }
+
         _cySpringLoaded = true;
 
         LinkSkirtControllerToCySpring();
@@ -1113,6 +1100,8 @@ public class UmaContainerCharacter : UmaContainer
         if (EnablePhysics && _cySpringLoaded && _cySpringController != null)
         {
             _cySpringController.EndSimulation();
+            if (_skirtController != null)
+                _skirtController.UpdateSkirt();
         }
 
         // 官方 AlterLateUpdatePost 是 EndSimulation 后 UpdateBodyLightDir / UpdateFaceLight。
