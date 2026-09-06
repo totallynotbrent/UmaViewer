@@ -110,7 +110,7 @@ jobs:
             "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
             --target "$GITHUB_SHA" \
             --title "UmaViewer $RELEASE_TAG" \
-            --generate-notes
+            --notes "Windows x64 IL2CPP build. For release notes, see the commit history or docs."
 
       - name: Publish GitHub Pre-release (prerelease/* branch)
         if: startsWith(github.ref, 'refs/heads/prerelease/')
