@@ -101,7 +101,7 @@ namespace Gallop
 
             _bloom.threshold.value = Mathf.Max(0.6f, param.BloomThreshold);
 
-            _bloom.intensity.value = Mathf.Min(6f, Mathf.Max(0f, param.BloomIntensity));
+            _bloom.intensity.value = Mathf.Min(4.5f, Mathf.Max(0f, param.BloomIntensity));
 
             _bloom.scatter.value =
                 Mathf.Clamp01(param.BloomBlurSize / 10f);

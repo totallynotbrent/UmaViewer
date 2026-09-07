@@ -148,6 +148,7 @@ public class UmaViewerUI : MonoBehaviour
         OtherSettings.ApplySettings();
         SetupJukeboxSoundUI();
         CameraSettings.AAModeDropdown.SetValueWithoutNotify(Config.Instance.AntiAliasing);
+        CameraSettings.EnsureRenderScaleDropdown();
         AssetSettings.LoadedAssetsClear();
         UmaAssetManager.OnLoadedBundleUpdate += AssetSettings.LoadedAssetsAdd;
         UmaAssetManager.OnLoadedBundleRemove += AssetSettings.LoadedAssetsRemove;
