@@ -178,10 +178,10 @@ public class UISettingsCamera : MonoBehaviour
 
         // Drop the clone one pitch below AA, then push every original sibling below
         // it down one pitch so nothing overlaps.
-        if (_runtimeRenderScaleRow is RectTransform newRect)
+        if (_runtimeRenderScaleRow.transform is RectTransform newRect)
             newRect.anchoredPosition = new Vector2(newRect.anchoredPosition.x, sourceY - shift);
 
-        for (int i = _runtimeRenderScaleRow.GetSiblingIndex() + 1; i < parent.childCount; i++)
+        for (int i = _runtimeRenderScaleRow.transform.GetSiblingIndex() + 1; i < parent.childCount; i++)
         {
             Transform t = parent.GetChild(i);
             if (t != null && t is RectTransform rt)
