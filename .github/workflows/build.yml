@@ -6,6 +6,7 @@ on:
       - "v*"
     branches:
       - "prerelease/*"
+  pull_request:
   workflow_dispatch:
     inputs:
       release_tag:
@@ -23,8 +24,10 @@ concurrency:
 jobs:
   build:
     name: Windows x64 IL2CPP
-    # unity-builder@v4 uses a Docker-based Unity image, so it must run on Linux.
-    runs-on: ubuntu-24.04
+    # IL2CPP for Windows requires the windows-il2cpp Unity image, which per GameCI
+    # can only run on a Windows runner (Mono-only builds worked on Linux, but that
+    # is not IL2CPP and could not import the packed CySpringPlugin.dll).
+    runs-on: windows-2022
     timeout-minutes: 120
 
     steps:
@@ -59,6 +62,7 @@ jobs:
             Library-${{ runner.os }}-StandaloneWindows64-
 
       - name: Free disk space (IL2CPP Windows editor image is large)
+        if: runner.os == 'Linux'
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
@@ -72,17 +76,19 @@ jobs:
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          VERSION: 1.1.0.${{ github.run_number }}
         with:
           projectPath: .
           unityVersion: 2022.3.62f2
           targetPlatform: StandaloneWindows64
           buildName: UmaViewer
           buildsPath: build
+          versioning: Custom
 
       - name: Package Windows build
-        shell: bash
+        shell: pwsh
         run: |
-          cd build/StandaloneWindows64 && zip -r ../../"UmaViewer-Windows-x64.zip" .
+          Get-ChildItem -Path "build/StandaloneWindows64" -Exclude "UmaViewer_BackUpThisFolder_ButDontShipItWithYourGame" | Compress-Archive -DestinationPath "UmaViewer-Windows-x64.zip" -Force
 
       - name: Upload workflow artifact (single clean zip of the build)
         uses: actions/upload-artifact@v4
