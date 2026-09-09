@@ -5,6 +5,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using Newtonsoft.Json.Linq;
 using System.Runtime.InteropServices;
 
@@ -39,6 +40,7 @@ public class UmaViewerMain : MonoBehaviour
         Instance = this;
         new Config();
         ApplyFrameRateLimit();
+        ApplyRenderScale();
 
         AbList = UmaDatabaseController.Instance.MetaEntries;
         if (AbList == null) return;
@@ -75,6 +77,12 @@ public class UmaViewerMain : MonoBehaviour
     {
         QualitySettings.vSyncCount = 0;
         Application.targetFrameRate = Config.Instance.GetTargetFrameRate();
+    }
+
+    public static void ApplyRenderScale()
+    {
+        if (GraphicsSettings.renderPipelineAsset is UniversalRenderPipelineAsset urp)
+            urp.renderScale = Mathf.Clamp(Config.Instance.RenderScale, 0.1f, 1f);
     }
 
     private void Update()
