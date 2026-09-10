@@ -593,6 +593,14 @@ public class MirrorReflection : MonoBehaviour
 
         _mirrorCamera.allowHDR = false;
         _mirrorCamera.allowMSAA = false;
+
+        // The mirror re-renders on a 512px reflection; drop the main-light shadow map
+        // (repeated every 2nd frame) and per-mirror shadows — imperceptible at 512px,
+        // removes the biggest hidden cost of the mirror pass.
+        var mirrorUrdData = _mirrorCamera.GetUniversalAdditionalCameraData();
+        if (mirrorUrdData != null)
+            mirrorUrdData.renderShadows = false;
+
         _mirrorCamera.depth = (_baseCamera != null ? _baseCamera.depth : 0f) + MIRROR_CAMERA_DEPTH_OFFSET;
         _mirrorCamera.clearFlags = CameraClearFlags.Color;
         _mirrorCamera.cullingMask = _finalRenderLayers;

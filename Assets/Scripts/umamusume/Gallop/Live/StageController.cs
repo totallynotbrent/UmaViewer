@@ -124,6 +124,7 @@ namespace Gallop.Live
 
         private readonly Dictionary<string, List<BgColor2RuntimeGroup>> _bgColor2GroupCache = new Dictionary<string, List<BgColor2RuntimeGroup>>(StringComparer.OrdinalIgnoreCase);
         private readonly List<BgColor2RuntimeGroup> _bgColor2Groups = new List<BgColor2RuntimeGroup>(64);
+        private readonly Dictionary<Renderer, MaterialPropertyBlock> _bgColorBlocks = new Dictionary<Renderer, MaterialPropertyBlock>();
         private readonly List<Renderer> _allStageRenderers = new List<Renderer>(256);
         private readonly Dictionary<Material, List<BgColor2RuntimeBinding>> _bindingsBySharedMaterialRef = new Dictionary<Material, List<BgColor2RuntimeBinding>>();
         private readonly Dictionary<string, List<BgColor2RuntimeBinding>> _bindingsBySharedMaterialName = new Dictionary<string, List<BgColor2RuntimeBinding>>(StringComparer.OrdinalIgnoreCase);
@@ -1347,7 +1348,7 @@ namespace Gallop.Live
                 }
                 if (!hasChara && !hasDark && !hasBright && !hasOutline && !hasSat && !hasPower) continue;
 
-                var block = new MaterialPropertyBlock();
+                var block = GetBgColorBlock(r);
                 r.GetPropertyBlock(block);
                 if (hasChara) block.SetColor(PID_CharaColor, updateInfo.color);
                 if (hasDark) block.SetColor(PID_ToonDarkColor, updateInfo.toonDarkColor);
@@ -1379,7 +1380,7 @@ namespace Gallop.Live
                         if (r == null) continue;
                         var sharedMats = r.sharedMaterials;
                         if (sharedMats == null || sharedMats.Length == 0) continue;
-                        var block = new MaterialPropertyBlock();
+                        var block = GetBgColorBlock(r);
                         r.GetPropertyBlock(block);
                         ApplyBgColor2ToRuntimeGroupBlock(group.kind, block, sharedMats, ref updateInfo, extra);
                         r.SetPropertyBlock(block);
@@ -1398,7 +1399,7 @@ namespace Gallop.Live
                 if (r == null) continue;
                 var sharedMats = r.sharedMaterials;
                 if (sharedMats == null || sharedMats.Length == 0) continue;
-                var block = new MaterialPropertyBlock();
+                var block = GetBgColorBlock(r);
                 r.GetPropertyBlock(block);
                 ApplyBgColor2ToRuntimeGroupBlock(BgColor2RuntimeKind.LegacyFallback, block, sharedMats, ref updateInfo, extra);
                 r.SetPropertyBlock(block);
@@ -1650,6 +1651,17 @@ namespace Gallop.Live
                 mat.SetFloat("_ColorPowerMultiply", extra);
         }
 
+        /// <summary> Returns a reusable per-renderer MPB (GetPropertyBlock overwrites, so
+        /// reading-back per-renderer props each frame is preserved). </summary>
+        private MaterialPropertyBlock GetBgColorBlock(Renderer r)
+        {
+            if (_bgColorBlocks.TryGetValue(r, out var block))
+                return block;
+            block = new MaterialPropertyBlock();
+            _bgColorBlocks[r] = block;
+            return block;
+        }
+
         private void RebuildBgColorCache()
         {
             _bgColorRendererCache.Clear();
@@ -1658,6 +1670,7 @@ namespace Gallop.Live
             _bgColorAllEligibleRenderers.Clear();
             _allStageRenderers.Clear();
             _bgColor2Groups.Clear();
+            _bgColorBlocks.Clear();
             _bindingsBySharedMaterialRef.Clear();
             _bindingsBySharedMaterialName.Clear();
 

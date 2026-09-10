@@ -34,7 +34,7 @@ public class UISettingsModel : MonoBehaviour
 
     private float _outlineWidth;
     private float _hairStiffness = 0.75f;
-    private float _skirtStiffness = 0.9f;
+    private float _skirtStiffness = 1.4f;
     private float _tailStiffness = 0.85f;
     private float _windIntensity = 0.5f;
     private float _collisionScale = 1.0f;

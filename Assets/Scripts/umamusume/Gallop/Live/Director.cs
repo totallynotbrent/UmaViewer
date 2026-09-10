@@ -236,6 +236,19 @@ namespace Gallop.Live
                     var go = Instantiate(prefab, _hqParticleRoot);
                     go.name = $"HQParticle_{Path.GetFileNameWithoutExtension(prefabName)}";
                     loaded++;
+
+                    // The prefabs instantiate silently; start their particle systems so
+                    // fire/gas/firework effects actually run (instantiate-on-its-own leaves
+                    // them idle under HQParticles).
+                    foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+                    {
+                        if (ps == null || !ps.emission.enabled)
+                            continue;
+                        var mainModule = ps.main;
+                        if (mainModule.playOnAwake)
+                            continue;
+                        mainModule.playOnAwake = true;
+                    }
                 }
                 else
                 {
