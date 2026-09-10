@@ -1,18 +1,21 @@
 name: Build and release Windows IL2CPP
 
 on:
-  push:
-    tags:
-      - "v*"
-    branches:
-      - "prerelease/*"
-  pull_request:
+  # NOTE: auto-builds disabled to stop burning Actions minutes (2026-09-10).
+  # To re-enable, uncomment the push / pull_request block below. Only manual
+  # workflow_dispatch remains so a build can still be fired on demand.
   workflow_dispatch:
     inputs:
       release_tag:
         description: "Optional release tag, for example v1.0.0 (leave empty for build only)"
         required: false
         type: string
+  # push:
+  #   tags:
+  #     - "v*"
+  #   branches:
+  #     - "prerelease/*"
+  # pull_request:
 
 permissions:
   contents: write
