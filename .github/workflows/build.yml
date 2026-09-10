@@ -87,7 +87,10 @@ jobs:
           swap-storage: false
 
       - name: Build Windows player with IL2CPP
-        uses: game-ci/unity-builder@v4
+        # v4.8.0+ includes the vcredist2013 activation fix (PR #757) — without it the
+        # Windows container hits "CreateDirectory ...\Unity\Caches failed" + exit 199
+        # (license activation failure). Pin it rather than @v4 to avoid the flake.
+        uses: game-ci/unity-builder@v4.8.2
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
