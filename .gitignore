@@ -66,9 +66,8 @@ Thumbs.db
 # Contains machine-specific game paths and preferences
 /Config.json
 
-# Local dev / research (hermes handoff — kept tracked)
+# Local developer scratch and cache directories
 /.memory/
-# ponytail: research + handoff docs now tracked for hermes agent; keep .memory ignored (ephemeral pi sessions, 793K/225 files, re-creatable). To track .memory: `git add -f .memory/`
 .hermes/plans/
 docs/GIT_MODEL.md
 research/__pycache__/
