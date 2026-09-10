@@ -571,10 +571,11 @@ public class UmaContainerCharacter : UmaContainer
         _cySpringController.Reset();
 
         // katboi restore: the rewrite now simulates BODY-only (drives the skirt).
-        // Stiffer body spring + force-disable hip-motion impulse => less flowy,
-        // less skirt rise on spins. 2x gravity so the skirt hangs heavier.
+        // Spin-stable skirt: spring rate near 1.0 holds the hem down against the
+        // centrifugal fan-out on spins instead of riding up; 2x gravity keeps it
+        // hanging heavy.
         _cySpringController.SetStiffnessRate(CySpringController.Parts.Body, 1.6f);
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 0.55f);
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 1.2f);
         CySpringController.GravityRate = 2.8f;  // 2x default 1.4
         try
         {

@@ -89,22 +89,10 @@ namespace Gallop
 
             var param = _dofDiffusionBloomOverlayParam;
 
-            bool enabled =
-                param.IsEnableBloom &&
-                param.BloomIntensity > 0f;
-
-            _bloom.active = enabled;
-
-            _bloom.threshold.overrideState = true;
+            // Bloom disabled entirely — the stage glow was reading way too bright.
+            _bloom.active = false;
             _bloom.intensity.overrideState = true;
-            _bloom.scatter.overrideState = true;
-
-            _bloom.threshold.value = Mathf.Max(0.6f, param.BloomThreshold);
-
-            _bloom.intensity.value = Mathf.Min(2.0f, Mathf.Max(0f, param.BloomIntensity));
-
-            _bloom.scatter.value =
-                Mathf.Clamp01(param.BloomBlurSize / 10f);
+            _bloom.intensity.value = 0f;
 
             if (_colorAdjust != null)
             {
@@ -118,15 +106,6 @@ namespace Gallop
                     Mathf.Clamp(param.DiffusionContrast, -100f, 100f);
                 _colorAdjust.postExposure.value =
                     Mathf.Clamp((param.DiffusionBright - 1f) * 0.35f, -0.35f, 0.35f);
-            }
-
-            if (param.IsEnableDiffusion)
-            {
-                _bloom.active = true;
-                _bloom.threshold.value =
-                    Mathf.Max(0.8f, param.DiffusionThreshold * 0.9f);
-                _bloom.scatter.value =
-                    Mathf.Clamp01(Mathf.Max(_bloom.scatter.value, Mathf.Clamp01(param.DiffusionBlurSize / 14f)));
             }
         }
     }
