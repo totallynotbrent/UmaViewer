@@ -61,6 +61,20 @@ jobs:
           restore-keys: |
             Library-${{ runner.os }}-StandaloneWindows64-
 
+      - name: Cache IL2CPP incremental build (Bee)
+        uses: actions/cache@v4
+        with:
+          # The bee C++ object cache lives under Library/bee_cache (unity-builder sets
+          # BEE_CACHE_DIRECTORY there). Persisting it across runs is what enables IL2CPP
+          # incremental builds — without it the tool recompiles every generated .cpp each
+          # push (the ~26 min cost). Keyed WITHOUT the Assets/** hash so it survives code
+          # churn; only the target + OS invalidate it.
+          path: |
+            Library/bee_cache
+          key: il2cpp-bee-${{ runner.os }}-StandaloneWindows64
+          restore-keys: |
+            il2cpp-bee-${{ runner.os }}-StandaloneWindows64
+
       - name: Free disk space (IL2CPP Windows editor image is large)
         if: runner.os == 'Linux'
         uses: jlumbroso/free-disk-space@v1.3.1
