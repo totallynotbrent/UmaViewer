@@ -58,9 +58,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ runner.os }}-StandaloneWindows64-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          # Stable key (no Assets/** hash): the Library holds Unity's asset import
+          # cache, which is additive and safe to reuse across code churn. Hashing
+          # Assets/** made every code change produce a fresh key -> full cold
+          # re-import on every push. Unity reconciles stale imports incrementally.
+          key: Library-${{ runner.os }}-StandaloneWindows64
           restore-keys: |
-            Library-${{ runner.os }}-StandaloneWindows64-
+            Library-${{ runner.os }}-StandaloneWindows64
 
       - name: Cache IL2CPP incremental build (Bee)
         uses: actions/cache@v4
@@ -115,7 +119,7 @@ jobs:
           path: build/StandaloneWindows64
           if-no-files-found: error
           retention-days: 14
-          compression-level: 9
+          compression-level: 0
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
