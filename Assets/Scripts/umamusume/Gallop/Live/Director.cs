@@ -664,24 +664,7 @@ namespace Gallop.Live
                     }
                     else
                     {
-                        if (liveMusic != null && liveMusic.sourceList.Count > 0)
-                        {
-                            var audio = liveMusic.sourceList[0];
-                            if (audio != null && audio.clip != null)
-                            {
-                                // Drive the dance clock from the real audio position each frame so
-                                // choreography stays on-beat (was a free-running += deltaTime that
-                                // drifted, and kept dancing past the song's end).
-                                _liveCurrentTime = audio.time;
-
-                                // Sync-stop: the song ended but the timeline is longer — end the
-                                // concert with the music instead of ghost-dancing into silence.
-                                if (!audio.isPlaying && _liveCurrentTime > 1f)
-                                {
-                                    _liveCurrentTime = totalTime;
-                                }
-                            }
-                        }
+                        _liveCurrentTime += Time.deltaTime;
                         _liveCurrentTime = Mathf.Clamp(_liveCurrentTime, 0f, Mathf.Max(0f, totalTime - 0.001f));
                         UI.ProgressBar.SetValueWithoutNotify(_liveCurrentTime / totalTime);
                         OnTimelineUpdate(_liveCurrentTime);
