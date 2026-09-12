@@ -574,9 +574,9 @@ public class UmaContainerCharacter : UmaContainer
         // Spin-stable skirt: higher spring rate holds the hem down against the
         // centrifugal fan-out on spins instead of riding up; extra gravity keeps it
         // hanging heavy.
-        _cySpringController.SetStiffnessRate(CySpringController.Parts.Body, 2.0f);
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 1.6f);
-        CySpringController.GravityRate = 3.5f;  // 2.5x default 1.4
+        _cySpringController.SetStiffnessRate(CySpringController.Parts.Body, 2.6f);
+        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 2.2f);
+        CySpringController.GravityRate = 4.5f;  // 3.2x default 1.4
         try
         {
             _cySpringController.SetForceDisableHipMoveParam(true);

@@ -1199,6 +1199,23 @@ namespace Gallop.Live
                 }
             }
             catch { }
+
+            // Auto-mount the sky/cloud controller so the timeline's BgColor1 keys drive
+            // the sky_base / sky_grad / cmn_sky meshes via MaterialPropertyBlock instead of
+            // material cloning (fixes the white/blank skybox on sky-heavy stages).
+            try
+            {
+                var skyCtrl = GetComponent<StageSkyController>();
+                if (skyCtrl == null)
+                {
+                    skyCtrl = gameObject.AddComponent<StageSkyController>();
+                }
+                skyCtrl.Initialize(this);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[StageController] StageSkyController init skipped: " + e.Message);
+            }
         }
 
         public void EnableAmbientParticles()

@@ -6,6 +6,7 @@ on:
       - "v*"
     branches:
       - "master"
+      - "experiment/*"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -86,6 +87,14 @@ jobs:
           large-packages: true
           swap-storage: false
 
+      - name: Generate build commit stamp
+        shell: pwsh
+        run: |
+          $sha = $env:GITHUB_SHA
+          $short = $sha.Substring(0, 7)
+          $content = "public static class BuildCommit { public const string Sha = `"$short`"; }"
+          Set-Content -Path "Assets/Scripts/BuildCommit.cs" -Value $content -Encoding UTF8
+
       - name: Build Windows player with IL2CPP
         # v4.8.0+ includes the vcredist2013 activation fix (PR #757) — without it the
         # Windows container hits "CreateDirectory ...\Unity\Caches failed" + exit 199
@@ -102,6 +111,9 @@ jobs:
           targetPlatform: StandaloneWindows64
           buildName: UmaViewer
           buildsPath: build
+          # the commit-stamp step writes BuildCommit.cs, which dirties the tree; Semantic
+          # versioning refuses a dirty branch, so allow it explicitly.
+          allowDirtyBuild: true
           # Semantic derives Application.version from the git tag (v1.3.0 -> 1.3.0)
           # so the exe reports the same version as the GitHub release, instead of the
           # stale bundleVersion 2.1.34 the old Custom scheme inherited from upstream.
@@ -122,14 +134,30 @@ jobs:
           compression-level: 0
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/experiment/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" \
-            "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
-            --target "$GITHUB_SHA" \
-            --title "UmaViewer $RELEASE_TAG" \
-            --notes "Windows x64 IL2CPP build. For release notes, see the commit history or docs."
+          if [[ "$GITHUB_REF" == refs/heads/experiment/* ]]; then
+            # lowercase, dash-joined name matching the commit-subject style; mirror a
+            # rolling prerelease so each experiment push replaces the prior one.
+            NAME="${GITHUB_REF##*/}"
+            NAME="${NAME,,}"
+            NAME="${NAME//\//-}"
+            # delete any prior rolling release for this experiment tag so assets don't accumulate
+            gh release delete "$NAME" --yes --cleanup-tag 2>/dev/null || true
+            gh release create "$NAME" \
+              "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
+              --target "$GITHUB_SHA" \
+              --title "umaViewer $NAME" \
+              --prerelease \
+              --notes "experiment build from the $NAME branch."
+          else
+            gh release create "$RELEASE_TAG" \
+              "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
+              --target "$GITHUB_SHA" \
+              --title "UmaViewer $RELEASE_TAG" \
+              --notes "Windows x64 IL2CPP build. For release notes, see the commit history or docs."
+          fi

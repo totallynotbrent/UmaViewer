@@ -13,6 +13,32 @@ namespace Gallop.Live
     {
         private static Director _instance = null;
         public LiveTimelineControl _liveTimelineControl; //Edited to public
+
+        // direct-to-file logger that bypasses Unity's Debug/logMessageReceived routing,
+        // which is unreliable in this IL2CPP build during playback (only boot-time
+        // warnings reliably reach the mirror log). appended synchronously, flushed per line.
+        private static object _debugLock = new object();
+        private static string _debugPath = null;
+        private static bool _debugStarted = false;
+        public static void FileLog(string line)
+        {
+            try
+            {
+                lock (_debugLock)
+                {
+                    if (_debugPath == null)
+                        _debugPath = Path.Combine(Path.GetDirectoryName(Application.dataPath) ?? ".", "UmaViewer.log");
+                    if (!_debugStarted)
+                    {
+                        File.AppendAllText(_debugPath,
+                            $"[UmaViewer] log start {DateTime.Now:yyyy-MM-dd HH:mm:ss} build=[{BuildCommit.Sha}]\n");
+                        _debugStarted = true;
+                    }
+                    File.AppendAllText(_debugPath, line + "\n");
+                }
+            }
+            catch { }
+        }
         [SerializeField]
         public float _liveCurrentTime;  //Edited to public
         public bool _isLiveSetup; //Edit to pulic
@@ -110,12 +136,24 @@ namespace Gallop.Live
 
         private float smoothMusicScoreTime => _liveCurrentTime;//temp to liveCurrentTime
 
+        // true once the backing track has actually finished playing (and isn't a
+        // looping clip), so the concert ends with the music instead of the dancers
+        // running on past the last beat.
+        private bool IsMusicFinished()
+        {
+            if (!_syncTime) return false;
+            if (liveMusic == null || liveMusic.sourceList.Count == 0) return false;
+            var src = liveMusic.sourceList[0];
+            if (src == null || src.clip == null) return false;
+            if (src.loop) return false;
+            return !src.isPlaying && _liveCurrentTime > 1f;
+        }
+
         public void Initialize()
         {
             if (live != null)
             {
                 _instance = this;
-                Debug.Log(string.Format(CUTT_PATH, live.MusicId));
                 Builder.LoadAssetPath(string.Format(CUTT_PATH, live.MusicId), transform);
                 if (RequireStage)
                 {
@@ -330,20 +368,23 @@ namespace Gallop.Live
                 var tmpPos = -(updateInfo.lightRotation * Vector3.forward).normalized;
                 if (_cachedGlobalLightMPB == null) _cachedGlobalLightMPB = new MaterialPropertyBlock();
                 // ponytail: cache MPB - allocates once per frame, not per locator; ceiling: per-renderer MPB if you need per-uma rim offset
+                // character pop: scale the rim + toon-bright by the config so the idol
+                // stays bright against a darkened background.
+                float charaBoost = Config.Instance != null ? Mathf.Clamp(Config.Instance.CharaBrightness, 0.5f, 2f) : 1f;
                 _cachedGlobalLightMPB.Clear();
                 _cachedGlobalLightMPB.SetFloat("_RimShadowRate", updateInfo.globalRimShadowRate);
-                _cachedGlobalLightMPB.SetColor("_RimColor", updateInfo.rimColor);
+                _cachedGlobalLightMPB.SetColor("_RimColor", updateInfo.rimColor * charaBoost);
                 _cachedGlobalLightMPB.SetFloat("_RimStep", updateInfo.rimStep);
                 _cachedGlobalLightMPB.SetFloat("_RimFeather", updateInfo.rimFeather);
-                _cachedGlobalLightMPB.SetFloat("_RimSpecRate", updateInfo.rimSpecRate);
+                _cachedGlobalLightMPB.SetFloat("_RimSpecRate", updateInfo.rimSpecRate * charaBoost);
                 _cachedGlobalLightMPB.SetFloat("_RimHorizonOffset", updateInfo.RimHorizonOffset);
                 _cachedGlobalLightMPB.SetFloat("_RimVerticalOffset", updateInfo.RimVerticalOffset);
                 _cachedGlobalLightMPB.SetFloat("_RimHorizonOffset2", updateInfo.RimHorizonOffset2);
                 _cachedGlobalLightMPB.SetFloat("_RimVerticalOffset2", updateInfo.RimVerticalOffset2);
-                _cachedGlobalLightMPB.SetColor("_RimColor2", updateInfo.rimColor2);
+                _cachedGlobalLightMPB.SetColor("_RimColor2", updateInfo.rimColor2 * charaBoost);
                 _cachedGlobalLightMPB.SetFloat("_RimStep2", updateInfo.rimStep2);
                 _cachedGlobalLightMPB.SetFloat("_RimFeather2", updateInfo.rimFeather2);
-                _cachedGlobalLightMPB.SetFloat("_RimSpecRate2", updateInfo.rimSpecRate2);
+                _cachedGlobalLightMPB.SetFloat("_RimSpecRate2", updateInfo.rimSpecRate2 * charaBoost);
                 _cachedGlobalLightMPB.SetFloat("_RimShadowRate2", updateInfo.globalRimShadowRate2);
                 _cachedGlobalLightMPB.SetFloat("_UseOriginalDirectionalLight", 1);
                 _cachedGlobalLightMPB.SetVector("_OriginalDirectionalLightDir", tmpPos);
@@ -581,9 +622,20 @@ namespace Gallop.Live
                 _lateTimelineAppliedThisFrame = false;
 
                 if ((!UmaViewerMain.TryConsumeEscapeForFullScreen() && Input.GetKeyDown(KeyCode.Escape)) ||
-                    _liveCurrentTime >= totalTime)
+                    (!sliderControl.is_Touched && !sliderControl.is_Outed &&
+                     (_liveCurrentTime >= totalTime || IsMusicFinished())))
                 {
                     ExitLive();
+                }
+
+                // F7 toggles the bloom/diffusion stage glow on and off at runtime.
+                if (Input.GetKeyDown(KeyCode.F7))
+                {
+                    var fx = GetActivePostEffect();
+                    if (fx != null)
+                    {
+                        fx.BloomAndDiffusionEnabled = !fx.BloomAndDiffusionEnabled;
+                    }
                 }
 
                 if (_syncTime == false)
@@ -664,7 +716,17 @@ namespace Gallop.Live
                     }
                     else
                     {
-                        _liveCurrentTime += Time.deltaTime;
+                        // drive the dance from the real music position so the choreography
+                        // stays locked to the beat (a free-running clock drifts when the
+                        // timeline length differs from the clip and never ends cleanly).
+                        if (liveMusic != null && liveMusic.sourceList.Count > 0)
+                        {
+                            var audio = liveMusic.sourceList[0];
+                            if (audio != null && audio.clip != null)
+                            {
+                                _liveCurrentTime = audio.time;
+                            }
+                        }
                         _liveCurrentTime = Mathf.Clamp(_liveCurrentTime, 0f, Mathf.Max(0f, totalTime - 0.001f));
                         UI.ProgressBar.SetValueWithoutNotify(_liveCurrentTime / totalTime);
                         OnTimelineUpdate(_liveCurrentTime);

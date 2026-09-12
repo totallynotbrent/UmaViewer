@@ -34,13 +34,16 @@ namespace Gallop.Live
                 return;
 
             var settings = timelineData.propsSettings;
-            if (settings == null || settings.propsDataGroup == null || settings.propsDataGroupCount <= 0)
+            if (settings == null || settings.propsDataGroup == null || settings.propsDataGroup.Length == 0)
+            {
+                Debug.LogWarning($"{PROP_LOG_TAG} propsSettings empty or missing");
                 return;
+            }
 
             int attached = 0;
             int skipped = 0;
 
-            int groupCount = Mathf.Min(settings.propsDataGroupCount, settings.propsDataGroup.Length);
+            int groupCount = settings.propsDataGroup.Length;
             for (int i = 0; i < groupCount; i++)
             {
                 var group = settings.propsDataGroup[i];
@@ -116,9 +119,7 @@ namespace Gallop.Live
             if (prefab == null)
                 return false;
 
-            int attachCount = Mathf.Min(
-                group.attachJointNameCount > 0 ? group.attachJointNameCount : (group.attachJointNames?.Length ?? 0),
-                group.attachJointNames?.Length ?? 0);
+            int attachCount = group.attachJointNames?.Length ?? 0;
 
             if (attachCount <= 0)
             {
@@ -261,10 +262,10 @@ namespace Gallop.Live
             List<UmaContainerCharacter> charaContainers,
             int charaIndex)
         {
-            if (group.propsConditionGroup == null || group.propsConditionGroupCount <= 0)
+            if (group.propsConditionGroup == null || group.propsConditionGroup.Length == 0)
                 return true; // no conditions = always attach
 
-            int groupCount = Mathf.Min(group.propsConditionGroupCount, group.propsConditionGroup.Length);
+            int groupCount = group.propsConditionGroup.Length;
             bool anyGroupValid = false;
 
             for (int g = 0; g < groupCount; g++)
@@ -275,8 +276,7 @@ namespace Gallop.Live
 
                 anyGroupValid = true;
 
-                int condCount = Mathf.Min(condGroup.propsConditionCount > 0 ? condGroup.propsConditionCount : (condGroup.propsConditionData?.Length ?? 0),
-                                          condGroup.propsConditionData?.Length ?? 0);
+                int condCount = condGroup.propsConditionData?.Length ?? 0;
 
                 bool allPass = true;
                 for (int c = 0; c < condCount; c++)

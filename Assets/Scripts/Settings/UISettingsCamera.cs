@@ -10,6 +10,9 @@ public class UISettingsCamera : MonoBehaviour
     public TMPro.TMP_Dropdown CameraModeDropdown;
 
     private GameObject _runtimeRenderScaleRow;
+    private GameObject _runtimeExposureRow;
+    private GameObject _runtimeCharaRow;
+    private GameObject _runtimeEmissionRow;
 
     [Header("Free Camera")]
     public GameObject FreeCameraSettingsTab;
@@ -230,5 +233,193 @@ public class UISettingsCamera : MonoBehaviour
             Config.Instance.UpdateConfig(false);
         }
         UmaViewerMain.ApplyRenderScale();
+    }
+
+    /// <summary> Clones a settings row as a new dropdown row one pitch below the source. </summary>
+    private GameObject CloneDropdownRow(Transform sourceRow, string name)
+    {
+        var parent = sourceRow.parent;
+        if (parent == null)
+            return null;
+
+        float sourceY = 0f;
+        float shift = 35f;
+        if (sourceRow is RectTransform srcRect)
+        {
+            sourceY = srcRect.anchoredPosition.y;
+            Transform probe = null;
+            for (int i = sourceRow.GetSiblingIndex() + 1; i < parent.childCount; i++)
+            {
+                Transform t = parent.GetChild(i);
+                if (t != null && !t.Equals(sourceRow))
+                {
+                    probe = t;
+                    break;
+                }
+            }
+            if (probe is RectTransform probeRect)
+            {
+                float d = sourceY - probeRect.anchoredPosition.y;
+                if (d >= 1f)
+                    shift = d;
+            }
+        }
+
+        var row = Instantiate(sourceRow.gameObject, parent);
+        row.name = name;
+        row.transform.SetSiblingIndex(sourceRow.GetSiblingIndex() + 1);
+
+        if (row.transform is RectTransform newRect)
+            newRect.anchoredPosition = new Vector2(newRect.anchoredPosition.x, sourceY - shift);
+
+        for (int i = row.transform.GetSiblingIndex() + 1; i < parent.childCount; i++)
+        {
+            Transform t = parent.GetChild(i);
+            if (t != null && t is RectTransform rt)
+                rt.anchoredPosition = new Vector2(rt.anchoredPosition.x, rt.anchoredPosition.y - shift);
+        }
+
+        var label = row.transform.GetChild(0).GetComponentInChildren<TextMeshProUGUI>(true);
+        if (label != null)
+            label.text = name;
+
+        return row;
+    }
+
+    /// <summary> Clones the Render Scale row at runtime as an Exposure row so no scene
+    /// edit is needed — exposure controls overall stage brightness. </summary>
+    public void EnsureExposureDropdown()
+    {
+        if (_runtimeExposureRow != null || _runtimeRenderScaleRow == null)
+            return;
+
+        _runtimeExposureRow = CloneDropdownRow(_runtimeRenderScaleRow.transform, "Exposure");
+        if (_runtimeExposureRow == null)
+            return;
+
+        var dd = _runtimeExposureRow.GetComponentInChildren<TMP_Dropdown>(true);
+        dd.name = "ExposureDropdown";
+        dd.ClearOptions();
+        dd.AddOptions(new List<string> { "+2", "+1", "0 (Default)", "-1", "-2", "-3" });
+        dd.onValueChanged = new TMP_Dropdown.DropdownEvent();
+        dd.onValueChanged.AddListener(ChangeExposure);
+        dd.SetValueWithoutNotify(ExposureToDropdownValue(Config.Instance.Exposure));
+        dd.RefreshShownValue();
+    }
+
+    /// <summary> Character brightness row: rim/toon boost so idols pop on a dark stage. </summary>
+    public void EnsureCharaDropdown()
+    {
+        if (_runtimeCharaRow != null || _runtimeExposureRow == null)
+            return;
+
+        _runtimeCharaRow = CloneDropdownRow(_runtimeExposureRow.transform, "Chara Brightness");
+        if (_runtimeCharaRow == null)
+            return;
+
+        var dd = _runtimeCharaRow.GetComponentInChildren<TMP_Dropdown>(true);
+        dd.name = "CharaBrightnessDropdown";
+        dd.ClearOptions();
+        dd.AddOptions(new List<string> { "0.5", "0.75", "1.0 (Default)", "1.3", "1.6", "2.0" });
+        dd.onValueChanged = new TMP_Dropdown.DropdownEvent();
+        dd.onValueChanged.AddListener(ChangeCharaBrightness);
+        dd.SetValueWithoutNotify(BoostToDropdownValue(Config.Instance.CharaBrightness));
+        dd.RefreshShownValue();
+    }
+
+    /// <summary> Emission boost row: bloom harder so LEDs/lasers/cyalume pop. </summary>
+    public void EnsureEmissionDropdown()
+    {
+        if (_runtimeEmissionRow != null || _runtimeCharaRow == null)
+            return;
+
+        _runtimeEmissionRow = CloneDropdownRow(_runtimeCharaRow.transform, "Emission Boost");
+        if (_runtimeEmissionRow == null)
+            return;
+
+        var dd = _runtimeEmissionRow.GetComponentInChildren<TMP_Dropdown>(true);
+        dd.name = "EmissionBoostDropdown";
+        dd.ClearOptions();
+        dd.AddOptions(new List<string> { "0.5", "0.75", "1.0 (Default)", "1.3", "1.6", "2.0" });
+        dd.onValueChanged = new TMP_Dropdown.DropdownEvent();
+        dd.onValueChanged.AddListener(ChangeEmissionBoost);
+        dd.SetValueWithoutNotify(BoostToDropdownValue(Config.Instance.EmissionBoost));
+        dd.RefreshShownValue();
+    }
+
+    private int BoostToDropdownValue(float boost)
+    {
+        if (boost >= 1.8f) return 5;
+        if (boost >= 1.45f) return 4;
+        if (boost >= 1.15f) return 3;
+        if (boost >= 0.85f) return 2;
+        if (boost >= 0.65f) return 1;
+        return 0;
+    }
+
+    private float DropdownValueToBoost(int value)
+    {
+        switch (value)
+        {
+            case 0: return 0.5f;
+            case 1: return 0.75f;
+            case 3: return 1.3f;
+            case 4: return 1.6f;
+            case 5: return 2f;
+            default: return 1f;
+        }
+    }
+
+    public void ChangeCharaBrightness(int value)
+    {
+        var b = DropdownValueToBoost(value);
+        if (!Mathf.Approximately(Config.Instance.CharaBrightness, b))
+        {
+            Config.Instance.CharaBrightness = b;
+            Config.Instance.UpdateConfig(false);
+        }
+    }
+
+    public void ChangeEmissionBoost(int value)
+    {
+        var b = DropdownValueToBoost(value);
+        if (!Mathf.Approximately(Config.Instance.EmissionBoost, b))
+        {
+            Config.Instance.EmissionBoost = b;
+            Config.Instance.UpdateConfig(false);
+        }
+    }
+
+    private int ExposureToDropdownValue(float exposure)
+    {
+        if (exposure >= 1.5f) return 0;
+        if (exposure >= 0.5f) return 1;
+        if (exposure >= -0.5f) return 2;
+        if (exposure >= -1.5f) return 3;
+        if (exposure >= -2.5f) return 4;
+        return 5;
+    }
+
+    private float DropdownValueToExposure(int value)
+    {
+        switch (value)
+        {
+            case 0: return 2f;
+            case 1: return 1f;
+            case 3: return -1f;
+            case 4: return -2f;
+            case 5: return -3f;
+            default: return 0f;
+        }
+    }
+
+    public void ChangeExposure(int value)
+    {
+        var exp = DropdownValueToExposure(value);
+        if (!Mathf.Approximately(Config.Instance.Exposure, exp))
+        {
+            Config.Instance.Exposure = exp;
+            Config.Instance.UpdateConfig(false);
+        }
     }
 }

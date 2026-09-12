@@ -70,6 +70,9 @@ namespace Gallop.Live.Cyalume
 
         public void StartOfficialLikeSetup(bool forceRebuild = false)
         {
+            if (!isActiveAndEnabled || !gameObject.activeInHierarchy)
+                return;
+
             if (_setupCoroutine != null)
             {
                 StopCoroutine(_setupCoroutine);
@@ -469,21 +472,25 @@ namespace Gallop.Live.Cyalume
 
         private void DestroyExistingCyalumeChildren()
         {
-            for (int i = transform.childCount - 1; i >= 0; i--)
+            // Destroy only the instances this component created (default/random/mob), never
+            // name-match children — that could delete character attachments or other stage
+            // objects that happen to contain "cyalume" in their name.
+            if (_defaultInstance != null)
             {
-                var child = transform.GetChild(i);
-                if (child == null)
-                    continue;
+                Destroy(_defaultInstance);
+                _defaultInstance = null;
+            }
 
-                string childName = child.name ?? string.Empty;
-                bool isKnownCyalumeChild =
-                    childName.Equals("default", StringComparison.OrdinalIgnoreCase) ||
-                    childName.Equals("random", StringComparison.OrdinalIgnoreCase) ||
-                    (!string.IsNullOrEmpty(_mobPrefabName) && childName.Equals(_mobPrefabName, StringComparison.OrdinalIgnoreCase)) ||
-                    childName.IndexOf("cyalume", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (_randomInstance != null)
+            {
+                Destroy(_randomInstance);
+                _randomInstance = null;
+            }
 
-                if (isKnownCyalumeChild)
-                    Destroy(child.gameObject);
+            if (_mobInstance != null)
+            {
+                Destroy(_mobInstance);
+                _mobInstance = null;
             }
         }
 

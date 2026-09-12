@@ -33,9 +33,6 @@ namespace Gallop.Live.Cutt
 
         private bool _motionSetup = false;
 
-        private int _curIndex = -1;
-        private int _prevIndex = -1;
-
         public int charaIndex = -1;
 
         public void Initialize(Transform target, int targetIndex, int seqDataIndex, LiveTimelineControl timelineControl, List<AnimationClip> animclips = null)
@@ -73,10 +70,10 @@ namespace Gallop.Live.Cutt
             {
                 foreach (var key in _currentKey.thisList)
                 {
-                   if(key.clip != null)
-                   {
+                    if(key.clip != null)
+                    {
                         _tempAnim.AddClip(key.clip, key.clip.name);
-                   }
+                    }
                 }
             }
             _tempAnim.wrapMode = WrapMode.Clamp;
@@ -110,7 +107,6 @@ namespace Gallop.Live.Cutt
             {
                 LiveTimelineKeyIndex curKey = LiveTimelineControl.AlterUpdate_Key(_currentKey, currentTime);
 
-                _curIndex = curKey.index;
                 LiveTimelineKeyCharaMotionData arg = curKey.key as LiveTimelineKeyCharaMotionData;
                 AnimationClip anim = arg.clip;
 
@@ -129,6 +125,7 @@ namespace Gallop.Live.Cutt
                 if (timescaleKeys.thisList.Count > 0)
                 {
                     var has_key = false;
+                    var reached_arg = false;
                     // apply timescale keys
                     for (int i = timescaleKeys.thisList.Count - 1; i >= 0; i--)
                     {
@@ -140,6 +137,7 @@ namespace Gallop.Live.Cutt
                             if (scaleKey.FrameSecond <= arg.FrameSecond)
                             {
                                 interval += (last_current_time - arg.FrameSecond) * scaleKey.Timescale * arg.playSpeed;
+                                reached_arg = true;
                                 break;
                             }
                             else
@@ -152,6 +150,11 @@ namespace Gallop.Live.Cutt
                     if (!has_key)
                     {
                         interval = (currentTime - arg.FrameSecond) * arg.playSpeed; // no timescale keys, use default speed
+                    }
+                    else if (!reached_arg && last_current_time > arg.FrameSecond)
+                    {
+                        // play the segment before the first timescale key at the motion's own speed
+                        interval += (last_current_time - arg.FrameSecond) * arg.playSpeed;
                     }
                 }
                 else
@@ -169,7 +172,6 @@ namespace Gallop.Live.Cutt
                     _tempAnim.Sample();
                     state.enabled = false;
                 }
-                _prevIndex = _curIndex;            
             }
             _prevFrameAnimationTime = currentTime;
         }

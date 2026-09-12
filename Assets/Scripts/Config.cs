@@ -50,6 +50,15 @@ public class Config
     public string RenderScaleTip = "Internal render resolution multiplier. 1.0 = native, lower values raise FPS on crowded stages at slight visual cost.";
     public float RenderScale = 1f;
 
+    public string ExposureTip = "Overall exposure in stops (EV). 0 = neutral, negative darkens the stage, positive brightens it.";
+    public float Exposure = 0f;
+
+    public string CharaBrightnessTip = "Character rim/toon brightness boost. Higher makes the idols stand out against a darkened background.";
+    public float CharaBrightness = 1f;
+
+    public string EmissionBoostTip = "Boost for emissive lights (LEDs, lasers, spotlights, cyalume) so they pop against the background.";
+    public float EmissionBoost = 1f;
+
     public bool RegionDetectionPassed = false;
 
     public string VmdMorphConvertSettingTip = "The mapping of MMD mprphs to UMA mprphs during VMD recording, multiple UMA expression weights will be combined (not exceeding 1)";
@@ -155,7 +164,9 @@ public class Config
         configPath = GetConfigPath();
         Version = Application.version;
 
-        MainPath = $@"{Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "Low"}\Cygames\umamusume";
+        MainPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Umamusume", "umamusume_Data", "Persistent");
         if (Application.isMobilePlatform)
         {
             WorkMode = WorkMode.Standalone;
@@ -221,7 +232,9 @@ public class Config
                 {
                     Debug.LogError("Config load error. Using default. " + ex.Message);
                 }
-                MainPath = $@"{Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "Low"}\Cygames\umamusume";
+                MainPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Umamusume", "umamusume_Data", "Persistent");
             }
         }
         Instance = this;

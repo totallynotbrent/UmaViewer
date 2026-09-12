@@ -42,6 +42,14 @@ public class UmaViewerMain : MonoBehaviour
         ApplyFrameRateLimit();
         ApplyRenderScale();
 
+        // mirror every log line to a file beside the exe so the user can hand us
+        // a full log (UmaViewer.log) without digging through LocalLow.
+        // NOTE: Director.FileLog is the actual logger now (direct append, thread-locked).
+        // This mirror used a long-lived StreamWriter that held the file open with
+        // FileShare.Read, which made FileLog's File.AppendAllText throw a sharing
+        // violation and silently drop every runtime line. So this mirror is gone;
+        // FileLog writes the "log start" header itself.
+
         AbList = UmaDatabaseController.Instance.MetaEntries;
         if (AbList == null) return;
         var chara_3d = AbList.Where(ab => ab.Value.Type == UmaFileType._3d_cutt).Select(ab => ab.Value).ToList();
@@ -55,7 +63,7 @@ public class UmaViewerMain : MonoBehaviour
 
     private IEnumerator SetWindowTitleRoutine()
     {
-        string title = $"UmaViewer v{Application.version}";
+        string title = $"UmaViewer v{Application.version} [{BuildCommit.Sha}]";
         for (int i = 0; i < 60; i++)
         {
             try

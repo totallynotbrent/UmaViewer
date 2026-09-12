@@ -35,9 +35,10 @@ public class UmaSceneController:MonoBehaviour
 
     public static void LoadScene(string name, Action OnSceneloaded = null, Action OnPrevSceneUnloaded = null)
     {
-        if (instance == null) return;
+        if (instance == null) { Debug.LogWarning($"[Scene] LoadScene '{name}' dropped: instance==null"); return; }
         // ponytail: drop concurrent load to avoid destroying Animation mid-transition; upgrade path: queue it
-        if (instance._isTransitioning) return;
+        if (instance._isTransitioning) { Debug.LogWarning($"[Scene] LoadScene '{name}' dropped: already transitioning"); return; }
+        Debug.LogWarning($"[Scene] LoadScene '{name}' starting");
         instance.StartCoroutine(instance.LoadLiveSceneAsync(name, OnSceneloaded, OnPrevSceneUnloaded));
     }
 
@@ -50,7 +51,7 @@ public class UmaSceneController:MonoBehaviour
         {
         // ponytail: local instance avoids field clobber; always clean previous
         if (CavansInstance) Destroy(CavansInstance);
-        if (!CavansPrefab) { _isTransitioning = false; yield break; }
+        if (!CavansPrefab) { Debug.LogWarning($"[Scene] LoadLiveSceneAsync '{sceneName}' aborted: no CavansPrefab"); _isTransitioning = false; yield break; }
         transitionObj = CavansInstance = Instantiate(CavansPrefab, transform);
         animation = transitionObj ? transitionObj.GetComponent<Animation>() : null;
         if (animation) animation.Play("SceneTransition_s");
@@ -64,6 +65,7 @@ public class UmaSceneController:MonoBehaviour
 
         // Wait until the last operation fully loads to return anything
         yield return new WaitUntil(()=> asyncLoad.isDone);
+        Debug.LogWarning($"[Scene] LoadLiveSceneAsync '{sceneName}' loaded, invoking OnSceneloaded");
 
         try { OnSceneloaded?.Invoke(); } catch (System.Exception e) { Debug.LogException(e); }
 
