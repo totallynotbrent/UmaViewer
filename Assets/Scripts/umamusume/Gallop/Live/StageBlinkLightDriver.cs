@@ -11,7 +11,8 @@ namespace Gallop.Live
     {
         public bool verboseLog = false;
 
-        public float emissionBoost = 1.1f;
+        public float emissionBoost = 1f;
+
         public float blinkSimpleUseNormalCorrection = 0f;
         public float localTimeScale = 1f;
         public float powerSmoothing = 0f;

@@ -101,7 +101,7 @@ public sealed class LiveBloomProbe : MonoBehaviour
             _bloom.intensity.Override(bloomIntensity);
             _bloom.threshold.Override(bloomThreshold);
             _bloom.scatter.Override(bloomScatter);
-            _bloom.clamp.Override(1000f);
+            _bloom.clamp.Override(2f);
             _bloom.highQualityFiltering.Override(true);
         }
 

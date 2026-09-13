@@ -162,9 +162,11 @@ namespace Gallop.Live
 
             renderer.GetPropertyBlock(mpb);
 
+            // keep the base albedo in 0-1 and let only the emissive channels carry
+            // the hdr values, so an led does not blow out its own surface.
             Color finalColor = color * intensity;
             mpb.SetColor(PID_BlinkColor, finalColor);
-            mpb.SetColor(PID_Color, finalColor);
+            mpb.SetColor(PID_Color, color);
             mpb.SetColor(PID_EmissionColor, finalColor);
             mpb.SetFloat(PID_Intensity, intensity);
 

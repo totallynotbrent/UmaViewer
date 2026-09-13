@@ -12,7 +12,6 @@ public class UISettingsCamera : MonoBehaviour
     private GameObject _runtimeRenderScaleRow;
     private GameObject _runtimeExposureRow;
     private GameObject _runtimeCharaRow;
-    private GameObject _runtimeEmissionRow;
 
     [Header("Free Camera")]
     public GameObject FreeCameraSettingsTab;
@@ -327,26 +326,6 @@ public class UISettingsCamera : MonoBehaviour
         dd.RefreshShownValue();
     }
 
-    /// <summary> Emission boost row: bloom harder so LEDs/lasers/cyalume pop. </summary>
-    public void EnsureEmissionDropdown()
-    {
-        if (_runtimeEmissionRow != null || _runtimeCharaRow == null)
-            return;
-
-        _runtimeEmissionRow = CloneDropdownRow(_runtimeCharaRow.transform, "Emission Boost");
-        if (_runtimeEmissionRow == null)
-            return;
-
-        var dd = _runtimeEmissionRow.GetComponentInChildren<TMP_Dropdown>(true);
-        dd.name = "EmissionBoostDropdown";
-        dd.ClearOptions();
-        dd.AddOptions(new List<string> { "0.5", "0.75", "1.0 (Default)", "1.3", "1.6", "2.0" });
-        dd.onValueChanged = new TMP_Dropdown.DropdownEvent();
-        dd.onValueChanged.AddListener(ChangeEmissionBoost);
-        dd.SetValueWithoutNotify(BoostToDropdownValue(Config.Instance.EmissionBoost));
-        dd.RefreshShownValue();
-    }
-
     private int BoostToDropdownValue(float boost)
     {
         if (boost >= 1.8f) return 5;
@@ -376,16 +355,6 @@ public class UISettingsCamera : MonoBehaviour
         if (!Mathf.Approximately(Config.Instance.CharaBrightness, b))
         {
             Config.Instance.CharaBrightness = b;
-            Config.Instance.UpdateConfig(false);
-        }
-    }
-
-    public void ChangeEmissionBoost(int value)
-    {
-        var b = DropdownValueToBoost(value);
-        if (!Mathf.Approximately(Config.Instance.EmissionBoost, b))
-        {
-            Config.Instance.EmissionBoost = b;
             Config.Instance.UpdateConfig(false);
         }
     }

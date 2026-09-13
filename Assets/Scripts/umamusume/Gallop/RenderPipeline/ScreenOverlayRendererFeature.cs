@@ -55,7 +55,7 @@ namespace Gallop.RenderPipeline
                 CommandBuffer command = CommandBufferPool.Get();
                 using (new ProfilingScope(command, overlayProfilingSampler))
                 {
-                    destination.GetTemporaryRT(command, FilterMode.Bilinear);
+                    destination.GetTemporaryRT(command, FilterMode.Bilinear, RenderTextureFormat.DefaultHDR);
                     ScreenOverlayRender.Parameter first = ScreenOverlayRender.Parameter.Default();
                     ScreenOverlayRender.Parameter second = ScreenOverlayRender.Parameter.Default();
                     ScreenOverlayRender.Parameter third = ScreenOverlayRender.Parameter.Default();

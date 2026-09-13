@@ -1,4 +1,5 @@
 using Gallop.ImageEffect;
+using Gallop.Live;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -21,6 +22,10 @@ namespace Gallop
 
         private Bloom _bloom;
         private ColorAdjustments _colorAdjust;
+        private DepthOfField _dof;
+        private Tonemapping _tonemapping;
+        private MotionBlur _motionBlur;
+        private Camera _camera;
 
         // runtime toggle so the stage glow (bloom + diffusion) can be switched off
         // without re-editing the timeline; defaults on.
@@ -31,6 +36,39 @@ namespace Gallop
         {
             get => _bloomAndDiffusionEnabled;
             set => _bloomAndDiffusionEnabled = value;
+        }
+
+        // runtime toggle so depth of field can be switched off without re-editing
+        // the timeline; defaults on.
+        [SerializeField]
+        private bool _depthOfFieldEnabled = true;
+
+        // f-stop for the bokeh aperture; lower = shallower focus.
+        [SerializeField]
+        private float _dofAperture = 2.8f;
+
+        // bloom threshold floor under hdr: only emissive values above this bloom,
+        // so the stage glows soft instead of clipping flat white.
+        [SerializeField]
+        private float _bloomThresholdFloor = 0.85f;
+
+        // cap on the veiling radius; 1.0 is the halo band, this stays in the soft-glow band.
+        [SerializeField]
+        private float _bloomScatterMax = 0.7f;
+
+        // bounds how much any single hot source feeds the bloom pyramid before the
+        // tonemap; the authoritative anti-blowout knob under hdr.
+        [SerializeField]
+        private float _bloomClamp = 2f;
+
+        // camera-only motion blur strength; 0 disables, 0.4 is a soft sweep.
+        [SerializeField]
+        private float _motionBlurIntensity = 0.4f;
+
+        public bool DepthOfFieldEnabled
+        {
+            get => _depthOfFieldEnabled;
+            set => _depthOfFieldEnabled = value;
         }
 
         public DofDiffusionBloomOverlayParam
@@ -50,6 +88,9 @@ namespace Gallop
         private void LateUpdate()
         {
             ApplyBloomParameter();
+            ApplyTonemapping();
+            ApplyDepthOfField();
+            ApplyMotionBlur();
         }
 
         public void InitializeVolume()
@@ -81,6 +122,15 @@ namespace Gallop
 
             if (!_runtimeProfile.TryGet(out _colorAdjust))
                 _colorAdjust = _runtimeProfile.Add<ColorAdjustments>(true);
+
+            if (!_runtimeProfile.TryGet(out _dof))
+                _dof = _runtimeProfile.Add<DepthOfField>(true);
+
+            if (!_runtimeProfile.TryGet(out _tonemapping))
+                _tonemapping = _runtimeProfile.Add<Tonemapping>(true);
+
+            if (!_runtimeProfile.TryGet(out _motionBlur))
+                _motionBlur = _runtimeProfile.Add<MotionBlur>(true);
         }
 
         public void ApplyBloomParameter()
@@ -108,14 +158,13 @@ namespace Gallop
             if (_volume != null)
                 _volume.weight = 1f;
 
-            // blend the diffusion glow into bloom (larger scatter), but keep the raw intensity
-            // driven by bloom alone — DiffusionBright is a different, much larger scale and
-            // summing it raw floods the stage.
+            // the reference forks drive bloom from the authored intensity raw; this fork
+            // used to fold diffusion brightness in and scale by a boost, which under hdr
+            // over-drove the pyramid to flat white. keep bloom intensity raw and let
+            // diffusion contribute only a tightly-bounded soft kick.
             float bloomIntensity = param.IsEnableBloom ? Mathf.Max(0f, param.BloomIntensity) : 0f;
             float diffusionHint = param.IsEnableDiffusion ? Mathf.Max(0f, param.DiffusionBright) : 0f;
-            // diffusion nudges the bloom up only slightly; its real job is the wider soft
-            // scatter below, not raw brightness.
-            float totalIntensity = bloomIntensity + Mathf.Min(diffusionHint * 0.05f, 1.5f);
+            float totalIntensity = bloomIntensity + Mathf.Min(diffusionHint * 0.02f, 0.4f);
 
             bool enabled = (param.IsEnableBloom || param.IsEnableDiffusion) && totalIntensity > 0f;
             _bloom.active = enabled;
@@ -123,13 +172,15 @@ namespace Gallop
             _bloom.threshold.overrideState = true;
             _bloom.intensity.overrideState = true;
             _bloom.scatter.overrideState = true;
+            _bloom.clamp.overrideState = true;
+            _bloom.highQualityFiltering.overrideState = true;
 
             _bloom.intensity.value = totalIntensity;
 
             float bloomBlur = param.IsEnableBloom ? Mathf.Max(0f, param.BloomBlurSize) : 0f;
             float diffusionBlur = param.IsEnableDiffusion ? Mathf.Max(0f, param.DiffusionBlurSize) : 0f;
             float maxBlurSize = Mathf.Max(bloomBlur, diffusionBlur);
-            _bloom.scatter.value = Mathf.Clamp01(maxBlurSize / 10f);
+            _bloom.scatter.value = Mathf.Min(_bloomScatterMax, Mathf.Clamp01(maxBlurSize / 10f));
 
             float threshold;
             if (param.IsEnableBloom && param.IsEnableDiffusion)
@@ -144,7 +195,15 @@ namespace Gallop
             {
                 threshold = Mathf.Max(0f, param.BloomThreshold);
             }
-            _bloom.threshold.value = threshold;
+            // hold the threshold at or above the hdr floor so only emissive sources bloom.
+            _bloom.threshold.value = Mathf.Max(_bloomThresholdFloor, threshold);
+
+            // bound the hot-source contribution before the tonemap so a single led does not
+            // clamp the whole pyramid to white.
+            _bloom.clamp.value = _bloomClamp;
+
+            // bicubic upsample removes the sparkle on the bright reconstruction.
+            _bloom.highQualityFiltering.value = true;
 
             // exposure control from the settings dropdown, in stops (EV): 0 is neutral,
             // negative darkens the whole frame (emissive lights hold up better because they
@@ -157,6 +216,94 @@ namespace Gallop
                 _colorAdjust.postExposure.overrideState = true;
                 _colorAdjust.postExposure.value = exp;
             }
+        }
+
+        public void ApplyTonemapping()
+        {
+            if (_tonemapping == null)
+                InitializeVolume();
+
+            if (_tonemapping == null)
+                return;
+
+            // the hdr buffer needs aces to roll off highlight values; rendered raw it reads
+            // washed out. active only while the stage glow is on (same kill switch) so the
+            // flat-stage a/b stays truly flat.
+            _tonemapping.active = _bloomAndDiffusionEnabled;
+            _tonemapping.mode.overrideState = true;
+            _tonemapping.mode.value = TonemappingMode.ACES;
+        }
+
+        public void ApplyDepthOfField()
+        {
+            if (_dof == null)
+                InitializeVolume();
+
+            if (_dof == null)
+                return;
+
+            if (_camera == null)
+                _camera = GetComponent<Camera>();
+
+            if (_camera == null)
+                return;
+
+            // free-camera / orbit mode has no timeline focus target; disable dof so
+            // the manual camera stays uniformly sharp.
+            if (!_depthOfFieldEnabled || Director.instance == null || !Director.instance.isTimelineControlled)
+            {
+                _dof.active = false;
+                return;
+            }
+
+            var control = Director.instance._liveTimelineControl;
+            if (control == null)
+            {
+                _dof.active = false;
+                return;
+            }
+
+            Vector3 focusPoint = control.LatestCameraLookAtPosition;
+            float focusDistance = Vector3.Distance(_camera.transform.position, focusPoint);
+
+            _dof.active = true;
+            _dof.mode.overrideState = true;
+            _dof.mode.value = DepthOfFieldMode.Bokeh;
+            _dof.focusDistance.overrideState = true;
+            _dof.focusDistance.value = Mathf.Clamp(focusDistance, 0.5f, 50f);
+            _dof.focalLength.overrideState = true;
+            _dof.focalLength.value = Gallop.Math.GetFocalLength(_camera.fieldOfView);
+            _dof.aperture.overrideState = true;
+            _dof.aperture.value = Mathf.Clamp(_dofAperture, 1f, 32f);
+            _dof.bladeCount.overrideState = true;
+            _dof.bladeCount.value = 6;
+        }
+
+        public void ApplyMotionBlur()
+        {
+            if (_motionBlur == null)
+                InitializeVolume();
+
+            if (_motionBlur == null)
+                return;
+
+            // camera-only blurs the timeline's camera sweeps and dollies; drop it in
+            // free-cam so orbit and screenshot mode stay sharp.
+            if (Director.instance == null || !Director.instance.isTimelineControlled)
+            {
+                _motionBlur.active = false;
+                return;
+            }
+
+            _motionBlur.active = true;
+            _motionBlur.mode.overrideState = true;
+            _motionBlur.mode.value = MotionBlurMode.CameraOnly;
+            _motionBlur.intensity.overrideState = true;
+            _motionBlur.intensity.value = Mathf.Clamp(_motionBlurIntensity, 0f, 1f);
+            _motionBlur.clamp.overrideState = true;
+            _motionBlur.clamp.value = 0.05f;
+            _motionBlur.quality.overrideState = true;
+            _motionBlur.quality.value = MotionBlurQuality.Medium;
         }
     }
 }

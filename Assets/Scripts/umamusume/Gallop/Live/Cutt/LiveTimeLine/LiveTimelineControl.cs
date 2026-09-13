@@ -227,6 +227,10 @@ namespace Gallop.Live.Cutt
 
         private Vector3 _liveStageCenterPos = Vector3.zero;
 
+        // the look-at point the timeline camera resolved this late frame; the
+        // depth-of-field effect reads it as its focus target.
+        public Vector3 LatestCameraLookAtPosition { get; private set; } = Vector3.zero;
+
         private TimelinePlayerMode _playMode = TimelinePlayerMode.Default;
 
         public TimelinePlayerMode PlayMode => _playMode;
@@ -253,6 +257,8 @@ namespace Gallop.Live.Cutt
         }
 
         private static int _liveCharaPositionMax = -1;
+
+        private static bool _bloomLogged = false;
 
         private static bool availableFindKeyCache => true;
 
@@ -417,6 +423,7 @@ namespace Gallop.Live.Cutt
             _isNowAlterUpdate = true;
 
             Vector3 outLookAt = Vector3.zero;
+            LatestCameraLookAtPosition = liveStageCenterPos;
 
             AlterLateUpdate_FormationOffset(currentLiveTime);
             AlterUpdate_CameraSwitcher(camSheet, _currentFrame);
@@ -1405,6 +1412,7 @@ namespace Gallop.Live.Cutt
                 {
                     camera.cacheTransform.LookAt(lookAtPos, Vector3.up);
                     outLookAt = lookAtPos;
+                    LatestCameraLookAtPosition = lookAtPos;
                 }
             }
         }
@@ -2993,6 +3001,14 @@ namespace Gallop.Live.Cutt
 
                 updateInfo.BloomBlendMode =
                     currentKey.BloomBlendMode;
+            }
+
+            // one-shot dump of the game's authored bloom ranges so the hdr calibration can be
+            // tuned against real data instead of guesses.
+            if (!_bloomLogged)
+            {
+                _bloomLogged = true;
+                Director.FileLog($"[Bloom] threshold={updateInfo.threshold:F3} intensity={updateInfo.intensity:F3} blur={updateInfo.BloomBlurSize:F2} diffBright={updateInfo.diffusionBright:F3} diffThreshold={updateInfo.diffusionThreshold:F3} diffBlur={updateInfo.diffusionBlurSize:F2}");
             }
         }
 

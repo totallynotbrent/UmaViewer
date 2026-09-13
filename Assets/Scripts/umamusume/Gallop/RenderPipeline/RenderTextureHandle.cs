@@ -79,6 +79,11 @@ namespace Gallop.RenderPipeline
             cmd.GetTemporaryRT( _id, Width, Height, 0, filter);
         }
 
+        public void GetTemporaryRT(CommandBuffer cmd, FilterMode filter, RenderTextureFormat format)
+        {
+            cmd.GetTemporaryRT( _id, Width, Height, 0, filter, format);
+        }
+
         public void ReleaseTemporaryRT(CommandBuffer cmd)
         {
             cmd.ReleaseTemporaryRT(_id);

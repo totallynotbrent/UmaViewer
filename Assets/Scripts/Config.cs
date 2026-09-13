@@ -56,9 +56,6 @@ public class Config
     public string CharaBrightnessTip = "Character rim/toon brightness boost. Higher makes the idols stand out against a darkened background.";
     public float CharaBrightness = 1f;
 
-    public string EmissionBoostTip = "Boost for emissive lights (LEDs, lasers, spotlights, cyalume) so they pop against the background.";
-    public float EmissionBoost = 1f;
-
     public bool RegionDetectionPassed = false;
 
     public string VmdMorphConvertSettingTip = "The mapping of MMD mprphs to UMA mprphs during VMD recording, multiple UMA expression weights will be combined (not exceeding 1)";

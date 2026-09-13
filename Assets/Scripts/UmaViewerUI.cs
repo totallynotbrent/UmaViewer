@@ -151,7 +151,6 @@ public class UmaViewerUI : MonoBehaviour
         CameraSettings.EnsureRenderScaleDropdown();
         CameraSettings.EnsureExposureDropdown();
         CameraSettings.EnsureCharaDropdown();
-        CameraSettings.EnsureEmissionDropdown();
         AssetSettings.LoadedAssetsClear();
         UmaAssetManager.OnLoadedBundleUpdate += AssetSettings.LoadedAssetsAdd;
         UmaAssetManager.OnLoadedBundleRemove += AssetSettings.LoadedAssetsRemove;

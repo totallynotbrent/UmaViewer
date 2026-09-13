@@ -86,7 +86,8 @@ namespace Gallop.RenderPipeline
 
                 currentDestination.GetTemporaryRT(
                     cmd,
-                    FilterMode.Bilinear);
+                    FilterMode.Bilinear,
+                    RenderTextureFormat.DefaultHDR);
             }
 
             if (isValidity1)
@@ -131,7 +132,8 @@ namespace Gallop.RenderPipeline
 
                     currentDestination.GetTemporaryRT(
                         cmd,
-                        FilterMode.Bilinear);
+                        FilterMode.Bilinear,
+                        RenderTextureFormat.DefaultHDR);
                 }
 
                 _renderer.Blit(
