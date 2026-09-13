@@ -117,11 +117,6 @@ namespace Gallop
             // scatter below, not raw brightness.
             float totalIntensity = bloomIntensity + Mathf.Min(diffusionHint * 0.05f, 1.5f);
 
-            // emission pop: scale the glow up so LEDs/lasers/cyalume bloom harder without
-            // brightening the whole frame — this is what makes the lights "pop".
-            float emissionBoost = Config.Instance != null ? Mathf.Clamp(Config.Instance.EmissionBoost, 0.5f, 2f) : 1f;
-            totalIntensity *= emissionBoost;
-
             bool enabled = (param.IsEnableBloom || param.IsEnableDiffusion) && totalIntensity > 0f;
             _bloom.active = enabled;
 

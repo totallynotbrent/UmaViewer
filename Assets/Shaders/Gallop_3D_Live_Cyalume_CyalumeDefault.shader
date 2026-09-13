@@ -5,7 +5,6 @@ Shader "Gallop_3D_Live_Cyalume_CyalumeDefault"
         _MainTex ("Texture", 2D) = "white" {}
         _Color ("Color", Color) = (1, 1, 1, 1)
         _Intensity ("Intensity", Range(0, 5)) = 1.0
-        _GlowPower ("Glow Power", Range(0, 10)) = 2.0
         _ScrollSpeed ("Scroll Speed", Vector) = (0, 0, 0, 0)
         _Tint ("Tint", Color) = (1, 1, 1, 1)
     }
@@ -59,7 +58,6 @@ Shader "Gallop_3D_Live_Cyalume_CyalumeDefault"
             fixed4 _Color;
             fixed4 _Tint;
             float _Intensity;
-            float _GlowPower;
             float4 _ScrollSpeed;
             
             v2f vert (appdata v)
@@ -91,19 +89,10 @@ Shader "Gallop_3D_Live_Cyalume_CyalumeDefault"
             
             fixed4 frag (v2f i) : SV_Target
             {
-                // Sample texture
+                // sample the texture and apply the color, tint, and intensity
                 fixed4 texColor = tex2D(_MainTex, i.uv);
-                
-                // Apply color, tint, and intensity
                 fixed4 finalColor = texColor * i.color * _Color * _Tint;
                 finalColor.rgb *= _Intensity;
-                
-                // Apply glow effect
-                float luminance = dot(finalColor.rgb, float3(0.299, 0.587, 0.114));
-                finalColor.rgb += finalColor.rgb * pow(luminance, _GlowPower) * 0.5;
-                
-                // Apply alpha
-                finalColor.a *= texColor.a * i.color.a * _Color.a;
                 
                 UNITY_APPLY_FOG(i.fogCoord, finalColor);
                 return finalColor;

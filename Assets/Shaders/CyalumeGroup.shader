@@ -5,7 +5,6 @@ Shader "Custom/CyalumeGroup"
         _MainTex ("Texture", 2D) = "white" {}
         _Color ("Color", Color) = (1, 1, 1, 1)
         _Intensity ("Intensity", Range(0, 5)) = 1.0
-        _GlowPower ("Glow Power", Range(0, 10)) = 2.0
         _ScrollSpeed ("Scroll Speed", Vector) = (0, 0, 0, 0)
         [Toggle] _UseVertexColor ("Use Vertex Color", Float) = 0
     }
@@ -58,7 +57,6 @@ Shader "Custom/CyalumeGroup"
             float4 _MainTex_ST;
             fixed4 _Color;
             float _Intensity;
-            float _GlowPower;
             float4 _ScrollSpeed;
             float _UseVertexColor;
             
@@ -92,19 +90,10 @@ Shader "Custom/CyalumeGroup"
             
             fixed4 frag (v2f i) : SV_Target
             {
-                // Sample texture
+                // sample the texture and apply the tint and intensity
                 fixed4 texColor = tex2D(_MainTex, i.uv);
-                
-                // Apply color and intensity
                 fixed4 finalColor = texColor * i.color;
                 finalColor.rgb *= _Intensity;
-                
-                // Apply glow effect
-                float luminance = dot(finalColor.rgb, float3(0.299, 0.587, 0.114));
-                finalColor.rgb += finalColor.rgb * pow(luminance, _GlowPower) * 0.5;
-                
-                // Apply alpha
-                finalColor.a *= texColor.a * i.color.a;
                 
                 UNITY_APPLY_FOG(i.fogCoord, finalColor);
                 return finalColor;

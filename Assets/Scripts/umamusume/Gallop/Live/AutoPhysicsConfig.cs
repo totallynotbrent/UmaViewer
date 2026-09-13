@@ -14,7 +14,7 @@ namespace Gallop.Live
         
         [Header("Skirt Physics")]
         [Range(0.5f, 3.0f)]
-        [SerializeField] private float _skirtStiffness = 1.4f;     // Higher to prevent clipping
+        [SerializeField] private float _skirtStiffness = 1.8f;     // Higher to prevent clipping
         
         [Header("Tail/Accessories")]
         [Range(0.5f, 3.0f)]

@@ -571,20 +571,6 @@ public class UmaContainerCharacter : UmaContainer
         _cySpringController.Reset();
 
         // katboi restore: the rewrite now simulates BODY-only (drives the skirt).
-        // Spin-stable skirt: higher spring rate holds the hem down against the
-        // centrifugal fan-out on spins instead of riding up; extra gravity keeps it
-        // hanging heavy.
-        _cySpringController.SetStiffnessRate(CySpringController.Parts.Body, 2.6f);
-        _cySpringController.SetPartsSpringRate(CySpringController.Parts.Body, 2.2f);
-        CySpringController.GravityRate = 4.5f;  // 3.2x default 1.4
-        try
-        {
-            _cySpringController.SetForceDisableHipMoveParam(true);
-        }
-        catch (System.Exception)
-        {
-            // optional knob; not fatal if a given body lacks the hip-param flag
-        }
 
         _cySpringLoaded = true;
 
@@ -1082,16 +1068,8 @@ public class UmaContainerCharacter : UmaContainer
     {
         if (EnablePhysics && _cySpringLoaded && _cySpringController != null)
         {
-            float dt = Mathf.Clamp(Time.deltaTime, 0f, 1f / 30f);
-            // ensure single driver: disable auto-update on controller/updater
-            var fi = typeof(Gallop.CySpringController).GetField("_autoUpdateInLateUpdate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (fi != null) fi.SetValue(_cySpringController, false);
-            var updater = _cySpringController.GetComponent<Gallop.CySpringUpdater>();
-            if (updater != null)
-            {
-                var fi2 = typeof(Gallop.CySpringUpdater).GetField("_autoUpdateInLateUpdate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (fi2 != null) fi2.SetValue(updater, false);
-            }
+            // cap the step so low-fps frames don't feed an oversized dt into the cloth sim
+            float dt = Mathf.Clamp(Time.deltaTime, 0f, 1f / 60f);
             _cySpringController.BeginSimulation(dt, false);
         }
     }
@@ -1101,8 +1079,6 @@ public class UmaContainerCharacter : UmaContainer
         if (EnablePhysics && _cySpringLoaded && _cySpringController != null)
         {
             _cySpringController.EndSimulation();
-            if (_skirtController != null)
-                _skirtController.UpdateSkirt();
         }
 
         // 官方 AlterLateUpdatePost 是 EndSimulation 后 UpdateBodyLightDir / UpdateFaceLight。

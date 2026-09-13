@@ -151,13 +151,22 @@ jobs:
             gh release create "$NAME" \
               "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
               --target "$GITHUB_SHA" \
-              --title "umaViewer $NAME" \
+              --title "UmaViewer $NAME" \
               --prerelease \
               --notes "experiment build from the $NAME branch."
-          else
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # stable release: the tag message is the single-sentence change note.
             gh release create "$RELEASE_TAG" \
               "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
               --target "$GITHUB_SHA" \
               --title "UmaViewer $RELEASE_TAG" \
-              --notes "Windows x64 IL2CPP build. For release notes, see the commit history or docs."
+              --notes-from-tag
+          else
+            # manual dispatch with a custom tag: no tag message exists yet, so
+            # use a plain one-liner and set the real note by editing the release.
+            gh release create "$RELEASE_TAG" \
+              "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
+              --target "$GITHUB_SHA" \
+              --title "UmaViewer $RELEASE_TAG" \
+              --notes "windows x64 il2cpp build."
           fi

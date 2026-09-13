@@ -165,7 +165,7 @@ namespace Gallop.Live
             Color finalColor = color * intensity;
             mpb.SetColor(PID_BlinkColor, finalColor);
             mpb.SetColor(PID_Color, finalColor);
-            mpb.SetColor(PID_EmissionColor, finalColor * 2f);
+            mpb.SetColor(PID_EmissionColor, finalColor);
             mpb.SetFloat(PID_Intensity, intensity);
 
             renderer.SetPropertyBlock(mpb);

@@ -72,7 +72,7 @@ namespace Gallop.Live
                 _camera.depth = cameraDepth;
                 //_camera.cullingMask = StageUtil.Background3dAllLayers() | StageUtil.CharaAllLayers();
                 _camera.clearFlags = CameraClearFlags.Depth;
-                _camera.allowHDR = false;
+                _camera.allowHDR = true;
                 _camera.SetTargetBuffers(colorBuffer.colorBuffer, depthBuffer.depthBuffer);
             }
         }
