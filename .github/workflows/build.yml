@@ -148,8 +148,11 @@ jobs:
             NAME="${NAME//\//-}"
             # delete any prior rolling release for this experiment tag so assets don't accumulate
             gh release delete "$NAME" --yes --cleanup-tag 2>/dev/null || true
-            # single-sentence note = the pushed commit subject, same rule as stable releases.
-            NOTE="$(git log -1 --format='%s')"
+            # change note = the latest real viewer change on the branch; commits that only
+            # touch .github/workflows are skipped so a workflow tweak is never the visible note.
+            BASE="$(git merge-base origin/master HEAD)"
+            NOTE="$(git log --format='%s' "$BASE"..HEAD -- ':!.github/workflows' | head -1)"
+            [ -z "$NOTE" ] && NOTE="windows x64 il2cpp build."
             gh release create "$NAME" \
               "UmaViewer-Windows-x64.zip#UmaViewer Windows x64 (IL2CPP)" \
               --target "$GITHUB_SHA" \
