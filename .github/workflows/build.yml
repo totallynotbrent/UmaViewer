@@ -127,6 +127,13 @@ jobs:
           dotnet publish Tools/UmaViewerUpdater -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o build/updater-publish
           Copy-Item "build/updater-publish/UmaViewerUpdater.exe" "build/StandaloneWindows64/UmaViewerUpdater.exe" -Force
 
+      - name: Build launcher
+        shell: pwsh
+        run: |
+          # double-click target that checks the feed, offers an update, else boots the game.
+          dotnet publish Tools/UmaViewerLauncher -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o build/launcher-publish
+          Copy-Item "build/launcher-publish/UmaViewerLauncher.exe" "build/StandaloneWindows64/UmaViewerLauncher.exe" -Force
+
       - name: Package Windows build
         shell: pwsh
         run: |
