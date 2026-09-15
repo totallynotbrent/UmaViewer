@@ -284,6 +284,45 @@ public class UmaViewerMain : MonoBehaviour
         Builder.ShaderList = new List<Shader>(shaders.LoadAllAssets<Shader>()); 
         Gallop.ShaderManager.InitManager();
         Gallop.ShaderManager.WarmupDofBloomShader();
+
+        TryBenchmarkStartup();
+    }
+
+    // command-line path for the benchmark rig: --music <id> auto-launches a
+    // deterministic concert, --bench arms the frame-time profiler.
+    private void TryBenchmarkStartup()
+    {
+        var args = Environment.GetCommandLineArgs();
+        bool bench = false;
+        int musicId = -1;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--bench")
+            {
+                bench = true;
+            }
+            else if (args[i] == "--music" && i + 1 < args.Length)
+            {
+                int.TryParse(args[i + 1], out musicId);
+            }
+        }
+
+        if (bench)
+            gameObject.AddComponent<FrameTimeProfiler>();
+
+        if (musicId >= 0)
+        {
+            var live = Lives.FirstOrDefault(l => l.MusicId == musicId);
+            if (live != null)
+            {
+                UI.AutoStartLive(live);
+            }
+            else
+            {
+                Debug.LogWarning($"[bench] music {musicId} not found in lives");
+            }
+        }
     }
 
     private static bool TryParseEnglishNames(

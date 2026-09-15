@@ -871,6 +871,21 @@ public class UmaViewerUI : MonoBehaviour
         }
     }
 
+    public void AutoStartLive(LiveEntry entry)
+    {
+        ShowLiveSelectPanel(entry);
+        var selectlist = LiveSelectList.content.GetComponentsInChildren<LiveCharacterSelect>();
+        var chars = UmaViewerMain.Instance.Characters;
+        for (int i = 0; i < selectlist.Length; i++)
+        {
+            var slot = selectlist[i];
+            slot.CharaEntry = chars.Count > 0 ? chars[i % chars.Count] : null;
+            slot.CostumeId = entry.DefaultDress.ToString();
+            slot.SelectChara(this);
+        }
+        PlayLive();
+    }
+
     void ShowLiveSelectPanel(LiveEntry entry)
     {
         LiveSelectPannel.SetActive(true);
