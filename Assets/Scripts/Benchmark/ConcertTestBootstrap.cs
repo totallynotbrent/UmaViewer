@@ -14,7 +14,7 @@ public class ConcertTestBootstrap : MonoBehaviour
 
     private IEnumerator _waiter;
 
-    private static int ResolveMusicId()
+    private int ResolveMusicId()
     {
         string[] args = Environment.GetCommandLineArgs();
         for (int i = 0; i < args.Length; i++)
