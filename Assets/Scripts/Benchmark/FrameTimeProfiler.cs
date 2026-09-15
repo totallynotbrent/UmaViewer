@@ -100,6 +100,30 @@ public class FrameTimeProfiler : MonoBehaviour
         float sum = sorted.Sum();
         float avg = sum / n;
 
+        // bucket histogram + stall stats so a single run also exposes the shape
+        // of the distribution, not just averages. frames >100ms are stalls.
+        int[] buckets = { 0, 0, 0, 0, 0, 0 };
+        float[] edgesMs = { 8.33f, 16.67f, 33.33f, 50f, 100f, float.MaxValue };
+        int stalls = 0;
+        float stallMaxMs = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = sorted[i];
+            for (int b = 0; b < buckets.Length; b++)
+            {
+                if (t <= edgesMs[b])
+                {
+                    buckets[b]++;
+                    break;
+                }
+            }
+            if (t > 100f)
+            {
+                stalls++;
+                if (t > stallMaxMs) stallMaxMs = t;
+            }
+        }
+
         long gcNow = GC.GetTotalMemory(false);
         int gcColsNow = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
 
@@ -112,6 +136,11 @@ public class FrameTimeProfiler : MonoBehaviour
             $"median_ms={P(0.5f):F3}",
             $"p99_ms={P(0.99f):F3} p99_9_ms={P(0.999f):F3}",
             $"min_ms={sorted[0]:F3} max_ms={sorted[^1]:F3}",
+            "hist_pct: " +
+                $"<8.33={100f * buckets[0] / n:F1} <16.67={100f * buckets[1] / n:F1} " +
+                $"<33.33={100f * buckets[2] / n:F1} <50={100f * buckets[3] / n:F1} " +
+                $"<100={100f * buckets[4] / n:F1} >=100={100f * buckets[5] / n:F1}",
+            $"stalls_gt100ms={stalls} stall_max_ms={stallMaxMs:F1}",
             $"gc_alloc_mb={(gcNow - _gcBytesBefore) / 1048576.0:F2}",
             $"gc_collections={gcColsNow - _gcCollectionsBefore}",
             $"target_fps={Application.targetFrameRate} resolution={Screen.width}x{Screen.height}",
@@ -122,6 +151,9 @@ public class FrameTimeProfiler : MonoBehaviour
         {
             Directory.CreateDirectory(Path.GetDirectoryName(outPath));
             File.WriteAllText(outPath, summary);
+            // raw per-frame times let the user's run be re-analysed offline.
+            File.WriteAllText(Path.Combine(Path.GetDirectoryName(outPath), "uma_bench_frames.csv"),
+                string.Join("\n", _frameTimes.ConvertAll(t => t.ToString("F3", CultureInfo.InvariantCulture)).ToArray()));
             Debug.Log($"[bench] summary written -> {outPath}");
         }
         catch (Exception ex)
