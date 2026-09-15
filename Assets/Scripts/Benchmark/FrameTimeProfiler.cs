@@ -15,6 +15,7 @@ public class FrameTimeProfiler : MonoBehaviour
     private static float _sampleSeconds = 30f;
 
     private bool _sampling;
+    private float _clock;
     private readonly List<float> _frameTimes = new List<float>(65536);
     private long _gcBytesBefore;
     private int _gcCollectionsBefore;
@@ -30,6 +31,22 @@ public class FrameTimeProfiler : MonoBehaviour
         }
     }
 
+    // the harness polls marker files in persistent data; managed Debug.Log does
+    // not reach the player log on the IL2CPP linux build, so files are the signal.
+    private static void WriteMarker(string name)
+    {
+        try
+        {
+            string markPath = Path.Combine(Application.persistentDataPath, name);
+            Directory.CreateDirectory(Path.GetDirectoryName(markPath));
+            File.WriteAllText(markPath, DateTime.Now.ToString(CultureInfo.InvariantCulture));
+        }
+        catch
+        {
+            // a missing marker only costs a harness timeout; boot continues.
+        }
+    }
+
     private void Awake()
     {
         ParseArgs();
@@ -41,25 +58,8 @@ public class FrameTimeProfiler : MonoBehaviour
 
         _gcBytesBefore = GC.GetTotalMemory(false);
         _gcCollectionsBefore = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
-
-        // the harness waits for this marker so the measurement window is measured
-        // from arming, not from container start, which absorbs boot-time variance.
-        try
-        {
-            string markPath = Path.Combine(Application.persistentDataPath, "uma_bench_armed.txt");
-            Directory.CreateDirectory(Path.GetDirectoryName(markPath));
-            File.WriteAllText(markPath, DateTime.Now.ToString(CultureInfo.InvariantCulture));
-        }
-        catch
-        {
-            // a missing marker only costs a harness timeout; boot continues.
-        }
-
+        WriteMarker("uma_bench_armed.txt");
         Debug.Log($"[bench] armed: warmup={_warmupSeconds}s sample={_sampleSeconds}s");
-
-        // the viewer never exits by itself on the bench rig, so sampling is driven by
-        // wall-clock duration; the summary is written once the window closes.
-        Invoke(nameof(FinishSampling), _warmupSeconds + _sampleSeconds);
     }
 
     private void Update()
@@ -67,15 +67,26 @@ public class FrameTimeProfiler : MonoBehaviour
         if (!_enabled)
             return;
 
-        // the warm-up window is not measured; it only lets the concert reach steady state.
-        if (!_sampling && _warmupSeconds > 0f)
+        // wall-clock only: the stage load produces multi-second frames, so scaled
+        // time would burn the warm-up instantly and contaminate the sample.
+        _clock += Time.unscaledDeltaTime;
+
+        if (!_sampling && _clock < _warmupSeconds)
+            return;
+
+        if (!_sampling)
         {
-            _warmupSeconds -= Time.deltaTime;
+            _sampling = true;
+            WriteMarker("uma_bench_sampling.txt");
+        }
+
+        if (_clock >= _warmupSeconds + _sampleSeconds)
+        {
+            FinishSampling();
             return;
         }
 
-        _sampling = true;
-        _frameTimes.Add(Time.deltaTime * 1000f);
+        _frameTimes.Add(Time.unscaledDeltaTime * 1000f);
     }
 
     private void WriteSummary()
@@ -125,7 +136,6 @@ public class FrameTimeProfiler : MonoBehaviour
     {
         WriteSummary();
         _enabled = false;
-        // the harness greps this marker in the player log to know the run ended.
         Debug.Log("[bench] BENCH_DONE");
     }
 }
