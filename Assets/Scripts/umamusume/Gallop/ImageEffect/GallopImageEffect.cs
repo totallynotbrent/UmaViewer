@@ -25,6 +25,7 @@ namespace Gallop
         private DepthOfField _dof;
         private Tonemapping _tonemapping;
         private MotionBlur _motionBlur;
+        private Vignette _vignette;
         private Camera _camera;
 
         // runtime toggle so the stage glow (bloom + diffusion) can be switched off
@@ -45,21 +46,21 @@ namespace Gallop
 
         // f-stop for the bokeh aperture; lower = shallower focus.
         [SerializeField]
-        private float _dofAperture = 2.8f;
+        private float _dofAperture = 4f;
 
         // bloom threshold floor under hdr: only emissive values above this bloom,
         // so the stage glows soft instead of clipping flat white.
         [SerializeField]
-        private float _bloomThresholdFloor = 0.85f;
+        private float _bloomThresholdFloor = 1.2f;
 
         // cap on the veiling radius; 1.0 is the halo band, this stays in the soft-glow band.
         [SerializeField]
-        private float _bloomScatterMax = 0.7f;
+        private float _bloomScatterMax = 0.45f;
 
         // bounds how much any single hot source feeds the bloom pyramid before the
         // tonemap; the authoritative anti-blowout knob under hdr.
         [SerializeField]
-        private float _bloomClamp = 2f;
+        private float _bloomClamp = 1.5f;
 
         // camera-only motion blur strength; 0 disables, 0.4 is a soft sweep.
         [SerializeField]
@@ -91,6 +92,7 @@ namespace Gallop
             ApplyTonemapping();
             ApplyDepthOfField();
             ApplyMotionBlur();
+            ApplyVignette();
         }
 
         public void InitializeVolume()
@@ -131,6 +133,9 @@ namespace Gallop
 
             if (!_runtimeProfile.TryGet(out _motionBlur))
                 _motionBlur = _runtimeProfile.Add<MotionBlur>(true);
+
+            if (!_runtimeProfile.TryGet(out _vignette))
+                _vignette = _runtimeProfile.Add<Vignette>(true);
         }
 
         public void ApplyBloomParameter()
@@ -145,13 +150,11 @@ namespace Gallop
             if (param == null)
                 return;
 
-            // runtime kill switch: drop bloom + diffusion entirely and zero the
-            // volume weight so the stage reads flat.
+            // runtime toggle: drops the stage glow so the f7 a/b tests bloom only; aces
+            // stays on because it is the hdr-to-display transform, not a glow effect.
             if (!_bloomAndDiffusionEnabled)
             {
                 _bloom.active = false;
-                if (_volume != null)
-                    _volume.weight = 0f;
                 return;
             }
 
@@ -205,17 +208,36 @@ namespace Gallop
             // bicubic upsample removes the sparkle on the bright reconstruction.
             _bloom.highQualityFiltering.value = true;
 
-            // exposure control from the settings dropdown, in stops (EV): 0 is neutral,
-            // negative darkens the whole frame (emissive lights hold up better because they
-            // are unlit), positive brightens. postExposure is already in stops so pass it
-            // through directly.
+            // neutral exposure (stops) baked directly into the grade; the viewer no longer
+            // exposes a tuning slider, and the renderer keeps its chosen value here.
             if (_colorAdjust != null)
             {
-                float exp = Config.Instance != null ? Config.Instance.Exposure : 0f;
-                exp = Mathf.Clamp(exp, -3f, 2f);
+                float exp = 0f;
                 _colorAdjust.postExposure.overrideState = true;
                 _colorAdjust.postExposure.value = exp;
+                // subtle lift to hit the dark concert grade without crushing the mids.
+                _colorAdjust.contrast.overrideState = true;
+                _colorAdjust.contrast.value = 5f;
+                _colorAdjust.saturation.overrideState = true;
+                _colorAdjust.saturation.value = -5f;
             }
+        }
+
+        private void ApplyVignette()
+        {
+            if (_vignette == null)
+                InitializeVolume();
+
+            if (_vignette == null)
+                return;
+
+            _vignette.active = true;
+            _vignette.intensity.overrideState = true;
+            _vignette.intensity.value = 0.35f;
+            _vignette.smoothness.overrideState = true;
+            _vignette.smoothness.value = 0.45f;
+            _vignette.rounded.overrideState = true;
+            _vignette.rounded.value = true;
         }
 
         public void ApplyTonemapping()
@@ -227,9 +249,9 @@ namespace Gallop
                 return;
 
             // the hdr buffer needs aces to roll off highlight values; rendered raw it reads
-            // washed out. active only while the stage glow is on (same kill switch) so the
-            // flat-stage a/b stays truly flat.
-            _tonemapping.active = _bloomAndDiffusionEnabled;
+            // washed out. always on because aces is the hdr-to-display transform, separate
+            // from the bloom toggle.
+            _tonemapping.active = true;
             _tonemapping.mode.overrideState = true;
             _tonemapping.mode.value = TonemappingMode.ACES;
         }

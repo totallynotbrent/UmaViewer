@@ -368,9 +368,9 @@ namespace Gallop.Live
                 var tmpPos = -(updateInfo.lightRotation * Vector3.forward).normalized;
                 if (_cachedGlobalLightMPB == null) _cachedGlobalLightMPB = new MaterialPropertyBlock();
                 // ponytail: cache MPB - allocates once per frame, not per locator; ceiling: per-renderer MPB if you need per-uma rim offset
-                // character pop: scale the rim + toon-bright by the config so the idol
-                // stays bright against a darkened background.
-                float charaBoost = Config.Instance != null ? Mathf.Clamp(Config.Instance.CharaBrightness, 0.5f, 2f) : 1f;
+                // character pop: the rim + toon-bright response is fed straight from the real
+                // global-light update info, with no user-configurable brightness boost.
+                float charaBoost = 1f;
                 _cachedGlobalLightMPB.Clear();
                 _cachedGlobalLightMPB.SetFloat("_RimShadowRate", updateInfo.globalRimShadowRate);
                 _cachedGlobalLightMPB.SetColor("_RimColor", updateInfo.rimColor * charaBoost);

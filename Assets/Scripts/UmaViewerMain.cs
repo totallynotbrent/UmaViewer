@@ -40,7 +40,6 @@ public class UmaViewerMain : MonoBehaviour
         Instance = this;
         new Config();
         ApplyFrameRateLimit();
-        ApplyRenderScale();
 
         // mirror every log line to a file beside the exe so the user can hand us
         // a full log (UmaViewer.log) without digging through LocalLow.
@@ -85,12 +84,6 @@ public class UmaViewerMain : MonoBehaviour
     {
         QualitySettings.vSyncCount = 0;
         Application.targetFrameRate = Config.Instance.GetTargetFrameRate();
-    }
-
-    public static void ApplyRenderScale()
-    {
-        if (GraphicsSettings.renderPipelineAsset is UniversalRenderPipelineAsset urp)
-            urp.renderScale = Mathf.Clamp(Config.Instance.RenderScale, 0.1f, 1f);
     }
 
     private void Update()

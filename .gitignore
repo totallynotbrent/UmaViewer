@@ -72,3 +72,11 @@ Thumbs.db
 docs/GIT_MODEL.md
 research/__pycache__/
 *.pyc
+
+# Internal reverse-engineering notes (agent scratch, never pushed)
+docs/codebase/
+
+# .NET updater build artifacts
+Tools/UmaViewerUpdater/bin/
+Tools/UmaViewerUpdater/obj/
+!Tools/UmaViewerUpdater/UmaViewerUpdater.csproj

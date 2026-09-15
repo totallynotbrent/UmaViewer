@@ -1899,6 +1899,12 @@ namespace Gallop.Live.Cutt
                         quaternion = GetCamera(sheet.targetCameraIndex).cacheTransform.rotation;
                     }
                     updateInfo.flags = lightData.flags;
+                    updateInfo.loopType = lightData.loopType;
+                    updateInfo.loopCount = lightData.loopCount;
+                    updateInfo.loopExecutedCount = lightData.loopExecutedCount;
+                    updateInfo.loopIntervalFrame = lightData.loopIntervalFrame;
+                    updateInfo.isPasteLoopUnit = lightData.isPasteLoopUnit;
+                    updateInfo.isChangeLoopInterpolate = lightData.isChangeLoopInterpolate;
                     if (lightData2 != null && lightData2.interpolateType != 0)
                     {
                         float ratio = CalculateInterpolationValue(lightData, lightData2, currentFrame);
@@ -1906,16 +1912,15 @@ namespace Gallop.Live.Cutt
                         Quaternion b = Quaternion.Euler(lightData2.lightDir);
                         updateInfo.lightRotation = Quaternion.Lerp(a, b, ratio) * quaternion;
                         updateInfo.globalRimShadowRate = LerpWithoutClamp(lightData.globalRimShadowRate, lightData2.globalRimShadowRate, ratio);
-                        updateInfo.rimColor = Color.Lerp(lightData.rimColor, lightData2.rimColor, ratio);
+                        updateInfo.rimColor = Color.Lerp(ResolveSyncRimColor(lightData, false), ResolveSyncRimColor(lightData2, false), ratio);
                         updateInfo.rimStep = LerpWithoutClamp(lightData.rimStep, lightData2.rimStep, ratio);
                         updateInfo.rimFeather = LerpWithoutClamp(lightData.rimFeather, lightData2.rimFeather, ratio);
                         updateInfo.rimSpecRate = LerpWithoutClamp(lightData.rimSpecRate, lightData2.rimSpecRate, ratio);
-                        updateInfo.flags = lightData2.flags;
                         updateInfo.RimHorizonOffset = LerpWithoutClamp(lightData.RimHorizonOffset, lightData2.RimHorizonOffset, ratio);
                         updateInfo.RimVerticalOffset = LerpWithoutClamp(lightData.RimVerticalOffset, lightData2.RimVerticalOffset, ratio);
                         updateInfo.RimHorizonOffset2 = LerpWithoutClamp(lightData.RimHorizonOffset2, lightData2.RimHorizonOffset2, ratio);
                         updateInfo.RimVerticalOffset2 = LerpWithoutClamp(lightData.RimVerticalOffset2, lightData2.RimVerticalOffset2, ratio);
-                        updateInfo.rimColor2 = Color.Lerp(lightData.rimColor2, lightData2.rimColor2, ratio);
+                        updateInfo.rimColor2 = Color.Lerp(ResolveSyncRimColor(lightData, true), ResolveSyncRimColor(lightData2, true), ratio);
                         updateInfo.rimStep2 = LerpWithoutClamp(lightData.rimStep2, lightData2.rimStep2, ratio);
                         updateInfo.rimFeather2 = LerpWithoutClamp(lightData.rimFeather2, lightData2.rimFeather2, ratio);
                         updateInfo.rimSpecRate2 = LerpWithoutClamp(lightData.rimSpecRate2, lightData2.rimSpecRate2, ratio);
@@ -1925,7 +1930,7 @@ namespace Gallop.Live.Cutt
                     {
                         updateInfo.lightRotation = Quaternion.Euler(lightData.lightDir) * quaternion;
                         updateInfo.globalRimShadowRate = lightData.globalRimShadowRate;
-                        updateInfo.rimColor = lightData.rimColor;
+                        updateInfo.rimColor = ResolveSyncRimColor(lightData, false);
                         updateInfo.rimStep = lightData.rimStep;
                         updateInfo.rimFeather = lightData.rimFeather;
                         updateInfo.rimSpecRate = lightData.rimSpecRate;
@@ -1934,7 +1939,7 @@ namespace Gallop.Live.Cutt
                         updateInfo.RimVerticalOffset = lightData.RimVerticalOffset;
                         updateInfo.RimHorizonOffset2 = lightData.RimHorizonOffset2;
                         updateInfo.RimVerticalOffset2 = lightData.RimVerticalOffset2;
-                        updateInfo.rimColor2 = lightData.rimColor2;
+                        updateInfo.rimColor2 = ResolveSyncRimColor(lightData, true);
                         updateInfo.rimStep2 = lightData.rimStep2;
                         updateInfo.rimFeather2 = lightData.rimFeather2;
                         updateInfo.rimSpecRate2 = lightData.rimSpecRate2;
@@ -1943,6 +1948,24 @@ namespace Gallop.Live.Cutt
                     OnUpdateGlobalLight.Invoke(ref updateInfo);
                 }
             }
+        }
+
+        private Color ResolveSyncRimColor(LiveTimelineKeyGlobalLightData data, bool isColor2)
+        {
+            if (data == null)
+                return Color.white;
+
+            Color c = isColor2 ? data.rimColor2 : data.rimColor;
+            bool sync = isColor2 ? data.IsSyncBlinkLightToRimColor2 : data.IsSyncBlinkLightToRimColor;
+
+            if (sync && TryGetBlinkLightColorRGB(data.BlinkLightName, data.BlinkLightNameHash, data.BlinkLightContainerIndex, false, out var blink, out _))
+            {
+                c.r = blink.r;
+                c.g = blink.g;
+                c.b = blink.b;
+            }
+
+            return c;
         }
 
         private HashSet<string> validBgColorNames = new HashSet<string> { "CharaCenter", "CharaLeft", "CharaRight", "CharaColor" };

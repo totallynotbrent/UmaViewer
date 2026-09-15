@@ -24,6 +24,12 @@ namespace Gallop.Live.Cutt
         public float rimFeather2; // 0x68
         public float rimSpecRate2; // 0x6c
         public float globalRimShadowRate2; // 0x70
+        public LiveTimelineKeyLoopType loopType; // 0x74
+        public int loopCount; // 0x78
+        public int loopExecutedCount; // 0x7c
+        public int loopIntervalFrame; // 0x80
+        public bool isPasteLoopUnit; // 0x84
+        public bool isChangeLoopInterpolate; // 0x85
     }
 
     public delegate void GlobalLightUpdateInfoDelegate(ref GlobalLightUpdateInfo updateInfo);

@@ -66,9 +66,10 @@ namespace Gallop.Live
             LiveTimelineKeyPostFilmData data,
             PostFilmUpdateInfo info)
         {
-            // Post-film is a global main-sheet effect; drive the first layer. If the
-            // key pins a specific layer via filmMode, keep it on layer 1 for now —
-            // author data layout for layering order is not yet confirmed.
+            // route uv-movie frames to the secondary composite layer (filmPass2nd) and
+            // keep color/vignette post-films on the primary layer so the two stack cleanly.
+            if (info.layerMode == LiveTimelineKeyPostFilmData.LayerMode.UVMovie)
+                return Overlay.Overlay2;
             return Overlay.Overlay1;
         }
 

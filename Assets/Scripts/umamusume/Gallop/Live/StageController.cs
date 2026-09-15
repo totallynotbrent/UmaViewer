@@ -153,7 +153,7 @@ namespace Gallop.Live
             AutoAddDriver("StageWashLightDriver");
             AutoAddDriver("StageUVScrollLightDriver");
             //AutoAddDriver("StageLaserDriver");
-            AutoAddDriver("StageLensFlareDriver");
+            // AutoAddDriver("StageLensFlareDriver"); // heuristic billboard fake (no recovered flare data); disabled per no-fake rule.
             AutoAddDriver("StageProjectorDriver");
             AutoAddDriver("StageConfettiDriver");
             AutoAddDriver("StageLedDriver");
