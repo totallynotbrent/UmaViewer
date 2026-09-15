@@ -41,6 +41,20 @@ public class FrameTimeProfiler : MonoBehaviour
 
         _gcBytesBefore = GC.GetTotalMemory(false);
         _gcCollectionsBefore = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
+
+        // the harness waits for this marker so the measurement window is measured
+        // from arming, not from container start, which absorbs boot-time variance.
+        try
+        {
+            string markPath = Path.Combine(Application.persistentDataPath, "uma_bench_armed.txt");
+            Directory.CreateDirectory(Path.GetDirectoryName(markPath));
+            File.WriteAllText(markPath, DateTime.Now.ToString(CultureInfo.InvariantCulture));
+        }
+        catch
+        {
+            // a missing marker only costs a harness timeout; boot continues.
+        }
+
         Debug.Log($"[bench] armed: warmup={_warmupSeconds}s sample={_sampleSeconds}s");
 
         // the viewer never exits by itself on the bench rig, so sampling is driven by
