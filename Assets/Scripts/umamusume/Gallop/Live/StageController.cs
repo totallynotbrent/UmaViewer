@@ -156,7 +156,7 @@ namespace Gallop.Live
             // AutoAddDriver("StageLensFlareDriver"); // heuristic billboard fake (no recovered flare data); disabled per no-fake rule.
             AutoAddDriver("StageProjectorDriver");
             AutoAddDriver("StageConfettiDriver");
-            AutoAddDriver("StageLedDriver");
+            // AutoAddDriver("StageLedDriver"); // heuristic fallback (no recovered led key) that writes the same _BlinkLightColor the authoritative blink driver owns, clobbering its multicolor on overlapping fixtures
             // AutoAddDriver("StagePropsDriver"); // SUPERSEDED by Director->LivePropsEvaluator
             AutoAddDriver("StageBillboardCleanup");
             //AutoAddDriver("StageHideBillboards");
