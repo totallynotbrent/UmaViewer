@@ -146,6 +146,7 @@ namespace Gallop.Live
         private float _cachedGlobalMirrorScanTime;
         private Gallop.Live.Cyalume.CrowdDistanceCuller _stageCrowdCuller;
         private bool _ambientParticlesScanned;
+        private StageSpotLightBinder _spotLightBinder;
 
         private void Awake()
         {
@@ -1216,6 +1217,31 @@ namespace Gallop.Live
             {
                 Debug.LogWarning("[StageController] StageSkyController init skipped: " + e.Message);
             }
+
+            TryBindSpotLights();
+        }
+
+        // spotlights are per-song fixtures named by the cut data rather than a key
+        // timeline; bind them once after stage objects are registered so the blink
+        // driver can find them by root name.
+        private void TryBindSpotLights()
+        {
+            var ctl = Director.instance ? Director.instance._liveTimelineControl : null;
+            if (ctl == null || ctl.data == null ||
+                ctl.data.spotLightPrefabNames == null ||
+                ctl.data.spotLightPrefabNames.Length == 0)
+            {
+                return;
+            }
+
+            if (_spotLightBinder == null)
+            {
+                _spotLightBinder = GetComponent<StageSpotLightBinder>();
+                if (_spotLightBinder == null)
+                    _spotLightBinder = gameObject.AddComponent<StageSpotLightBinder>();
+            }
+
+            _spotLightBinder.Bind(this, ctl.data);
         }
 
         public void EnableAmbientParticles()
