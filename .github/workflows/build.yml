@@ -119,21 +119,6 @@ jobs:
           # stale bundleVersion 2.1.34 the old Custom scheme inherited from upstream.
           versioning: Semantic
 
-      - name: Build standalone updater
-        shell: pwsh
-        run: |
-          # the updater ships inside the release zip; the viewer copies it to temp before
-          # launching so the install can always replace the copy that lives in the app root.
-          dotnet publish Tools/UmaViewerUpdater -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o build/updater-publish
-          Copy-Item "build/updater-publish/UmaViewerUpdater.exe" "build/StandaloneWindows64/UmaViewerUpdater.exe" -Force
-
-      - name: Build launcher
-        shell: pwsh
-        run: |
-          # double-click target that checks the feed, offers an update, else boots the game.
-          dotnet publish Tools/UmaViewerLauncher -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o build/launcher-publish
-          Copy-Item "build/launcher-publish/UmaViewerLauncher.exe" "build/StandaloneWindows64/UmaViewerLauncher.exe" -Force
-
       - name: Package Windows build
         shell: pwsh
         run: |
@@ -142,7 +127,7 @@ jobs:
       - name: Write release digest
         shell: pwsh
         run: |
-          # sidecar the auto-updater downloads to verify the release before installing.
+          # sidecar for installs that want to verify the release before installing.
           $hash = Get-FileHash "UmaViewer-Windows-x64.zip" -Algorithm SHA256
           ("{0}  UmaViewer-Windows-x64.zip" -f $hash.Hash.ToLower()) | Set-Content -Path "UmaViewer-Windows-x64.zip.sha256" -Encoding ascii
 
