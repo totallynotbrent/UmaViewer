@@ -873,7 +873,21 @@ public class UmaViewerUI : MonoBehaviour
 
     public void AutoStartLive(LiveEntry entry)
     {
+        StartCoroutine(AutoStartLiveCoroutine(entry));
+    }
+
+    // command-line autostart runs before the character database finishes loading,
+    // so wait for it; without characters the load produces a stage with no dance.
+    private System.Collections.IEnumerator AutoStartLiveCoroutine(LiveEntry entry)
+    {
         ShowLiveSelectPanel(entry);
+        var started = Time.realtimeSinceStartup;
+        while (UmaViewerMain.Instance.Characters.Count == 0 && Time.realtimeSinceStartup - started < 30f)
+        {
+            yield return new WaitForSeconds(0.1f);
+        }
+        Debug.Log($"[autostart] characters={UmaViewerMain.Instance.Characters.Count} waited={(Time.realtimeSinceStartup - started):F1}s");
+
         var selectlist = LiveSelectList.content.GetComponentsInChildren<LiveCharacterSelect>();
         var chars = UmaViewerMain.Instance.Characters;
         for (int i = 0; i < selectlist.Length; i++)

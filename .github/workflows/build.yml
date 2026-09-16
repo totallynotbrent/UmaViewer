@@ -122,6 +122,7 @@ jobs:
       - name: Package Windows build
         shell: pwsh
         run: |
+          Copy-Item "update.bat" "build/StandaloneWindows64/update.bat" -Force
           Get-ChildItem -Path "build/StandaloneWindows64" -Exclude "UmaViewer_BackUpThisFolder_ButDontShipItWithYourGame","GameAssembly.pdb" | Compress-Archive -DestinationPath "UmaViewer-Windows-x64.zip" -Force
 
       - name: Write release digest
