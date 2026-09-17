@@ -101,6 +101,16 @@ namespace Gallop.Live.Cutt
         public event HdrBloomUpdateInfoDelegate OnUpdateHdrBloom;
 
         public event Action<PostEffectUpdateInfo_BloomDiffusion> OnUpdatePostEffect_BloomDiffusion;
+        public event Action<PostEffectUpdateInfo_DOF> OnUpdatePostEffect_DOF;
+        public event Action<RadialBlurUpdateInfo> OnUpdateRadialBlur;
+        public event Action<TiltShiftUpdateInfo> OnUpdateTiltShift;
+        public event Action<FadeUpdateInfo> OnUpdateFade;
+        public event Action<FluctuationUpdateInfo> OnUpdateFluctuation;
+        public event Action<VortexUpdateInfo> OnUpdateVortex;
+        public event Action<HandShakeCameraUpdateInfo> OnUpdateHandShakeCamera;
+        public event Action<PropsUpdateInfo> OnUpdateProps;
+        public event Action<PropsAttachUpdateInfo> OnUpdatePropsAttach;
+        public event Action<Spotlight3dUpdateInfo> OnUpdateSpotlight3d;
 
         public event UVScrollLightUpdateInfoDelegate OnUpdateUVScrollLight;
 
@@ -438,6 +448,16 @@ namespace Gallop.Live.Cutt
             AlterUpdate_MirrorReflection(camSheet, _currentFrame);
             AlterUpdate_HdrBloom(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_PostEffect_BloomDiffusion(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_PostEffect_DOF(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_RadialBlur(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_TiltShift(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_Fade(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_Fluctuation(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_Vortex(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_HandShakeCamera(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_Props(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_PropsAttach(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_Spotlight3d(camSheet, Mathf.RoundToInt(_currentFrame));
 
             AlterUpdate_BgColor1(camSheet, _currentFrame);
             _laserRuntimeIndexOffset = 0;
@@ -3081,6 +3101,339 @@ namespace Gallop.Live.Cutt
             SetupBloomDiffusionUpdateInfo( ref updateInfo, currentKey, nextKey, currentFrame);
 
             OnUpdatePostEffect_BloomDiffusion(updateInfo);
+        }
+
+        // evaluates one simple key list and fires the event; shared shape for the
+        // post-fx style effects that interpolate their numeric fields.
+        private void AlterUpdate_SimpleList<T>(
+            ILiveTimelineKeyDataList keys,
+            int currentFrame,
+            System.Action onValid)
+            where T : LiveTimelineKeyWithInterpolate
+        {
+            if (keys == null)
+                return;
+
+            if (keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable))
+                return;
+
+            if (!keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(
+                out LiveTimelineKey currentBaseKey,
+                out LiveTimelineKey nextBaseKey,
+                keys,
+                currentFrame);
+
+            if (currentBaseKey == null)
+                return;
+
+            onValid?.Invoke();
+            _simpleListCurrentKey = currentBaseKey as T;
+            _simpleListNextKey = nextBaseKey as T;
+            _simpleListT = 0f;
+            if (_simpleListNextKey != null && _simpleListNextKey.IsInterpolateKey())
+                _simpleListT = CalculateInterpolationValue(
+                    (LiveTimelineKeyWithInterpolate)currentBaseKey,
+                    (LiveTimelineKeyWithInterpolate)nextBaseKey,
+                    currentFrame);
+        }
+
+        private LiveTimelineKeyWithInterpolate _simpleListCurrentKey;
+        private LiveTimelineKeyWithInterpolate _simpleListNextKey;
+        private float _simpleListT;
+
+        private void AlterUpdate_PostEffect_DOF(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdatePostEffect_DOF == null || sheet?.postEffectDOFKeys == null)
+                return;
+
+            AlterUpdate_SimpleList<LiveTimelineKeyPostEffectDOFData>(sheet.postEffectDOFKeys, currentFrame, null);
+            var currentKey = _simpleListCurrentKey as LiveTimelineKeyPostEffectDOFData;
+            var nextKey = _simpleListNextKey as LiveTimelineKeyPostEffectDOFData;
+            if (currentKey == null)
+                return;
+
+            float t = _simpleListT;
+            PostEffectUpdateInfo_DOF updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.forcalSize = Mathf.Lerp(currentKey.forcalSize, nextKey != null ? nextKey.forcalSize : currentKey.forcalSize, t);
+            updateInfo.blurSpread = Mathf.Lerp(currentKey.blurSpread, nextKey != null ? nextKey.blurSpread : currentKey.blurSpread, t);
+            updateInfo.charactor = currentKey.charactor;
+            updateInfo.dofBlurType = currentKey.dofBlurType;
+            updateInfo.dofQuality = currentKey.dofQuality;
+            updateInfo.dofForegroundSize = Mathf.Lerp(currentKey.dofForegroundSize, nextKey != null ? nextKey.dofForegroundSize : currentKey.dofForegroundSize, t);
+            updateInfo.dofFocalPoint = Mathf.Lerp(currentKey.dofFocalPoint, nextKey != null ? nextKey.dofFocalPoint : currentKey.dofFocalPoint, t);
+            updateInfo.dofSmoothness = Mathf.Lerp(currentKey.dofSmoothness, nextKey != null ? nextKey.dofSmoothness : currentKey.dofSmoothness, t);
+            updateInfo.BallBlurPowerFactor = Mathf.Lerp(currentKey.BallBlurPowerFactor, nextKey != null ? nextKey.BallBlurPowerFactor : currentKey.BallBlurPowerFactor, t);
+            updateInfo.BallBlurBrightnessThreshhold = Mathf.Lerp(currentKey.BallBlurBrightnessThreshhold, nextKey != null ? nextKey.BallBlurBrightnessThreshhold : currentKey.BallBlurBrightnessThreshhold, t);
+            updateInfo.BallBlurBrightnessIntensity = Mathf.Lerp(currentKey.BallBlurBrightnessIntensity, nextKey != null ? nextKey.BallBlurBrightnessIntensity : currentKey.BallBlurBrightnessIntensity, t);
+            updateInfo.BallBlurSpread = Mathf.Lerp(currentKey.BallBlurSpread, nextKey != null ? nextKey.BallBlurSpread : currentKey.BallBlurSpread, t);
+            OnUpdatePostEffect_DOF(updateInfo);
+        }
+
+        private void AlterUpdate_RadialBlur(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateRadialBlur == null || sheet?.radialBlurKeys == null)
+                return;
+
+            AlterUpdate_SimpleList<LiveTimelineKeyRadialBlurData>(sheet.radialBlurKeys, currentFrame, null);
+            var currentKey = _simpleListCurrentKey as LiveTimelineKeyRadialBlurData;
+            var nextKey = _simpleListNextKey as LiveTimelineKeyRadialBlurData;
+            if (currentKey == null)
+                return;
+
+            float t = _simpleListT;
+            RadialBlurUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.moveBlurType = currentKey.moveBlurType;
+            updateInfo.radialBlurOffset = LerpWithoutClamp(currentKey.radialBlurOffset, nextKey != null ? nextKey.radialBlurOffset : currentKey.radialBlurOffset, t);
+            updateInfo.radialBlurDownsample = currentKey.radialBlurDownsample;
+            updateInfo.radialBlurStartArea = Mathf.Lerp(currentKey.radialBlurStartArea, nextKey != null ? nextKey.radialBlurStartArea : currentKey.radialBlurStartArea, t);
+            updateInfo.radialBlurEndArea = Mathf.Lerp(currentKey.radialBlurEndArea, nextKey != null ? nextKey.radialBlurEndArea : currentKey.radialBlurEndArea, t);
+            updateInfo.radialBlurPower = Mathf.Lerp(currentKey.radialBlurPower, nextKey != null ? nextKey.radialBlurPower : currentKey.radialBlurPower, t);
+            updateInfo.radialBlurIteration = currentKey.radialBlurIteration;
+            updateInfo.radialBlurEllipseDir = LerpWithoutClamp(currentKey.radialBlurEllipseDir, nextKey != null ? nextKey.radialBlurEllipseDir : currentKey.radialBlurEllipseDir, t);
+            updateInfo.radialBlurRollEulerAngles = Mathf.Lerp(currentKey.radialBlurRollEulerAngles, nextKey != null ? nextKey.radialBlurRollEulerAngles : currentKey.radialBlurRollEulerAngles, t);
+            updateInfo.depthPowerFront = Mathf.Lerp(currentKey.depthPowerFront, nextKey != null ? nextKey.depthPowerFront : currentKey.depthPowerFront, t);
+            updateInfo.depthPowerBack = Mathf.Lerp(currentKey.depthPowerBack, nextKey != null ? nextKey.depthPowerBack : currentKey.depthPowerBack, t);
+            updateInfo.depthCancelRect = LerpWithoutClamp(currentKey.depthCancelRect, nextKey != null ? nextKey.depthCancelRect : currentKey.depthCancelRect, t);
+            updateInfo.depthCancelBlendLength = Mathf.Lerp(currentKey.depthCancelBlendLength, nextKey != null ? nextKey.depthCancelBlendLength : currentKey.depthCancelBlendLength, t);
+            OnUpdateRadialBlur(updateInfo);
+        }
+
+        private void AlterUpdate_TiltShift(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateTiltShift == null || sheet?.tiltShiftKeys == null)
+                return;
+
+            AlterUpdate_SimpleList<LiveTimelineKeyTiltShiftData>(sheet.tiltShiftKeys, currentFrame, null);
+            var currentKey = _simpleListCurrentKey as LiveTimelineKeyTiltShiftData;
+            var nextKey = _simpleListNextKey as LiveTimelineKeyTiltShiftData;
+            if (currentKey == null)
+                return;
+
+            float t = _simpleListT;
+            TiltShiftUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.mode = currentKey.mode;
+            updateInfo.quality = currentKey.quality;
+            updateInfo.blurArea = Mathf.Lerp(currentKey.blurArea, nextKey != null ? nextKey.blurArea : currentKey.blurArea, t);
+            updateInfo.maxBlurSize = Mathf.Lerp(currentKey.maxBlurSize, nextKey != null ? nextKey.maxBlurSize : currentKey.maxBlurSize, t);
+            updateInfo.downsample = currentKey.downsample;
+            updateInfo.offset = Vector2.zero;
+            updateInfo.roll = Mathf.Lerp(currentKey.roll, nextKey != null ? nextKey.roll : currentKey.roll, t);
+            OnUpdateTiltShift(updateInfo);
+        }
+
+        private void AlterUpdate_Fade(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateFade == null || sheet?.fadeKeys == null)
+                return;
+
+            AlterUpdate_SimpleList<LiveTimelineKeyFadeData>(sheet.fadeKeys, currentFrame, null);
+            var currentKey = _simpleListCurrentKey as LiveTimelineKeyFadeData;
+            var nextKey = _simpleListNextKey as LiveTimelineKeyFadeData;
+            if (currentKey == null)
+                return;
+
+            float t = _simpleListT;
+            FadeUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.fadeColor = LerpWithoutClamp(currentKey.fadeColor, nextKey != null ? nextKey.fadeColor : currentKey.fadeColor, t);
+            OnUpdateFade(updateInfo);
+        }
+
+        private void AlterUpdate_Fluctuation(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateFluctuation == null || sheet?.FluctuationKeys == null)
+                return;
+
+            AlterUpdate_SimpleList<LiveTimelineKeyFluctuationData>(sheet.FluctuationKeys, currentFrame, null);
+            var currentKey = _simpleListCurrentKey as LiveTimelineKeyFluctuationData;
+            var nextKey = _simpleListNextKey as LiveTimelineKeyFluctuationData;
+            if (currentKey == null)
+                return;
+
+            float t = _simpleListT;
+            FluctuationUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.IsEnable = currentKey.IsEnable;
+            updateInfo.MoveDirection = LerpWithoutClamp(currentKey.MoveDirection, nextKey != null ? nextKey.MoveDirection : currentKey.MoveDirection, t);
+            updateInfo.MovePower = Mathf.Lerp(currentKey.MovePower, nextKey != null ? nextKey.MovePower : currentKey.MovePower, t);
+            updateInfo.Power = Mathf.Lerp(currentKey.Power, nextKey != null ? nextKey.Power : currentKey.Power, t);
+            updateInfo.DepthClip = Mathf.Lerp(currentKey.DepthClip, nextKey != null ? nextKey.DepthClip : currentKey.DepthClip, t);
+            OnUpdateFluctuation(updateInfo);
+        }
+
+        private void AlterUpdate_Vortex(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateVortex == null || sheet?.VortexKeys == null)
+                return;
+
+            AlterUpdate_SimpleList<LiveTimelineKeyVortexData>(sheet.VortexKeys, currentFrame, null);
+            var currentKey = _simpleListCurrentKey as LiveTimelineKeyVortexData;
+            var nextKey = _simpleListNextKey as LiveTimelineKeyVortexData;
+            if (currentKey == null)
+                return;
+
+            float t = _simpleListT;
+            VortexUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.IsEnable = currentKey.IsEnable;
+            updateInfo.Area = LerpWithoutClamp(currentKey.Area, nextKey != null ? nextKey.Area : currentKey.Area, t);
+            updateInfo.RotVolume = Mathf.Lerp(currentKey.RotVolume, nextKey != null ? nextKey.RotVolume : currentKey.RotVolume, t);
+            updateInfo.DepthClip = Mathf.Lerp(currentKey.DepthClip, nextKey != null ? nextKey.DepthClip : currentKey.DepthClip, t);
+            OnUpdateVortex(updateInfo);
+        }
+
+        private void AlterUpdate_HandShakeCamera(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateHandShakeCamera == null || sheet?.handShakeCameraKeys == null)
+                return;
+
+            AlterUpdate_SimpleList<LiveTimelineKeyHandShakeCameraData>(sheet.handShakeCameraKeys, currentFrame, null);
+            var currentKey = _simpleListCurrentKey as LiveTimelineKeyHandShakeCameraData;
+            var nextKey = _simpleListNextKey as LiveTimelineKeyHandShakeCameraData;
+            if (currentKey == null)
+                return;
+
+            float t = _simpleListT;
+            HandShakeCameraUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.power = Mathf.Lerp(currentKey.power, nextKey != null ? nextKey.power : currentKey.power, t);
+            updateInfo.frequency = Mathf.Lerp(currentKey.frequency, nextKey != null ? nextKey.frequency : currentKey.frequency, t);
+            updateInfo.Rate = Mathf.Lerp(currentKey.Rate, nextKey != null ? nextKey.Rate : currentKey.Rate, t);
+            OnUpdateHandShakeCamera(updateInfo);
+        }
+
+        // props are containers (name + keys) so the update info carries the entry
+        // name for the driver to resolve the fixture.
+        private void AlterUpdate_Props(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateProps == null || sheet?.propsList == null)
+                return;
+
+            for (int i = 0; i < sheet.propsList.Count; i++)
+            {
+                var entry = sheet.propsList[i];
+                if (entry?.keys == null)
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable))
+                    continue;
+                if (!entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out LiveTimelineKey currentBaseKey, out LiveTimelineKey nextBaseKey, entry.keys, currentFrame);
+                var currentKey = currentBaseKey as LiveTimelineKeyPropsData;
+                var nextKey = nextBaseKey as LiveTimelineKeyPropsData;
+                if (currentKey == null)
+                    continue;
+
+                PropsUpdateInfo updateInfo = default;
+                updateInfo.isValid = true;
+                updateInfo.settingFlags = currentKey.settingFlags;
+                updateInfo.propsID = currentKey.propsID;
+                updateInfo.rendererEnable = currentKey.rendererEnable;
+                updateInfo.IsVisibleAttachedCharaLinked = currentKey.IsVisibleAttachedCharaLinked;
+                updateInfo.AutoSwitchLayerOnMirrorRendering = currentKey.AutoSwitchLayerOnMirrorRendering;
+                updateInfo.color = currentKey.color;
+                updateInfo.rootColor = currentKey.rootColor;
+                updateInfo.tipColor = currentKey.tipColor;
+                updateInfo.colorPower = currentKey.colorPower;
+                updateInfo.IsApplyAnimation = currentKey.IsApplyAnimation;
+                updateInfo.IsApplyReserveWarming = currentKey.IsApplyReserveWarming;
+                updateInfo.StartAnimationTime = currentKey.StartAnimationTime;
+                updateInfo.AnimationHeadFrame = currentKey.AnimationHeadFrame;
+                updateInfo.ToonDarkColor = currentKey.ToonDarkColor;
+                OnUpdateProps(updateInfo);
+            }
+        }
+
+        private void AlterUpdate_PropsAttach(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdatePropsAttach == null || sheet?.propsAttachList == null)
+                return;
+
+            for (int i = 0; i < sheet.propsAttachList.Count; i++)
+            {
+                var entry = sheet.propsAttachList[i];
+                if (entry?.keys == null)
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable))
+                    continue;
+                if (!entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out LiveTimelineKey currentBaseKey, out LiveTimelineKey nextBaseKey, entry.keys, currentFrame);
+                var currentKey = currentBaseKey as LiveTimelineKeyPropsAttachData;
+                if (currentKey == null)
+                    continue;
+
+                PropsAttachUpdateInfo updateInfo = default;
+                updateInfo.isValid = true;
+                updateInfo._attachJointName = currentKey._attachJointName;
+                updateInfo._attachJointHash = currentKey._attachJointHash;
+                updateInfo._copyPositionJointName = currentKey._copyPositionJointName;
+                updateInfo._copyPositionJointHash = currentKey._copyPositionJointHash;
+                updateInfo._settingFlags = currentKey._settingFlags;
+                updateInfo._propsId = currentKey._propsId;
+                updateInfo._offsetPosition = currentKey._offsetPosition;
+                updateInfo.OffsetRotate = currentKey.OffsetRotate;
+                updateInfo.OffsetScale = currentKey.OffsetScale;
+                updateInfo.IsLinkAttachBone = currentKey.IsLinkAttachBone;
+                updateInfo._attachType = currentKey._attachType;
+                updateInfo._attachPropId = currentKey._attachPropId;
+                updateInfo._attachTargetPropNodeName = currentKey._attachTargetPropNodeName;
+                OnUpdatePropsAttach(updateInfo);
+            }
+        }
+
+        private void AlterUpdate_Spotlight3d(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateSpotlight3d == null || sheet?.spotlight3dList == null)
+                return;
+
+            for (int i = 0; i < sheet.spotlight3dList.Count; i++)
+            {
+                var entry = sheet.spotlight3dList[i];
+                if (entry?.keys == null)
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable))
+                    continue;
+                if (!entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out LiveTimelineKey currentBaseKey, out LiveTimelineKey nextBaseKey, entry.keys, currentFrame);
+                var currentKey = currentBaseKey as LiveTimelineKeySpotlight3dData;
+                var nextKey = nextBaseKey as LiveTimelineKeySpotlight3dData;
+                if (currentKey == null)
+                    continue;
+
+                float t = 0f;
+                if (nextKey != null && nextKey.IsInterpolateKey())
+                    t = CalculateInterpolationValue(
+                        (LiveTimelineKeyWithInterpolate)currentBaseKey,
+                        (LiveTimelineKeyWithInterpolate)nextBaseKey,
+                        currentFrame);
+
+                Spotlight3dUpdateInfo updateInfo = default;
+                updateInfo.isValid = true;
+                updateInfo.isActive = currentKey.isActive;
+                updateInfo.color = LerpWithoutClamp(currentKey.color, nextKey != null ? nextKey.color : currentKey.color, t);
+                updateInfo.colorPower = Mathf.Lerp(currentKey.colorPower, nextKey != null ? nextKey.colorPower : currentKey.colorPower, t);
+                updateInfo.localHeight = Mathf.Lerp(currentKey.localHeight, nextKey != null ? nextKey.localHeight : currentKey.localHeight, t);
+                updateInfo.position = LerpWithoutClamp(currentKey.position, nextKey != null ? nextKey.position : currentKey.position, t);
+                updateInfo.rotation = LerpWithoutClamp(currentKey.rotation, nextKey != null ? nextKey.rotation : currentKey.rotation, t);
+                updateInfo.scale = LerpWithoutClamp(currentKey.scale, nextKey != null ? nextKey.scale : currentKey.scale, t);
+                updateInfo.characterPosition = LerpWithoutClamp(currentKey.characterPosition, nextKey != null ? nextKey.characterPosition : currentKey.characterPosition, t);
+                updateInfo.targetCameraType = currentKey.targetCameraType;
+                updateInfo.targetCameraIndex = currentKey.targetCameraIndex;
+                updateInfo.assetName = currentKey.assetName;
+                updateInfo.characterIndex = currentKey.characterIndex;
+                OnUpdateSpotlight3d(updateInfo);
+            }
         }
 
         private static float LerpWithoutClamp(float a, float b, float t)

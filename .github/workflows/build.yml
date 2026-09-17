@@ -6,7 +6,7 @@ on:
       - "v*"
     branches:
       - "master"
-      - "experiment/*"
+      - "experimental"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -142,19 +142,16 @@ jobs:
           compression-level: 0
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/experiment/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/experimental' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: |
-          if [[ "$GITHUB_REF" == refs/heads/experiment/* ]]; then
-            # lowercase, dash-joined name matching the commit-subject style; mirror a
-            # rolling prerelease so each experiment push replaces the prior one.
-            NAME="${GITHUB_REF##*/}"
-            NAME="${NAME,,}"
-            NAME="${NAME//\//-}"
-            # delete any prior rolling release for this experiment tag so assets don't accumulate
+          if [[ "$GITHUB_REF" == refs/heads/experimental ]]; then
+            # single rolling prerelease named after the branch; each push replaces the prior one.
+            NAME="experimental"
+            # delete any prior rolling release for this tag so assets don't accumulate
             gh release delete "$NAME" --yes --cleanup-tag 2>/dev/null || true
             # change note = the latest real viewer change on the branch; commits that only
             # touch .github/workflows are skipped so a workflow tweak is never the visible note.

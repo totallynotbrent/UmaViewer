@@ -407,5 +407,38 @@ namespace Gallop.Live
 
             return null;
         }
+
+        // timeline attach event: snaps an already-instanced prop to the named joint
+        // with the timeline's offset; used when the propsAttach track fires.
+        public static void AttachToJoint(string jointName, Vector3 offsetPosition)
+        {
+            if (string.IsNullOrEmpty(jointName))
+                return;
+
+            var director = Director.instance;
+            if (director == null || director.CharaContainerScript == null || director.CharaContainerScript.Count == 0)
+                return;
+
+            // find any prop already instanced under this joint name first
+            for (int i = 0; i < director.CharaContainerScript.Count; i++)
+            {
+                var container = director.CharaContainerScript[i];
+                if (container == null)
+                    continue;
+
+                Transform joint = ResolveJoint(new List<UmaContainerCharacter> { container }, i, jointName);
+                if (joint == null)
+                    continue;
+
+                foreach (Transform child in joint)
+                {
+                    if (child.name.StartsWith("Prop_", StringComparison.Ordinal))
+                    {
+                        child.localPosition = offsetPosition;
+                        return;
+                    }
+                }
+            }
+        }
     }
 }

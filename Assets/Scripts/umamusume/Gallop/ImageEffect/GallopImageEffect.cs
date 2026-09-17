@@ -66,6 +66,25 @@ namespace Gallop
         [SerializeField]
         private float _motionBlurIntensity = 0.4f;
 
+        // timeline radial-blur keys drive the camera motion blur as the closest
+        // existing blur pass; clamped by the timeline handler.
+        public float MotionBlurIntensity
+        {
+            get => _motionBlurIntensity;
+            set => _motionBlurIntensity = value;
+        }
+
+        // timeline tilt-shift / vortex keys lift the bloom scatter band for the frame;
+        // 0 keeps the serialized default so the glow stays in the soft-glow band.
+        [SerializeField]
+        private float _bloomScatterBoost = 0f;
+
+        public float BloomScatterBoost
+        {
+            get => _bloomScatterBoost;
+            set => _bloomScatterBoost = value;
+        }
+
         public bool DepthOfFieldEnabled
         {
             get => _depthOfFieldEnabled;
@@ -183,7 +202,10 @@ namespace Gallop
             float bloomBlur = param.IsEnableBloom ? Mathf.Max(0f, param.BloomBlurSize) : 0f;
             float diffusionBlur = param.IsEnableDiffusion ? Mathf.Max(0f, param.DiffusionBlurSize) : 0f;
             float maxBlurSize = Mathf.Max(bloomBlur, diffusionBlur);
-            _bloom.scatter.value = Mathf.Min(_bloomScatterMax, Mathf.Clamp01(maxBlurSize / 10f));
+            float scatter = Mathf.Min(_bloomScatterMax, Mathf.Clamp01(maxBlurSize / 10f));
+            // timeline tilt-shift/vortex keys lift the scatter band for the frame; the
+            // bloom diffuses wider without touching the pyramid intensity.
+            _bloom.scatter.value = Mathf.Min(1f, Mathf.Max(scatter, _bloomScatterBoost));
 
             float threshold;
             if (param.IsEnableBloom && param.IsEnableDiffusion)

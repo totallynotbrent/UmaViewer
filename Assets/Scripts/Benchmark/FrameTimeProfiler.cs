@@ -40,27 +40,21 @@ public class FrameTimeProfiler : MonoBehaviour
         }
     }
 
-    // the harness polls marker files; bench output lives beside the exe so the
-    // user finds it next to the player log, falling back to persistent data.
+    // the harness polls marker files; bench output lives beside the exe next to
+    // UmaViewer.log so the user finds everything in the install folder.
     private static string OutputDirectory()
     {
         try
         {
-            string beside = Application.dataPath.TrimEnd('/', '\\');
-            // Application.dataPath points at <install>/UmaViewer_Data; the install
-            // root is its parent.
-            string root = Path.GetDirectoryName(Path.GetDirectoryName(beside));
+            // Application.dataPath is <install>/UmaViewer_Data, so its parent is
+            // the folder the exe lives in.
+            string root = Path.GetDirectoryName(Application.dataPath.TrimEnd('/', '\\'));
             if (!string.IsNullOrEmpty(root) && Directory.Exists(root))
-            {
-                string probe = Path.Combine(root, "uma_bench_probe.tmp");
-                File.WriteAllText(probe, "probe");
-                File.Delete(probe);
                 return root;
-            }
         }
         catch
         {
-            // read-only install falls back to persistent data below.
+            // any failure falls back to persistent data below.
         }
         return Application.persistentDataPath;
     }
@@ -237,6 +231,17 @@ public class FrameTimeProfiler : MonoBehaviour
         }
 
         Debug.Log("[bench] done\n" + summary);
+
+        // mirror the numbers into UmaViewer.log next to the exe so the
+        // optimization results live with the rest of the runtime log.
+        try
+        {
+            Gallop.Live.Director.FileLog("[bench] summary\n" + summary.Replace("\n", "\n[bench] "));
+        }
+        catch
+        {
+            // the mirror is convenience only; the file write above already succeeded.
+        }
     }
 
     private void FinishSampling()

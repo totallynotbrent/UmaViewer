@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using Gallop.Live.Cutt;
 
@@ -17,6 +18,49 @@ namespace Gallop.Live
         [Header("Props Settings")]
         [SerializeField] private bool _enablePropsDriver = true;
         [SerializeField] private bool _verboseLog = true;
+
+        // props instances found on the stage, keyed by joint so timeline color and
+        // visibility updates can address them without scene searches each frame.
+        private static readonly Dictionary<string, List<Renderer>> _propsRenderersByJoint =
+            new Dictionary<string, List<Renderer>>();
+
+        // registers a prop's renderers under its attach joint; called when the
+        // evaluator instances a prop so per-frame color events can find it.
+        public static void RegisterPropRenderers(string jointName, Renderer[] renderers)
+        {
+            if (string.IsNullOrEmpty(jointName) || renderers == null || renderers.Length == 0)
+                return;
+
+            if (!_propsRenderersByJoint.TryGetValue(jointName, out var list))
+            {
+                list = new List<Renderer>();
+                _propsRenderersByJoint[jointName] = list;
+            }
+
+            foreach (var r in renderers)
+            {
+                if (r != null && !list.Contains(r))
+                    list.Add(r);
+            }
+        }
+
+        // applies a timeline props color/visibility update to every registered prop
+        // renderer; null-safe when no props have registered yet.
+        public static void ApplyPropsColor(Color color, bool rendererEnable)
+        {
+            foreach (var kv in _propsRenderersByJoint)
+            {
+                var list = kv.Value;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var r = list[i];
+                    if (r == null)
+                        continue;
+                    r.enabled = rendererEnable;
+                    r.material.color = color;
+                }
+            }
+        }
 
         private void OnEnable()
         {

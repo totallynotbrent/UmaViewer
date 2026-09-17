@@ -111,6 +111,17 @@ namespace Gallop.Live
         private static readonly Dictionary<string, UmaDatabaseEntry> _laserBundleCache
             = new Dictionary<string, UmaDatabaseEntry>();
 
+        // timeline-driven screen-space state: fullscreen fade color, camera shake noise,
+        // and per-name logging so an unresolvable props/spotlight name warns once.
+        private GameObject _fadeQuad;
+        private Material _fadeMaterial;
+        private float _handShakePower;
+        private float _handShakeFrequency;
+        private float _handShakeRate;
+        private readonly HashSet<string> _propsMissingLogged = new HashSet<string>();
+        private readonly HashSet<string> _spotlightMissingLogged = new HashSet<string>();
+        private readonly Dictionary<string, GameObject> _spotlight3dInstances = new Dictionary<string, GameObject>();
+
         public bool isTimelineControlled
         {
             get
@@ -445,6 +456,16 @@ namespace Gallop.Live
             }
             _liveTimelineControl.OnUpdatePostEffect_BloomDiffusion += OnUpdatePostEffect_BloomDiffusion;
             _liveTimelineControl.OnUpdateHdrBloom += OnUpdateHdrBloom;
+            _liveTimelineControl.OnUpdatePostEffect_DOF += OnUpdatePostEffect_DOF;
+            _liveTimelineControl.OnUpdateRadialBlur += OnUpdateRadialBlur;
+            _liveTimelineControl.OnUpdateTiltShift += OnUpdateTiltShift;
+            _liveTimelineControl.OnUpdateFade += OnUpdateFade;
+            _liveTimelineControl.OnUpdateFluctuation += OnUpdateFluctuation;
+            _liveTimelineControl.OnUpdateVortex += OnUpdateVortex;
+            _liveTimelineControl.OnUpdateHandShakeCamera += OnUpdateHandShakeCamera;
+            _liveTimelineControl.OnUpdateProps += OnUpdateProps;
+            _liveTimelineControl.OnUpdatePropsAttach += OnUpdatePropsAttach;
+            _liveTimelineControl.OnUpdateSpotlight3d += OnUpdateSpotlight3d;
 
 
             _liveTimelineControl.OnUpdateCameraSwitcher += delegate (int cameraIndex_)
@@ -749,11 +770,13 @@ namespace Gallop.Live
             {
                 ApplyTimelineLateUpdate();
             }
-            
+
             if (_enableMirrorReflection && _mirrorRenderInLateUpdate)
             {
                 UpdateMirrorReflections();
             }
+
+            ApplyHandShake();
         }
 
         private void FixedUpdate()
@@ -1166,6 +1189,83 @@ namespace Gallop.Live
             }
         }
 
+        // no valid key at this frame means the timeline holds nothing: leave the dof
+        // parameters at their current values instead of forcing defaults.
+        private void OnUpdatePostEffect_DOF(PostEffectUpdateInfo_DOF updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null) return;
+
+            imageEffect.DepthOfFieldEnabled = true;
+            bool dofOn = updateInfo.dofBlurType != DofDiffusionBloomOverlayParam.DofDiffusionBloomType.None;
+            imageEffect.DofDiffusionBloomOverlayParam.IsEnableBloom = dofOn;
+            imageEffect.DofDiffusionBloomOverlayParam.BloomDofWeight = Mathf.Clamp01(updateInfo.forcalSize / 10f);
+            imageEffect.DofDiffusionBloomOverlayParam.BloomThreshold =
+                Mathf.Clamp(updateInfo.BallBlurBrightnessThreshhold, 0f, 4f);
+            imageEffect.DofDiffusionBloomOverlayParam.BloomIntensity =
+                Mathf.Clamp(updateInfo.BallBlurBrightnessIntensity, 0f, 8f);
+            imageEffect.DofDiffusionBloomOverlayParam.BloomBlurSize =
+                Mathf.Clamp(updateInfo.BallBlurSpread / 10f, 0f, 10f);
+        }
+
+        private void OnUpdateRadialBlur(RadialBlurUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            ApplyRadialBlur(updateInfo.radialBlurPower, updateInfo.radialBlurStartArea);
+        }
+
+        private void OnUpdateTiltShift(TiltShiftUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            ApplyTiltShift(updateInfo.blurArea, updateInfo.maxBlurSize, updateInfo.roll);
+        }
+
+        private void OnUpdateFade(FadeUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            ApplyFadeColor(updateInfo.fadeColor);
+        }
+
+        private void OnUpdateFluctuation(FluctuationUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid || !updateInfo.IsEnable) return;
+            ApplyRadialBlur(updateInfo.MovePower * 4f, 0.25f);
+        }
+
+        private void OnUpdateVortex(VortexUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid || !updateInfo.IsEnable) return;
+            ApplyTiltShift(6f, updateInfo.RotVolume * 4f, 0f);
+        }
+
+        private void OnUpdateHandShakeCamera(HandShakeCameraUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            _handShakePower = Mathf.Clamp(updateInfo.power, 0f, 2f);
+            _handShakeFrequency = Mathf.Clamp(updateInfo.frequency, 0f, 30f);
+            _handShakeRate = Mathf.Clamp(updateInfo.Rate, 0f, 4f);
+        }
+
+        private void OnUpdateProps(PropsUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            StagePropsDriver.ApplyPropsColor(updateInfo.color, updateInfo.rendererEnable);
+        }
+
+        private void OnUpdatePropsAttach(PropsAttachUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            LivePropsEvaluator.AttachToJoint(updateInfo._attachJointName, updateInfo._offsetPosition);
+        }
+
+        private void OnUpdateSpotlight3d(Spotlight3dUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            ApplySpotlight3d(updateInfo.assetName, updateInfo);
+        }
+
         private void OnDestroy()
         {
             UnbindTimelineEvents();
@@ -1183,6 +1283,162 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdateHdrBloom -=
                 OnUpdateHdrBloom;
+
+            _liveTimelineControl.OnUpdatePostEffect_DOF -= OnUpdatePostEffect_DOF;
+            _liveTimelineControl.OnUpdateRadialBlur -= OnUpdateRadialBlur;
+            _liveTimelineControl.OnUpdateTiltShift -= OnUpdateTiltShift;
+            _liveTimelineControl.OnUpdateFade -= OnUpdateFade;
+            _liveTimelineControl.OnUpdateFluctuation -= OnUpdateFluctuation;
+            _liveTimelineControl.OnUpdateVortex -= OnUpdateVortex;
+            _liveTimelineControl.OnUpdateHandShakeCamera -= OnUpdateHandShakeCamera;
+            _liveTimelineControl.OnUpdateProps -= OnUpdateProps;
+            _liveTimelineControl.OnUpdatePropsAttach -= OnUpdatePropsAttach;
+            _liveTimelineControl.OnUpdateSpotlight3d -= OnUpdateSpotlight3d;
+        }
+
+        // radial blur keys drive the existing motion-blur volume override: power maps to
+        // intensity, the start area to the clamp band; no radial-blur pass exists here.
+        private void ApplyRadialBlur(float power, float startArea)
+        {
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null) return;
+
+            imageEffect.MotionBlurIntensity = Mathf.Clamp(power, 0f, 1f);
+        }
+
+        // tilt-shift keys have no dedicated pass: maxBlurSize folds into the bloom scatter
+        // band and roll is dropped (a roll would need a second camera rotation pass).
+        private void ApplyTiltShift(float blurArea, float maxBlurSize, float roll)
+        {
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null) return;
+
+            imageEffect.BloomScatterBoost = Mathf.Clamp01(maxBlurSize / 25f);
+        }
+
+        // fade keys set a fullscreen quad color in front of the camera; alpha 0 hides it.
+        private void ApplyFadeColor(Color color)
+        {
+            Camera mainCamera = MainCameraTransform != null ? MainCameraTransform.GetComponent<Camera>() : null;
+            if (mainCamera == null)
+                mainCamera = Camera.main;
+            if (mainCamera == null)
+                return;
+
+            if (_fadeQuad == null)
+            {
+                _fadeQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                Destroy(_fadeQuad.GetComponent<Collider>());
+                _fadeQuad.name = "TimelineFadeQuad";
+                _fadeMaterial = new Material(Shader.Find("Sprites/Default"));
+                _fadeQuad.GetComponent<MeshRenderer>().material = _fadeMaterial;
+                _fadeQuad.transform.SetParent(mainCamera.transform, false);
+                _fadeQuad.transform.localPosition = new Vector3(0f, 0f, 0.05f);
+                _fadeQuad.transform.localScale = new Vector3(10f, 10f, 1f);
+            }
+
+            if (_fadeMaterial != null)
+            {
+                _fadeMaterial.color = color;
+                _fadeQuad.SetActive(color.a > 0.001f);
+            }
+        }
+
+        // hand-shake keys drive a perlin-noise camera offset so the shake reads on the
+        // real camera transform; applied per frame in LateUpdate.
+        private void ApplyHandShake()
+        {
+            if (_handShakePower <= 0f || _mainCameraTransform == null)
+                return;
+
+            float time = Time.time * _handShakeFrequency;
+            Vector3 noise = new Vector3(
+                (Mathf.PerlinNoise(time, 0f) - 0.5f) * 2f,
+                (Mathf.PerlinNoise(0f, time) - 0.5f) * 2f,
+                0f);
+            _mainCameraTransform.localPosition = noise * _handShakePower * _handShakeRate;
+        }
+
+        // resolve the spotlight3d entry by name: cut data names carry an editor ordinal
+        // prefix ("1st : spotlight3d002"), strip it and match the StageObjectMap first,
+        // then binder-instanced fixtures; log an unresolvable name once.
+        private void ApplySpotlight3d(string entryName, Spotlight3dUpdateInfo updateInfo)
+        {
+            StageController stage = _stageController;
+            if (stage == null)
+                return;
+
+            string bare = StripOrdinalPrefix(entryName);
+            if (string.IsNullOrEmpty(bare))
+                return;
+
+            GameObject target = null;
+            if (stage.StageObjectMap != null)
+            {
+                if (!stage.StageObjectMap.TryGetValue(bare, out target) &&
+                    !stage.StageObjectMap.TryGetValue(entryName, out target))
+                {
+                    target = null;
+                }
+            }
+
+            if (target == null && _spotlight3dInstances.TryGetValue(bare, out GameObject cached))
+                target = cached;
+
+            if (target == null)
+            {
+                if (!string.IsNullOrEmpty(updateInfo.assetName) &&
+                    stage.StageObjectMap != null &&
+                    stage.StageObjectMap.TryGetValue(updateInfo.assetName, out GameObject byAsset))
+                {
+                    target = byAsset;
+                }
+            }
+
+            if (target == null)
+            {
+                if (_spotlightMissingLogged.Add(entryName))
+                    Director.FileLog($"[spotlight3d] could not resolve spotlight entry '{entryName}'");
+                return;
+            }
+
+            target.SetActive(updateInfo.isActive);
+            if (updateInfo.isActive)
+            {
+                target.transform.localPosition = updateInfo.position;
+                target.transform.localRotation = Quaternion.Euler(updateInfo.rotation);
+                target.transform.localScale = updateInfo.scale;
+            }
+        }
+
+        // cut data entry names are editor display names like "1st : spotlight3d002";
+        // strip the ordinal + separator so only the real key name remains.
+        private static string StripOrdinalPrefix(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return name;
+
+            int idx = name.IndexOf(':');
+            if (idx < 0)
+                return name.Trim();
+
+            string head = name.Substring(0, idx).Trim();
+            if (head.Length == 0)
+                return name.Trim();
+
+            // only strip when the head is a plain ordinal token (1st / 2nd / 3rd / 4th)
+            bool isOrdinal = head.EndsWith("st", StringComparison.Ordinal) ||
+                             head.EndsWith("nd", StringComparison.Ordinal) ||
+                             head.EndsWith("rd", StringComparison.Ordinal) ||
+                             head.EndsWith("th", StringComparison.Ordinal);
+            if (!isOrdinal)
+                return name.Trim();
+
+            string digits = head.Substring(0, head.Length - 2);
+            if (!int.TryParse(digits, out _))
+                return name.Trim();
+
+            return name.Substring(idx + 1).Trim();
         }
     }
 

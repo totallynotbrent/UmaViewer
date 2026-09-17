@@ -469,6 +469,31 @@ namespace Gallop.Live.Cutt
         [SerializeField] public List<LiveTimelineMobCyalumeControlData> mobControlList;
         [SerializeField] public List<LiveTimelineMobCyalumeControlData> cyalumeControlList;
 
+        [SerializeField] public LiveTimelineKeyHandShakeCameraDataList handShakeCameraKeys;
+
+        [SerializeField]
+        public LiveTimelineKeyPostEffectDOFDataList postEffectDOFKeys;
+        [SerializeField]
+        public LiveTimelineKeyRadialBlurDataList radialBlurKeys;
+        [SerializeField]
+        public LiveTimelineKeyTiltShiftDataList tiltShiftKeys;
+        [SerializeField]
+        public LiveTimelineKeyFadeDataList fadeKeys;
+        [SerializeField]
+        public LiveTimelineKeyFluctuationDataList FluctuationKeys;
+        [SerializeField]
+        public LiveTimelineKeyVortexDataList VortexKeys;
+        [SerializeField]
+        public LiveTimelineKeyPostFilmDataList postFilm2Keys;
+        [SerializeField]
+        public LiveTimelineKeyPostFilmDataList postFilm3Keys;
+        [SerializeField]
+        public List<LiveTimelinePropsData> propsList;
+        [SerializeField]
+        public List<LiveTimelinePropsAttachData> propsAttachList;
+        [SerializeField]
+        public List<LiveTimelineSpotlight3dData> spotlight3dList;
+
         /*
 		//���ڿ��Ե���AB���ˣ���Ȼ���淢��ûʲô��...˵����ʲôʱ�����õ�
 		private void Start()
