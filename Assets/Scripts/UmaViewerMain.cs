@@ -302,6 +302,11 @@ public class UmaViewerMain : MonoBehaviour
             {
                 bench = true;
             }
+            else if (args[i] == "--bench-manual")
+            {
+                // manual mode arms the same profiler; it just waits for the user.
+                bench = true;
+            }
             else if (args[i] == "--music" && i + 1 < args.Length)
             {
                 int.TryParse(args[i + 1], out musicId);

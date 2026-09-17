@@ -40,13 +40,36 @@ public class FrameTimeProfiler : MonoBehaviour
         }
     }
 
-    // the harness polls marker files in persistent data; managed Debug.Log does
-    // not reach the player log on the IL2CPP linux build, so files are the signal.
+    // the harness polls marker files; bench output lives beside the exe so the
+    // user finds it next to the player log, falling back to persistent data.
+    private static string OutputDirectory()
+    {
+        try
+        {
+            string beside = Application.dataPath.TrimEnd('/', '\\');
+            // Application.dataPath points at <install>/UmaViewer_Data; the install
+            // root is its parent.
+            string root = Path.GetDirectoryName(Path.GetDirectoryName(beside));
+            if (!string.IsNullOrEmpty(root) && Directory.Exists(root))
+            {
+                string probe = Path.Combine(root, "uma_bench_probe.tmp");
+                File.WriteAllText(probe, "probe");
+                File.Delete(probe);
+                return root;
+            }
+        }
+        catch
+        {
+            // read-only install falls back to persistent data below.
+        }
+        return Application.persistentDataPath;
+    }
+
     private static void WriteMarker(string name)
     {
         try
         {
-            string markPath = Path.Combine(Application.persistentDataPath, name);
+            string markPath = Path.Combine(OutputDirectory(), name);
             Directory.CreateDirectory(Path.GetDirectoryName(markPath));
             File.WriteAllText(markPath, DateTime.Now.ToString(CultureInfo.InvariantCulture));
         }
@@ -198,7 +221,7 @@ public class FrameTimeProfiler : MonoBehaviour
             $"target_fps={Application.targetFrameRate} resolution={Screen.width}x{Screen.height}",
             "thread/gpu timings: unavailable (frame-timing module not compiled)");
 
-        string outPath = Path.Combine(Application.persistentDataPath, SummaryName);
+        string outPath = Path.Combine(OutputDirectory(), SummaryName);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(outPath));
