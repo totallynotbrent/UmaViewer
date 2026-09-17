@@ -1356,8 +1356,14 @@ namespace Gallop.Live
                 (Mathf.PerlinNoise(time, 0f) - 0.5f) * 2f,
                 (Mathf.PerlinNoise(0f, time) - 0.5f) * 2f,
                 0f);
-            _mainCameraTransform.localPosition = noise * _handShakePower * _handShakeRate;
+            // offset from the position the timeline just set, not overwrite it;
+            // storing the base keeps consecutive frames from compounding drift.
+            Vector3 offset = noise * _handShakePower * _handShakeRate;
+            _mainCameraTransform.localPosition += offset - _lastHandShakeOffset;
+            _lastHandShakeOffset = offset;
         }
+
+        private Vector3 _lastHandShakeOffset;
 
         // resolve the spotlight3d entry by name: cut data names carry an editor ordinal
         // prefix ("1st : spotlight3d002"), strip it and match the StageObjectMap first,
@@ -1387,11 +1393,11 @@ namespace Gallop.Live
 
             if (target == null)
             {
-                if (!string.IsNullOrEmpty(updateInfo.assetName) &&
-                    stage.StageObjectMap != null &&
-                    stage.StageObjectMap.TryGetValue(updateInfo.assetName, out GameObject byAsset))
+                if (!string.IsNullOrEmpty(updateInfo.assetName))
                 {
-                    target = byAsset;
+                    // instance the spotlight fixture from its bundle on first use;
+                    // keys carry bare asset names like "spotlight3d000".
+                    target = InstanceSpotlightFixture(bare, updateInfo.assetName, stage);
                 }
             }
 
@@ -1409,6 +1415,56 @@ namespace Gallop.Live
                 target.transform.localRotation = Quaternion.Euler(updateInfo.rotation);
                 target.transform.localScale = updateInfo.scale;
             }
+        }
+
+        // loads the shared spotlight3d controller prefab once and clones it per
+        // entry; clones live under the stage so the blink driver can find them.
+        private GameObject InstanceSpotlightFixture(string entryKey, string assetName, StageController stage)
+        {
+            if (_spotlight3dInstances.TryGetValue(entryKey, out GameObject existing) && existing != null)
+                return existing;
+
+            var main = UmaViewerMain.Instance;
+            if (main == null || main.AbList == null)
+                return null;
+
+            UmaDatabaseEntry entry = null;
+            foreach (var kv in main.AbList)
+            {
+                string keyFile = System.IO.Path.GetFileName(kv.Key);
+                if (string.Equals(keyFile, "pfb_env_live_cmn_spotlight3d_controller" + assetName.Substring("spotlight3d".Length), StringComparison.OrdinalIgnoreCase))
+                {
+                    entry = kv.Value;
+                    break;
+                }
+            }
+
+            if (entry == null)
+                return null;
+
+            AssetBundle bundle = UmaAssetManager.LoadAssetBundle(entry, neverUnload: true, isRecursive: true);
+            if (bundle == null)
+                return null;
+
+            GameObject prefab = bundle.LoadAsset<GameObject>("pfb_env_live_cmn_spotlight3d_controller" + assetName.Substring("spotlight3d".Length));
+            if (prefab == null)
+            {
+                foreach (GameObject go in bundle.LoadAllAssets<GameObject>())
+                {
+                    if (go != null) { prefab = go; break; }
+                }
+            }
+
+            if (prefab == null)
+                return null;
+
+            GameObject instance = Instantiate(prefab, stage.transform);
+            instance.name = entryKey;
+            if (stage.StageObjectMap != null)
+                stage.StageObjectMap[entryKey] = instance;
+            _spotlight3dInstances[entryKey] = instance;
+            Director.FileLog($"[spotlight3d] instanced fixture '{entryKey}' for asset '{assetName}'");
+            return instance;
         }
 
         // cut data entry names are editor display names like "1st : spotlight3d002";

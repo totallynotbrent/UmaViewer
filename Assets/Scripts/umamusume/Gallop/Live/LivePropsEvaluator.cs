@@ -36,7 +36,7 @@ namespace Gallop.Live
             var settings = timelineData.propsSettings;
             if (settings == null || settings.propsDataGroup == null || settings.propsDataGroup.Length == 0)
             {
-                Debug.LogWarning($"{PROP_LOG_TAG} propsSettings empty or missing");
+                Director.FileLog($"{PROP_LOG_TAG} propsSettings empty or missing");
                 return;
             }
 
@@ -74,7 +74,7 @@ namespace Gallop.Live
             }
 
             if (attached > 0 || skipped > 0)
-                Debug.Log($"{PROP_LOG_TAG} props evaluated: attached={attached} skipped={skipped}");
+                Director.FileLog($"{PROP_LOG_TAG} props evaluated: attached={attached} skipped={skipped}");
         }
 
         /// <summary>
@@ -95,21 +95,21 @@ namespace Gallop.Live
             UmaDatabaseEntry entry = FindPropEntry(main.AbList, group.propsName);
             if (entry == null)
             {
-                Debug.LogWarning($"{PROP_LOG_TAG} prop bundle not found for '{group.propsName}'");
+                Director.FileLog($"{PROP_LOG_TAG} prop bundle not found for '{group.propsName}'");
                 return false;
             }
 
             AssetBundle bundle = UmaAssetManager.LoadAssetBundle(entry);
             if (bundle == null)
             {
-                Debug.LogWarning($"{PROP_LOG_TAG} failed to load bundle for '{group.propsName}'");
+                Director.FileLog($"{PROP_LOG_TAG} failed to load bundle for '{group.propsName}'");
                 return false;
             }
 
             GameObject[] prefabs = bundle.LoadAllAssets<GameObject>();
             if (prefabs == null || prefabs.Length == 0)
             {
-                Debug.LogWarning($"{PROP_LOG_TAG} no prefab in bundle for '{group.propsName}'");
+                Director.FileLog($"{PROP_LOG_TAG} no prefab in bundle for '{group.propsName}'");
                 return false;
             }
 
@@ -141,7 +141,7 @@ namespace Gallop.Live
                 Transform joint = ResolveJoint(charaContainers, charaIndex, jointName);
                 if (joint == null)
                 {
-                    Debug.LogWarning($"{PROP_LOG_TAG} joint '{jointName}' not found for '{group.propsName}' (charaIndex={charaIndex})");
+                    Director.FileLog($"{PROP_LOG_TAG} joint '{jointName}' not found for '{group.propsName}' (charaIndex={charaIndex})");
                     continue;
                 }
 
@@ -166,36 +166,26 @@ namespace Gallop.Live
             if (string.IsNullOrEmpty(propsName))
                 return null;
 
-            // Exact key match first.
-            if (abList.TryGetValue(propsName, out var exact))
+            // stage props live in 3d/env/live/common/prop/pfb_env_live_cmn_propNNN
+            // keyed by the bare number the cut data carries (e.g. "001").
+            string padded = propsName.PadLeft(3, '0');
+            string direct = $"3d/env/live/common/prop/pfb_env_live_cmn_prop{padded}";
+            if (abList.TryGetValue(direct, out var exact))
                 return exact;
 
-            string fileName = System.IO.Path.GetFileName(propsName);
-
-            // Typed pass: only entries whose manifest type is item (props are filed
-            // under the item type in the current manifest) or whose key contains prop.
+            // fall back to any key whose file name ends with the padded number.
+            string fileName = "pfb_env_live_cmn_prop" + padded;
             foreach (var kv in abList)
             {
-                if (kv.Value.Type != UmaFileType.item)
-                    continue;
                 string keyFile = System.IO.Path.GetFileName(kv.Key);
                 if (string.Equals(keyFile, fileName, StringComparison.OrdinalIgnoreCase))
                     return kv.Value;
             }
 
-            // Typed fuzzy pass: key contains the propsName segment.
+            // last resort: name contains the segment anywhere.
             foreach (var kv in abList)
             {
-                if (kv.Value.Type == UmaFileType.item &&
-                    kv.Key.IndexOf(propsName, StringComparison.OrdinalIgnoreCase) >= 0)
-                    return kv.Value;
-            }
-
-            // Last resort: untyped name match (older manifests may not tag props).
-            foreach (var kv in abList)
-            {
-                string keyFile = System.IO.Path.GetFileName(kv.Key);
-                if (string.Equals(keyFile, fileName, StringComparison.OrdinalIgnoreCase))
+                if (kv.Key.IndexOf("pfb_env_live_cmn_prop" + padded, StringComparison.OrdinalIgnoreCase) >= 0)
                     return kv.Value;
             }
 

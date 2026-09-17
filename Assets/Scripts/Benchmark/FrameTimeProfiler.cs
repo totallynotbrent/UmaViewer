@@ -20,7 +20,6 @@ public class FrameTimeProfiler : MonoBehaviour
 
     // manual-mode state
     private bool _liveWasPlaying;
-    private float _idleSeconds;
 
     private bool _sampling;
     private float _clock;
@@ -59,20 +58,6 @@ public class FrameTimeProfiler : MonoBehaviour
         return Application.persistentDataPath;
     }
 
-    private static void WriteMarker(string name)
-    {
-        try
-        {
-            string markPath = Path.Combine(OutputDirectory(), name);
-            Directory.CreateDirectory(Path.GetDirectoryName(markPath));
-            File.WriteAllText(markPath, DateTime.Now.ToString(CultureInfo.InvariantCulture));
-        }
-        catch
-        {
-            // a missing marker only costs a harness timeout; boot continues.
-        }
-    }
-
     // a live counts as playing when the director finished setup and the ui is in live mode.
     private static bool IsLivePlaying()
     {
@@ -92,7 +77,6 @@ public class FrameTimeProfiler : MonoBehaviour
 
         _gcBytesBefore = GC.GetTotalMemory(false);
         _gcCollectionsBefore = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
-        WriteMarker("uma_bench_armed.txt");
         Debug.Log($"[bench] armed: manual={_manualMode} warmup={_warmupSeconds}s sample={_sampleSeconds}s");
     }
 
@@ -116,12 +100,6 @@ public class FrameTimeProfiler : MonoBehaviour
                 }
 
                 _liveWasPlaying = false;
-                _idleSeconds += Time.unscaledDeltaTime;
-                if (_idleSeconds >= 60f)
-                {
-                    _idleSeconds = 0f;
-                    WriteMarker("uma_bench_waiting.txt");
-                }
                 return;
             }
 
@@ -131,7 +109,6 @@ public class FrameTimeProfiler : MonoBehaviour
                 _liveWasPlaying = true;
                 _clock = 0f;
                 _sampling = false;
-                WriteMarker("uma_bench_live_detected.txt");
                 Debug.Log("[bench] live detected, starting window");
             }
         }
@@ -146,7 +123,6 @@ public class FrameTimeProfiler : MonoBehaviour
         if (!_sampling)
         {
             _sampling = true;
-            WriteMarker("uma_bench_sampling.txt");
         }
 
         if (_clock >= _warmupSeconds + _sampleSeconds)
@@ -220,9 +196,6 @@ public class FrameTimeProfiler : MonoBehaviour
         {
             Directory.CreateDirectory(Path.GetDirectoryName(outPath));
             File.WriteAllText(outPath, summary);
-            // raw per-frame times let the user's run be re-analysed offline.
-            File.WriteAllText(Path.Combine(Path.GetDirectoryName(outPath), "uma_bench_frames.csv"),
-                string.Join("\n", _frameTimes.ConvertAll(t => t.ToString("F3", CultureInfo.InvariantCulture)).ToArray()));
             Debug.Log($"[bench] summary written -> {outPath}");
         }
         catch (Exception ex)
