@@ -34,14 +34,14 @@ powershell %PSARGS% "$l=Get-Content '!URLFILE!'; if($l.Count -gt 1){$l[1]}" > "%
 set /p SURL=<"%TEMP%\uma_side.txt" 2>nul
 
 echo Downloading !ZURL! ...
-powershell %PSARGS% "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest '!ZURL!' -OutFile '!TMPZIP!'" 2>>"!ERRFILE!"
+powershell %PSARGS% "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object System.Net.WebClient; $wc.Proxy=[System.Net.WebRequest]::GetSystemWebProxy(); $wc.Proxy.Credentials=[System.Net.CredentialCache]::DefaultCredentials; $wc.DownloadFile('!ZURL!','!TMPZIP!')" 2>>"!ERRFILE!"
 if errorlevel 1 goto fail
 if not exist "!TMPZIP!" goto fail
 
 set "SIDELINE="
 if not "!SURL!"=="" (
   echo Verifying sha256 against the release sidecar ...
-  powershell %PSARGS% "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest '!SURL!' -OutFile '%TEMP%\uma_viewer.sha256'" 2>>"!ERRFILE!"
+  powershell %PSARGS% "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object System.Net.WebClient; $wc.DownloadFile('!SURL!','%TEMP%\uma_viewer.sha256')" 2>>"!ERRFILE!"
   if not errorlevel 1 set /p SIDELINE=<"%TEMP%\uma_viewer.sha256"
 )
 

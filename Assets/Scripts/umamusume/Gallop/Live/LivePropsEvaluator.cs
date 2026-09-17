@@ -53,24 +53,26 @@ namespace Gallop.Live
                     continue;
                 }
 
-                // Resolve target character index (chara props attach per-chara; stage props attach once).
-                int charaIndex = -1;
-                if (group.isCharaProps && !ResolveCharaIndex(group, charaContainers, motionSequenceIndices, ref charaIndex))
+                // Stage props carry CharaPosition conditions listing the slots they
+                // appear at; spawn one instance per slot instead of testing all
+                // conditions against a single slot.
+                List<int> targetSlots = ResolveTargetSlots(group, charaContainers);
+                if (targetSlots == null || targetSlots.Count == 0)
                 {
                     skipped++;
                     continue;
                 }
 
-                if (!ConditionsSatisfied(group, charaContainers, charaIndex))
+                bool anyAttached = false;
+                for (int slot = 0; slot < targetSlots.Count; slot++)
                 {
-                    skipped++;
-                    continue;
+                    if (AttachProp(group, charaContainers, targetSlots[slot]))
+                        anyAttached = true;
+                    else
+                        skipped++;
                 }
-
-                if (AttachProp(group, charaContainers, charaIndex))
+                if (anyAttached)
                     attached++;
-                else
-                    skipped++;
             }
 
             if (attached > 0 || skipped > 0)
@@ -154,6 +156,67 @@ namespace Gallop.Live
             }
 
             return anyAttached;
+        }
+
+        /// <summary>
+        /// Decide which character slots a prop group targets. Chara props keep
+        /// their resolved slot; stage props collect every CharaPosition value the
+        /// conditions name. Returns null when nothing matches.
+        /// </summary>
+        private static List<int> ResolveTargetSlots(
+            LiveTimelinePropsSettings.PropsDataGroup group,
+            List<UmaContainerCharacter> charaContainers)
+        {
+            if (group.propsConditionGroup == null || group.propsConditionGroup.Length == 0)
+            {
+                // no conditions: stage prop attaches once, chara props at slot 0.
+                return group.isCharaProps
+                    ? new List<int> { 0 }
+                    : new List<int> { -1 };
+            }
+
+            var slots = new List<int>();
+            if (group.isCharaProps)
+            {
+                for (int g = 0; g < group.propsConditionGroup.Length; g++)
+                {
+                    var condGroup = group.propsConditionGroup[g];
+                    if (condGroup == null)
+                        continue;
+                    for (int c = 0; c < (condGroup.propsConditionData?.Length ?? 0); c++)
+                    {
+                        var cond = condGroup.propsConditionData[c];
+                        if (cond?.Type == LiveTimelinePropsSettings.PropsConditionType.CharaPosition)
+                        {
+                            int slotIndex = cond.Value;
+                            if (slotIndex >= 0 && slotIndex < charaContainers.Count && !slots.Contains(slotIndex))
+                                slots.Add(slotIndex);
+                        }
+                    }
+                }
+                if (slots.Count == 0 && (charaContainers?.Count ?? 0) > 0)
+                    slots.Add(0);
+                return slots;
+            }
+
+            // stage prop: collect every named slot; none named means attach once.
+            for (int g = 0; g < group.propsConditionGroup.Length; g++)
+            {
+                var condGroup = group.propsConditionGroup[g];
+                if (condGroup == null)
+                    continue;
+                for (int c = 0; c < (condGroup.propsConditionData?.Length ?? 0); c++)
+                {
+                    var cond = condGroup.propsConditionData[c];
+                    if (cond?.Type == LiveTimelinePropsSettings.PropsConditionType.CharaPosition &&
+                        cond.Value >= 0 && cond.Value < charaContainers.Count &&
+                        !slots.Contains(cond.Value))
+                        slots.Add(cond.Value);
+                }
+            }
+            if (slots.Count == 0)
+                slots.Add(-1);
+            return slots;
         }
 
         /// <summary>

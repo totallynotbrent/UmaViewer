@@ -1351,6 +1351,8 @@ namespace Gallop.Live
             if (_handShakePower <= 0f || _mainCameraTransform == null)
                 return;
 
+            // the timeline data's power values sit around 0.15-0.5 in game
+            // units; a small scale factor keeps the shake subtle in world space.
             float time = Time.time * _handShakeFrequency;
             Vector3 noise = new Vector3(
                 (Mathf.PerlinNoise(time, 0f) - 0.5f) * 2f,
@@ -1358,7 +1360,7 @@ namespace Gallop.Live
                 0f);
             // offset from the position the timeline just set, not overwrite it;
             // storing the base keeps consecutive frames from compounding drift.
-            Vector3 offset = noise * _handShakePower * _handShakeRate;
+            Vector3 offset = noise * (_handShakePower * _handShakeRate * 0.05f);
             _mainCameraTransform.localPosition += offset - _lastHandShakeOffset;
             _lastHandShakeOffset = offset;
         }
