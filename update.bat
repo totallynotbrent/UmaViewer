@@ -8,17 +8,17 @@ set "TMPZIP=%TEMP%\uma_viewer_update.zip"
 set "STAGE=%TEMP%\uma_viewer_update_stage"
 
 echo UmaViewer updater
-echo 1) stable release
-echo 2) experimental (prerelease)
+echo 1) stable release (latest non-prerelease)
+echo 2) experimental (camera-and-postfx prerelease)
 choice /C 12 /M "Pick a channel"
-if "%ERRORLEVEL%"=="2" (set "CH=2") else (set "CH=1")
+if "%ERRORLEVEL%"=="2" (set "TAG=camera-and-postfx") else (set "TAG=")
 
-if "%CH%"=="2" (
-  echo Resolving latest experimental release...
-  for /f "delims=" %%u in ('powershell -NoProfile -Command "(Invoke-RestMethod '%API%' -Headers @{'User-Agent'='uma-update'} | Where-Object prerelease -eq $true | Select-Object -First 1).assets | Where-Object name -like 'UmaViewer-Windows-x64.zip' | Select-Object -First 1 -ExpandProperty browser_download_url"') do set "ZURL=%%u"
+if not "%TAG%"=="" (
+  echo Resolving experimental release %TAG%...
+  for /f "usebackq delims=" %%u in (`powershell -NoProfile -Command "$r = Invoke-RestMethod '%API%/tags/%TAG%' -Headers @{'User-Agent'='uma-update'}; $a = $r.assets ^| Where-Object { $_.name -eq 'UmaViewer-Windows-x64.zip' }; if ($a) { $a.browser_download_url }"`) do set "ZURL=%%u"
 ) else (
   echo Resolving latest stable release...
-  for /f "delims=" %%u in ('powershell -NoProfile -Command "(Invoke-RestMethod '%API%/latest' -Headers @{'User-Agent'='uma-update'}).assets | Where-Object name -like 'UmaViewer-Windows-x64.zip' | Select-Object -First 1 -ExpandProperty browser_download_url"') do set "ZURL=%%u"
+  for /f "usebackq delims=" %%u in (`powershell -NoProfile -Command "$r = Invoke-RestMethod '%API%/latest' -Headers @{'User-Agent'='uma-update'}; $a = $r.assets ^| Where-Object { $_.name -eq 'UmaViewer-Windows-x64.zip' }; if ($a) { $a.browser_download_url }"`) do set "ZURL=%%u"
 )
 
 if "%ZURL%"=="" (
@@ -37,8 +37,8 @@ if not exist "%TMPZIP%" (
 
 echo Verifying sha256 against the release sidecar...
 curl -sL -o "%TEMP%\uma_viewer.sha256" "%ZURL%.sha256" >nul 2>&1
-for /f "delims=" %%h in ('type "%TEMP%\uma_viewer.sha256"') do set "WANT=%%h"
-for /f "delims=" %%h in ('certutil -hashfile "%TMPZIP%" SHA256 ^| findstr /R "^[0-9a-fA-F]*$"') do set "GOT=%%h"
+for /f "usebackq delims=" %%h in (`type "%TEMP%\uma_viewer.sha256"`) do set "WANT=%%h"
+for /f "usebackq delims=" %%h in (`certutil -hashfile "%TMPZIP%" SHA256 ^| findstr /R "^[0-9a-fA-F]*$"`) do set "GOT=%%h"
 if not "%WANT:~0,64%"=="%GOT%" (
   echo sha256 mismatch, aborting.
   pause

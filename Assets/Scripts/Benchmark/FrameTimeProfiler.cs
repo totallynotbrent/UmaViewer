@@ -1,4 +1,7 @@
 // deterministic frame-time benchmark for the diagnostic container, not a gameplay feature.
+// manual mode: arm the profiler any time; it starts sampling only once a live is
+// actually playing, so the user can boot normally, pick a concert by hand, and the
+// numbers still come out clean without any command-line autostart.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -13,6 +16,11 @@ public class FrameTimeProfiler : MonoBehaviour
     private static bool _enabled;
     private static float _warmupSeconds = 12f;
     private static float _sampleSeconds = 30f;
+    private static bool _manualMode;
+
+    // manual-mode state
+    private bool _liveWasPlaying;
+    private float _idleSeconds;
 
     private bool _sampling;
     private float _clock;
@@ -26,6 +34,7 @@ public class FrameTimeProfiler : MonoBehaviour
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] == "--bench") _enabled = true;
+            else if (args[i] == "--bench-manual") { _enabled = true; _manualMode = true; }
             else if (args[i] == "--bench-warmup" && i + 1 < args.Length) float.TryParse(args[i + 1], out _warmupSeconds);
             else if (args[i] == "--bench-seconds" && i + 1 < args.Length) float.TryParse(args[i + 1], out _sampleSeconds);
         }
@@ -47,6 +56,14 @@ public class FrameTimeProfiler : MonoBehaviour
         }
     }
 
+    // a live counts as playing when the director finished setup and the ui is in live mode.
+    private static bool IsLivePlaying()
+    {
+        var director = Gallop.Live.Director.instance;
+        var ui = UmaViewerUI.Instance;
+        return director != null && director._isLiveSetup && ui != null && ui.LiveTime;
+    }
+
     private void Awake()
     {
         ParseArgs();
@@ -59,13 +76,48 @@ public class FrameTimeProfiler : MonoBehaviour
         _gcBytesBefore = GC.GetTotalMemory(false);
         _gcCollectionsBefore = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
         WriteMarker("uma_bench_armed.txt");
-        Debug.Log($"[bench] armed: warmup={_warmupSeconds}s sample={_sampleSeconds}s");
+        Debug.Log($"[bench] armed: manual={_manualMode} warmup={_warmupSeconds}s sample={_sampleSeconds}s");
     }
 
     private void Update()
     {
         if (!_enabled)
             return;
+
+        if (_manualMode)
+        {
+            // wait indefinitely for the user to start a live; a fresh marker each
+            // idle minute proves the profiler is alive while waiting.
+            bool playing = IsLivePlaying();
+            if (!playing)
+            {
+                if (_sampling)
+                {
+                    // the live ended mid-window; keep the clean frames we have.
+                    FinishSampling();
+                    return;
+                }
+
+                _liveWasPlaying = false;
+                _idleSeconds += Time.unscaledDeltaTime;
+                if (_idleSeconds >= 60f)
+                {
+                    _idleSeconds = 0f;
+                    WriteMarker("uma_bench_waiting.txt");
+                }
+                return;
+            }
+
+            if (!_liveWasPlaying)
+            {
+                // the user just entered the live; start the window from here.
+                _liveWasPlaying = true;
+                _clock = 0f;
+                _sampling = false;
+                WriteMarker("uma_bench_live_detected.txt");
+                Debug.Log("[bench] live detected, starting window");
+            }
+        }
 
         // wall-clock only: the stage load produces multi-second frames, so scaled
         // time would burn the warm-up instantly and contaminate the sample.
@@ -168,6 +220,7 @@ public class FrameTimeProfiler : MonoBehaviour
     {
         WriteSummary();
         _enabled = false;
+        _manualMode = false;
         Debug.Log("[bench] BENCH_DONE");
     }
 }
