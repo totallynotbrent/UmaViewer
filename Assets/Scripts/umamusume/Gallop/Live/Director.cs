@@ -117,6 +117,7 @@ namespace Gallop.Live
         private Material _fadeMaterial;
         private readonly HashSet<string> _propsMissingLogged = new HashSet<string>();
         private readonly HashSet<string> _spotlightMissingLogged = new HashSet<string>();
+        private readonly Dictionary<GameObject, bool> _spotlightMaterialTinted = new Dictionary<GameObject, bool>();
         private readonly Dictionary<string, GameObject> _spotlight3dInstances = new Dictionary<string, GameObject>();
 
         public bool isTimelineControlled
@@ -1438,9 +1439,39 @@ namespace Gallop.Live
             target.SetActive(updateInfo.isActive);
             if (updateInfo.isActive)
             {
-                target.transform.localPosition = updateInfo.position;
-                target.transform.localRotation = Quaternion.Euler(updateInfo.rotation);
-                target.transform.localScale = updateInfo.scale;
+                // the fixture hangs at its authored height over the performer's
+                // slot; characterPosition is the stage-space target the beam
+                // points at, so put the fixture above it, not at raw position.
+                Vector3 slot = new Vector3(
+                    updateInfo.characterPosition.x,
+                    0f,
+                    updateInfo.characterPosition.z);
+                Vector3 hang = updateInfo.position;
+                target.transform.SetParent(stage.transform, false);
+                target.transform.localPosition = new Vector3(slot.x, hang.y, slot.z);
+
+                // tint the fixture materials once per fixture (cached) so the
+                // pool matches the authored color without per-frame material churn.
+                if (!_spotlightMaterialTinted.TryGetValue(target, out bool tinted) || !tinted)
+                {
+                    Color poolColor = updateInfo.color;
+                    foreach (Renderer r in target.GetComponentsInChildren<Renderer>())
+                    {
+                        if (r == null)
+                            continue;
+                        Material mat = r.material;
+                        if (mat == null)
+                            continue;
+                        if (mat.HasProperty("_EmissionColor"))
+                        {
+                            mat.EnableKeyword("_EMISSION");
+                            mat.SetColor("_EmissionColor", poolColor * Mathf.Max(1f, updateInfo.colorPower));
+                        }
+                        if (mat.HasProperty("_Color"))
+                            mat.SetColor("_Color", poolColor);
+                    }
+                    _spotlightMaterialTinted[target] = true;
+                }
             }
         }
 

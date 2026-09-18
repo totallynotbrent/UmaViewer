@@ -1,6 +1,7 @@
 using System;
 #pragma warning disable CS0067 // ponytail: keep official field for parity
 using System.Collections.Generic;
+using Gallop.Live;
 using UnityEngine;
 using System.Linq;
 using System.IO;
@@ -416,10 +417,18 @@ namespace Gallop.Live.Cutt
             _oldFrame = _oldLiveTime * 60f;
             _deltaTime = currentLiveTime - _oldLiveTime;
             _deltaTimeRatio = _deltaTime / 0.0166666675f;
+            SectionProfiler.Begin("motion.sequence");
             AlterUpdate_CharaMotionSequence(liveTime);
+            SectionProfiler.End();
+            SectionProfiler.Begin("facial.data");
             AlterUpdate_FacialData(liveTime);
+            SectionProfiler.End();
+            SectionProfiler.Begin("lipsync");
             AlterUpdate_LipSync(liveTime);
+            SectionProfiler.End();
+            SectionProfiler.Begin("lipsync2");
             AlterUpdate_LipSync2(liveTime);
+            SectionProfiler.End();
             _isNowAlterUpdate = false;
         }
 

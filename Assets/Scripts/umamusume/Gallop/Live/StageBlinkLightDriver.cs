@@ -483,6 +483,22 @@ namespace Gallop.Live
             {
                 InitAllStageLightsOff();
                 _allOffInited = true;
+
+                // one-shot census: which timeline blink roots found real stage
+                // objects, so a dark stage names its missing fixtures in the log.
+                int resolved = 0, missing = 0;
+                foreach (var kv in _latest)
+                {
+                    if (_stage.StageObjectUnitMap.TryGetValue(kv.Key, out var unit) &&
+                        unit != null && unit.ChildObjects != null && unit.ChildObjects.Length > 0)
+                        resolved++;
+                    else
+                    {
+                        missing++;
+                        Director.FileLog($"[blinklight] timeline root '{kv.Key}' has no stage unit");
+                    }
+                }
+                Director.FileLog($"[blinklight] census: roots={_latest.Count} resolved={resolved} missing={missing} mapSize={_stage.StageObjectMap.Count}");
             }
 
             if (_latest.Count == 0)
