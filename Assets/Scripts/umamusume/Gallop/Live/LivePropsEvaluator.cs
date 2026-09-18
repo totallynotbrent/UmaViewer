@@ -133,29 +133,39 @@ namespace Gallop.Live
                 return true;
             }
 
-            bool anyAttached = false;
-            for (int j = 0; j < attachCount; j++)
+            // the joint list enumerates candidate anchors; prefer the _loc
+            // locator the game authors the mic for, then the right hand, so a
+            // mic lands in one hand only.
+            Transform joint = null;
+            string jointName = null;
+            string[] orderedCandidates = OrderAttachCandidates(group.attachJointNames, attachCount);
+            for (int j = 0; j < orderedCandidates.Length; j++)
             {
-                string jointName = group.attachJointNames[j];
-                if (string.IsNullOrEmpty(jointName))
+                string candidate = orderedCandidates[j];
+                if (string.IsNullOrEmpty(candidate))
                     continue;
-
-                Transform joint = ResolveJoint(charaContainers, charaIndex, jointName);
-                if (joint == null)
+                Transform found = ResolveJoint(charaContainers, charaIndex, candidate);
+                if (found != null)
                 {
-                    Director.FileLog($"{PROP_LOG_TAG} joint '{jointName}' not found for '{group.propsName}' (charaIndex={charaIndex})");
-                    continue;
+                    joint = found;
+                    jointName = candidate;
+                    break;
                 }
-
-                var go = UnityEngine.Object.Instantiate(prefab, joint);
-                go.name = $"Prop_{group.propsName}_{jointName}";
-                go.transform.localPosition = Vector3.zero;
-                go.transform.localRotation = Quaternion.identity;
-                go.transform.localScale = Vector3.one;
-                anyAttached = true;
             }
 
-            return anyAttached;
+            if (joint == null)
+            {
+                Director.FileLog($"{PROP_LOG_TAG} no attach joint found for '{group.propsName}' (charaIndex={charaIndex})");
+                return false;
+            }
+
+            var attachedGo = UnityEngine.Object.Instantiate(prefab, joint);
+            attachedGo.name = $"Prop_{group.propsName}_{jointName}";
+            attachedGo.transform.localPosition = Vector3.zero;
+            attachedGo.transform.localRotation = Quaternion.identity;
+            attachedGo.transform.localScale = Vector3.one;
+            StagePropsDriver.RegisterPropRenderers(jointName, attachedGo.GetComponentsInChildren<Renderer>());
+            return true;
         }
 
         /// <summary>
@@ -217,6 +227,27 @@ namespace Gallop.Live
             if (slots.Count == 0)
                 slots.Add(-1);
             return slots;
+        }
+
+        /// <summary>
+        /// Reorder the group's candidate joints so _loc locators and the right
+        /// hand win; the game's authored order puts both hands in the list.
+        /// </summary>
+        private static string[] OrderAttachCandidates(string[] attachJointNames, int attachCount)
+        {
+            var candidates = new List<string>(attachCount);
+            for (int i = 0; i < attachCount; i++)
+            {
+                string name = attachJointNames[i];
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                if (name.EndsWith("_loc", StringComparison.OrdinalIgnoreCase) ||
+                    name.EndsWith("_R", StringComparison.OrdinalIgnoreCase))
+                    candidates.Insert(0, name);
+                else
+                    candidates.Add(name);
+            }
+            return candidates.ToArray();
         }
 
         /// <summary>

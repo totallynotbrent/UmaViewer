@@ -39,6 +39,24 @@ namespace Gallop
             set => _bloomAndDiffusionEnabled = value;
         }
 
+        // timeline film state set by Director from the PostFilm keys; a null
+        // color means no film layer is active this frame.
+        private Color? _timelineFilmColor;
+        private float _timelineFilmPower;
+        private bool _timelineFilmIsVignette;
+
+        public void ApplyTimelineFilm(Color color, float power, bool isVignette)
+        {
+            _timelineFilmColor = color;
+            _timelineFilmPower = power;
+            _timelineFilmIsVignette = isVignette;
+        }
+
+        public void ClearTimelineFilm()
+        {
+            _timelineFilmColor = null;
+        }
+
         // runtime toggle so depth of field can be switched off without re-editing
         // the timeline; defaults on.
         [SerializeField]
@@ -112,6 +130,45 @@ namespace Gallop
             ApplyDepthOfField();
             ApplyMotionBlur();
             ApplyVignette();
+            ApplyTimelineFilmLayers();
+        }
+
+        // maps the game's PostFilm layers onto the volume: the film color tint
+        // drives colorFilter and vignette-style layers boost the vignette.
+        private void ApplyTimelineFilmLayers()
+        {
+            if (_colorAdjust == null)
+                InitializeVolume();
+            if (_colorAdjust == null)
+                return;
+
+            if (_timelineFilmColor.HasValue)
+            {
+                Color film = _timelineFilmColor.Value;
+                float power = Mathf.Clamp01(_timelineFilmPower);
+
+                _colorAdjust.active = true;
+                _colorAdjust.colorFilter.overrideState = true;
+                _colorAdjust.colorFilter.value =
+                    Color.Lerp(Color.white, film, power);
+
+                if (_vignette != null)
+                {
+                    if (_timelineFilmIsVignette)
+                    {
+                        _vignette.color.overrideState = true;
+                        _vignette.color.value = film;
+                        _vignette.intensity.overrideState = true;
+                        _vignette.intensity.value =
+                            Mathf.Max(_vignette.intensity.value, power * 0.6f);
+                    }
+                }
+            }
+            else
+            {
+                _colorAdjust.colorFilter.overrideState = true;
+                _colorAdjust.colorFilter.value = Color.white;
+            }
         }
 
         public void InitializeVolume()

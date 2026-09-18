@@ -115,9 +115,6 @@ namespace Gallop.Live
         // and per-name logging so an unresolvable props/spotlight name warns once.
         private GameObject _fadeQuad;
         private Material _fadeMaterial;
-        private float _handShakePower;
-        private float _handShakeFrequency;
-        private float _handShakeRate;
         private readonly HashSet<string> _propsMissingLogged = new HashSet<string>();
         private readonly HashSet<string> _spotlightMissingLogged = new HashSet<string>();
         private readonly Dictionary<string, GameObject> _spotlight3dInstances = new Dictionary<string, GameObject>();
@@ -466,6 +463,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateProps += OnUpdateProps;
             _liveTimelineControl.OnUpdatePropsAttach += OnUpdatePropsAttach;
             _liveTimelineControl.OnUpdateSpotlight3d += OnUpdateSpotlight3d;
+            _liveTimelineControl.OnUpdatePostFilm += OnUpdatePostFilm;
 
 
             _liveTimelineControl.OnUpdateCameraSwitcher += delegate (int cameraIndex_)
@@ -617,6 +615,9 @@ namespace Gallop.Live
 
         private void OnTimelineUpdate(float _liveCurrentTime)
         {
+            // film layers evaluate in this pass; reset the strongest-layer
+            // tracker before the three PostFilm events fire.
+            _filmBestPower = -1f;
             _liveTimelineControl.AlterUpdate(_liveCurrentTime);
             if (!_soloMode)
             {
@@ -776,7 +777,6 @@ namespace Gallop.Live
                 UpdateMirrorReflections();
             }
 
-            ApplyHandShake();
         }
 
         private void FixedUpdate()
@@ -1240,12 +1240,45 @@ namespace Gallop.Live
             ApplyTiltShift(6f, updateInfo.RotVolume * 4f, 0f);
         }
 
+
+        // the game composites up to three PostFilm layers; the strongest active
+        // layer drives the volume tint this frame.
+        private void OnUpdatePostFilm(
+            LiveTimelineKeyPostFilmData data,
+            ref PostFilmUpdateInfo updateInfo,
+            float currentLiveTime)
+        {
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null)
+                return;
+
+            var mode = data.filmMode;
+            if (mode == PostFilmMode.None)
+            {
+                imageEffect.ClearTimelineFilm();
+                return;
+            }
+
+            bool isVignette =
+                mode == PostFilmMode.VignetteLerp ||
+                mode == PostFilmMode.VignetteAdd ||
+                mode == PostFilmMode.VignetteMul;
+
+            // prefer the strongest powered layer seen this frame; Director's
+            // per-frame reset happens in ClearFrameFilmState below.
+            float power = Mathf.Clamp01(updateInfo.filmPower);
+            if (power > _filmBestPower)
+            {
+                _filmBestPower = power;
+                imageEffect.ApplyTimelineFilm(updateInfo.color0, power, isVignette);
+            }
+        }
+
+        private float _filmBestPower = -1f;
+
         private void OnUpdateHandShakeCamera(HandShakeCameraUpdateInfo updateInfo)
         {
-            if (!updateInfo.isValid) return;
-            _handShakePower = Mathf.Clamp(updateInfo.power, 0f, 2f);
-            _handShakeFrequency = Mathf.Clamp(updateInfo.frequency, 0f, 30f);
-            _handShakeRate = Mathf.Clamp(updateInfo.Rate, 0f, 4f);
+            // camera shake disabled by request; the keys still evaluate but apply nothing.
         }
 
         private void OnUpdateProps(PropsUpdateInfo updateInfo)
@@ -1294,6 +1327,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateProps -= OnUpdateProps;
             _liveTimelineControl.OnUpdatePropsAttach -= OnUpdatePropsAttach;
             _liveTimelineControl.OnUpdateSpotlight3d -= OnUpdateSpotlight3d;
+            _liveTimelineControl.OnUpdatePostFilm -= OnUpdatePostFilm;
         }
 
         // radial blur keys drive the existing motion-blur volume override: power maps to
@@ -1346,26 +1380,6 @@ namespace Gallop.Live
 
         // hand-shake keys drive a perlin-noise camera offset so the shake reads on the
         // real camera transform; applied per frame in LateUpdate.
-        private void ApplyHandShake()
-        {
-            if (_handShakePower <= 0f || _mainCameraTransform == null)
-                return;
-
-            // the timeline data's power values sit around 0.15-0.5 in game
-            // units; a small scale factor keeps the shake subtle in world space.
-            float time = Time.time * _handShakeFrequency;
-            Vector3 noise = new Vector3(
-                (Mathf.PerlinNoise(time, 0f) - 0.5f) * 2f,
-                (Mathf.PerlinNoise(0f, time) - 0.5f) * 2f,
-                0f);
-            // offset from the position the timeline just set, not overwrite it;
-            // storing the base keeps consecutive frames from compounding drift.
-            Vector3 offset = noise * (_handShakePower * _handShakeRate * 0.05f);
-            _mainCameraTransform.localPosition += offset - _lastHandShakeOffset;
-            _lastHandShakeOffset = offset;
-        }
-
-        private Vector3 _lastHandShakeOffset;
 
         // resolve the spotlight3d entry by name: cut data names carry an editor ordinal
         // prefix ("1st : spotlight3d002"), strip it and match the StageObjectMap first,
