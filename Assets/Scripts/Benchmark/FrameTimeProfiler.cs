@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Gallop.Live;
 using UnityEngine;
 
 public class FrameTimeProfiler : MonoBehaviour
@@ -140,6 +141,7 @@ public class FrameTimeProfiler : MonoBehaviour
         _gcLastTotalMemory = gcNow;
 
         _frameTimes.Add(Time.unscaledDeltaTime * 1000f);
+        SectionProfiler.SetEnabled(true);
     }
 
     private void WriteSummary()
@@ -178,6 +180,9 @@ public class FrameTimeProfiler : MonoBehaviour
         }
 
         int gcColsNow = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
+        SectionProfiler.SetEnabled(false);
+        string sectionReport = SectionProfiler.Dump(15);
+        SectionProfiler.Reset();
 
         // note: per-thread and gpu timings are not available here; the FrameTiming
         // manager module is not compiled into this project's player build.
@@ -196,7 +201,8 @@ public class FrameTimeProfiler : MonoBehaviour
             $"gc_alloc_mb={_gcAllocAccumulated / 1048576.0:F2}",
             $"gc_collections={gcColsNow - _gcCollectionsBefore}",
             $"target_fps={Application.targetFrameRate} resolution={Screen.width}x{Screen.height}",
-            "thread/gpu timings: unavailable (frame-timing module not compiled)");
+            "thread/gpu timings: unavailable (frame-timing module not compiled)",
+            sectionReport);
 
         string outPath = Path.Combine(OutputDirectory(), SummaryName);
         try

@@ -618,7 +618,9 @@ namespace Gallop.Live
             // film layers evaluate in this pass; reset the strongest-layer
             // tracker before the three PostFilm events fire.
             _filmBestPower = -1f;
+            SectionProfiler.Begin("timeline.eval");
             _liveTimelineControl.AlterUpdate(_liveCurrentTime);
+            SectionProfiler.End();
             if (!_soloMode)
             {
                 UmaViewerAudio.AlterUpdate(_liveCurrentTime, partInfo, liveVocal, sliderControl.is_Outed);
@@ -767,6 +769,7 @@ namespace Gallop.Live
 
         private void LateUpdate()
         {
+            SectionProfiler.Begin("director.lateupdate");
             if (_isLiveSetup && _syncTime && !IsRecordVMD)
             {
                 ApplyTimelineLateUpdate();
@@ -777,6 +780,7 @@ namespace Gallop.Live
                 UpdateMirrorReflections();
             }
 
+            SectionProfiler.End();
         }
 
         private void FixedUpdate()
@@ -1198,16 +1202,23 @@ namespace Gallop.Live
             GallopImageEffect imageEffect = GetActivePostEffect();
             if (imageEffect == null) return;
 
+            // dof keys drive the focus plane only; the dedicated bloom track owns
+            // the bloom parameters so the two tracks stop stomping each other.
             imageEffect.DepthOfFieldEnabled = true;
-            bool dofOn = updateInfo.dofBlurType != DofDiffusionBloomOverlayParam.DofDiffusionBloomType.None;
-            imageEffect.DofDiffusionBloomOverlayParam.IsEnableBloom = dofOn;
-            imageEffect.DofDiffusionBloomOverlayParam.BloomDofWeight = Mathf.Clamp01(updateInfo.forcalSize / 10f);
-            imageEffect.DofDiffusionBloomOverlayParam.BloomThreshold =
-                Mathf.Clamp(updateInfo.BallBlurBrightnessThreshhold, 0f, 4f);
-            imageEffect.DofDiffusionBloomOverlayParam.BloomIntensity =
-                Mathf.Clamp(updateInfo.BallBlurBrightnessIntensity, 0f, 8f);
-            imageEffect.DofDiffusionBloomOverlayParam.BloomBlurSize =
-                Mathf.Clamp(updateInfo.BallBlurSpread / 10f, 0f, 10f);
+
+            bool dofOn = updateInfo.dofBlurType == DofDiffusionBloomOverlayParam.DofDiffusionBloomType.DofBloom ||
+                         updateInfo.dofBlurType == DofDiffusionBloomOverlayParam.DofDiffusionBloomType.DiffusionDofBloom ||
+                         updateInfo.dofBlurType == DofDiffusionBloomOverlayParam.DofDiffusionBloomType.Dof;
+            imageEffect.DepthOfFieldActive = dofOn;
+
+            // authored focus: charactor=1 locks focus to the character slot's
+            // authored focal distance; otherwise dofFocalPoint is an absolute
+            // plane distance from the camera.
+            float authoredDistance = Mathf.Max(0.1f, updateInfo.dofFocalPoint);
+            imageEffect.SetTimelineFocus(
+                authoredDistance,
+                Mathf.Max(0.05f, updateInfo.forcalSize),
+                updateInfo.charactor == 1);
         }
 
         private void OnUpdateRadialBlur(RadialBlurUpdateInfo updateInfo)

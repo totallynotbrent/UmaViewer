@@ -45,6 +45,26 @@ namespace Gallop
         private float _timelineFilmPower;
         private bool _timelineFilmIsVignette;
 
+        // authored dof focus from the keys: absolute distance + aperture size,
+        // with a character-lock flag for shots focused on a performer.
+        private float _timelineFocusDistance = -1f;
+        private float _timelineFocusSize = 1.5f;
+        private bool _timelineFocusOnChara;
+        private bool _depthOfFieldActive;
+
+        public bool DepthOfFieldActive
+        {
+            get => _depthOfFieldActive;
+            set => _depthOfFieldActive = value;
+        }
+
+        public void SetTimelineFocus(float distance, float size, bool onChara)
+        {
+            _timelineFocusDistance = distance;
+            _timelineFocusSize = size;
+            _timelineFocusOnChara = onChara;
+        }
+
         public void ApplyTimelineFilm(Color color, float power, bool isVignette)
         {
             _timelineFilmColor = color;
@@ -125,12 +145,14 @@ namespace Gallop
 
         private void LateUpdate()
         {
+            SectionProfiler.Begin("imageeffect.apply");
             ApplyBloomParameter();
             ApplyTonemapping();
             ApplyDepthOfField();
             ApplyMotionBlur();
             ApplyVignette();
             ApplyTimelineFilmLayers();
+            SectionProfiler.End();
         }
 
         // maps the game's PostFilm layers onto the volume: vignette-mode films
@@ -151,21 +173,28 @@ namespace Gallop
 
                 if (_timelineFilmIsVignette && _vignette != null)
                 {
-                    // vignette films touch only the edge falloff.
+                    // the official grade is a vignette-tinted frame: the film
+                    // color washes the whole image and deepens toward the
+                    // edges, so tint the filter AND boost the vignette in it.
                     _colorAdjust.colorFilter.overrideState = true;
-                    _colorAdjust.colorFilter.value = Color.white;
+                    _colorAdjust.colorFilter.value =
+                        Color.Lerp(Color.white, film, power * 0.75f);
                     _vignette.color.overrideState = true;
                     _vignette.color.value = film;
                     _vignette.intensity.overrideState = true;
                     _vignette.intensity.value = power * 0.6f;
+                    _vignette.smoothness.overrideState = true;
+                    _vignette.smoothness.value = 0.45f;
+                    _vignette.rounded.overrideState = true;
+                    _vignette.rounded.value = true;
                 }
                 else
                 {
-                    // full-screen tint, white-preserving so bright colors keep
-                    // their luminance instead of washing to solid color.
+                    // full-screen tint at authored power; white-preserving lerp
+                    // keeps bright colors from washing to solid color.
                     _colorAdjust.colorFilter.overrideState = true;
                     _colorAdjust.colorFilter.value =
-                        Color.Lerp(Color.white, film, power * 0.5f);
+                        Color.Lerp(Color.white, film, power * 0.85f);
                     _vignette.color.overrideState = true;
                     _vignette.color.value = Color.black;
                 }
@@ -374,8 +403,33 @@ namespace Gallop
                 return;
             }
 
-            Vector3 focusPoint = control.LatestCameraLookAtPosition;
-            float focusDistance = Vector3.Distance(_camera.transform.position, focusPoint);
+            float focusDistance;
+            if (_depthOfFieldActive && _timelineFocusDistance > 0f)
+            {
+                // authored dof keys win: the game stores an absolute focal
+                // distance with an optional character lock; follow it directly.
+                focusDistance = _timelineFocusDistance;
+                var director = Gallop.Live.Director.instance;
+                if (_timelineFocusOnChara && director != null &&
+                    director.CharaContainerScript != null && director.CharaContainerScript.Count > 0)
+                {
+                    // character-locked shots track the lead performer's body
+                    // so handheld close-ups stay on the performer, not the set.
+                    var chara = director.CharaContainerScript[0];
+                    if (chara != null)
+                    {
+                        float charaDist = Vector3.Distance(
+                            _camera.transform.position,
+                            chara.transform.position);
+                        focusDistance = Mathf.Lerp(focusDistance, charaDist, 0.7f);
+                    }
+                }
+            }
+            else
+            {
+                Vector3 focusPoint = control.LatestCameraLookAtPosition;
+                focusDistance = Vector3.Distance(_camera.transform.position, focusPoint);
+            }
 
             _dof.active = true;
             _dof.mode.overrideState = true;
@@ -385,7 +439,10 @@ namespace Gallop
             _dof.focalLength.overrideState = true;
             _dof.focalLength.value = Gallop.Math.GetFocalLength(_camera.fieldOfView);
             _dof.aperture.overrideState = true;
-            _dof.aperture.value = Mathf.Clamp(_dofAperture, 1f, 32f);
+            float authoredAperture = _depthOfFieldActive
+                ? Mathf.Clamp(32f - Mathf.Clamp(_timelineFocusSize, 0f, 30f), 1f, 32f)
+                : _dofAperture;
+            _dof.aperture.value = authoredAperture;
             _dof.bladeCount.overrideState = true;
             _dof.bladeCount.value = 6;
         }
