@@ -133,8 +133,10 @@ namespace Gallop
             ApplyTimelineFilmLayers();
         }
 
-        // maps the game's PostFilm layers onto the volume: the film color tint
-        // drives colorFilter and vignette-style layers boost the vignette.
+        // maps the game's PostFilm layers onto the volume: vignette-mode films
+        // only color the screen edges through the vignette; non-vignette films
+        // tint the full screen. the hardcoded base look stays untouched so the
+        // film never stacks with it.
         private void ApplyTimelineFilmLayers()
         {
             if (_colorAdjust == null)
@@ -147,21 +149,25 @@ namespace Gallop
                 Color film = _timelineFilmColor.Value;
                 float power = Mathf.Clamp01(_timelineFilmPower);
 
-                _colorAdjust.active = true;
-                _colorAdjust.colorFilter.overrideState = true;
-                _colorAdjust.colorFilter.value =
-                    Color.Lerp(Color.white, film, power);
-
-                if (_vignette != null)
+                if (_timelineFilmIsVignette && _vignette != null)
                 {
-                    if (_timelineFilmIsVignette)
-                    {
-                        _vignette.color.overrideState = true;
-                        _vignette.color.value = film;
-                        _vignette.intensity.overrideState = true;
-                        _vignette.intensity.value =
-                            Mathf.Max(_vignette.intensity.value, power * 0.6f);
-                    }
+                    // vignette films touch only the edge falloff.
+                    _colorAdjust.colorFilter.overrideState = true;
+                    _colorAdjust.colorFilter.value = Color.white;
+                    _vignette.color.overrideState = true;
+                    _vignette.color.value = film;
+                    _vignette.intensity.overrideState = true;
+                    _vignette.intensity.value = power * 0.6f;
+                }
+                else
+                {
+                    // full-screen tint, white-preserving so bright colors keep
+                    // their luminance instead of washing to solid color.
+                    _colorAdjust.colorFilter.overrideState = true;
+                    _colorAdjust.colorFilter.value =
+                        Color.Lerp(Color.white, film, power * 0.5f);
+                    _vignette.color.overrideState = true;
+                    _vignette.color.value = Color.black;
                 }
             }
             else
@@ -308,6 +314,10 @@ namespace Gallop
                 InitializeVolume();
 
             if (_vignette == null)
+                return;
+
+            // a timeline film layer owns the vignette this frame.
+            if (_timelineFilmColor.HasValue)
                 return;
 
             _vignette.active = true;

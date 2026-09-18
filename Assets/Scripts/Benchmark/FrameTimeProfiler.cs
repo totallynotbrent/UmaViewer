@@ -24,7 +24,8 @@ public class FrameTimeProfiler : MonoBehaviour
     private bool _sampling;
     private float _clock;
     private readonly List<float> _frameTimes = new List<float>(65536);
-    private long _gcBytesBefore;
+    private long _gcAllocAccumulated;
+    private long _gcLastTotalMemory;
     private int _gcCollectionsBefore;
 
     private static void ParseArgs()
@@ -75,7 +76,8 @@ public class FrameTimeProfiler : MonoBehaviour
             return;
         }
 
-        _gcBytesBefore = GC.GetTotalMemory(false);
+        _gcAllocAccumulated = 0;
+        _gcLastTotalMemory = GC.GetTotalMemory(false);
         _gcCollectionsBefore = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
         Debug.Log($"[bench] armed: manual={_manualMode} warmup={_warmupSeconds}s sample={_sampleSeconds}s");
     }
@@ -131,6 +133,12 @@ public class FrameTimeProfiler : MonoBehaviour
             return;
         }
 
+        long gcNow = GC.GetTotalMemory(false);
+        long gcDelta = gcNow - _gcLastTotalMemory;
+        if (gcDelta > 0)
+            _gcAllocAccumulated += gcDelta;
+        _gcLastTotalMemory = gcNow;
+
         _frameTimes.Add(Time.unscaledDeltaTime * 1000f);
     }
 
@@ -169,7 +177,6 @@ public class FrameTimeProfiler : MonoBehaviour
             }
         }
 
-        long gcNow = GC.GetTotalMemory(false);
         int gcColsNow = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
 
         // note: per-thread and gpu timings are not available here; the FrameTiming
@@ -186,7 +193,7 @@ public class FrameTimeProfiler : MonoBehaviour
                 $"<33.33={100f * buckets[2] / n:F1} <50={100f * buckets[3] / n:F1} " +
                 $"<100={100f * buckets[4] / n:F1} >=100={100f * buckets[5] / n:F1}",
             $"stalls_gt100ms={stalls} stall_max_ms={stallMaxMs:F1}",
-            $"gc_alloc_mb={(gcNow - _gcBytesBefore) / 1048576.0:F2}",
+            $"gc_alloc_mb={_gcAllocAccumulated / 1048576.0:F2}",
             $"gc_collections={gcColsNow - _gcCollectionsBefore}",
             $"target_fps={Application.targetFrameRate} resolution={Screen.width}x{Screen.height}",
             "thread/gpu timings: unavailable (frame-timing module not compiled)");

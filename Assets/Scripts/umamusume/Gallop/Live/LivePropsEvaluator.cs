@@ -164,6 +164,21 @@ namespace Gallop.Live
             attachedGo.transform.localPosition = Vector3.zero;
             attachedGo.transform.localRotation = Quaternion.identity;
             attachedGo.transform.localScale = Vector3.one;
+
+            // bundle roots carry both a handheld "mic" and a "standmic" stage
+            // dressing; the game attaches only the handheld part to the
+            // character, so strip the stand (and its lights) from the instance.
+            foreach (Transform child in attachedGo.GetComponentsInChildren<Transform>(true))
+            {
+                if (child == attachedGo.transform)
+                    continue;
+                if (child.name == "standmic" || child.name.EndsWith("_light") || child.name.StartsWith("light"))
+                {
+                    UnityEngine.Object.Destroy(child.gameObject);
+                    break;
+                }
+            }
+
             StagePropsDriver.RegisterPropRenderers(jointName, attachedGo.GetComponentsInChildren<Renderer>());
             return true;
         }
