@@ -244,18 +244,26 @@ namespace Gallop.Live
             if (container == null)
                 return false;
 
-            // plant at the performer's initial standing position, parented to
-            // the stage root so it glides with the character when the position
-            // track moves the formation.
-            var go = UnityEngine.Object.Instantiate(prefab, director._stageController != null
-                ? director._stageController.transform
-                : director.transform);
+            // plant under the character's own CharacterObject node — the
+            // instantiated CharacterStandPos the container itself parents
+            // under — so the stand sits exactly where the game puts it and
+            // inherits any formation glide.
+            Transform anchor = container.transform.parent;
+            if (anchor == null)
+            {
+                var plain = UnityEngine.Object.Instantiate(prefab, director.transform);
+                plain.name = $"Prop_{group.propsName}";
+                plain.transform.localPosition = Vector3.zero;
+                return true;
+            }
+
+            var go = UnityEngine.Object.Instantiate(prefab, anchor);
             go.name = $"Prop_{group.propsName}_slot{charaIndex}";
-            Vector3 stand = container.LiveLocator != null
-                ? container.LiveLocator.liveCharaInitialPosition
-                : container.transform.position;
-            go.transform.position = new Vector3(stand.x, 0f, stand.z);
-            Director.FileLog($"{PROP_LOG_TAG} planted '{group.propsName}' at slot {charaIndex} pos=({stand.x:F2},{stand.z:F2})");
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = Vector3.one;
+            Vector3 world = go.transform.position;
+            Director.FileLog($"{PROP_LOG_TAG} planted '{group.propsName}' at slot {charaIndex} world=({world.x:F2},{world.y:F2},{world.z:F2})");
             return true;
         }
 

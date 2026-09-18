@@ -251,28 +251,37 @@ namespace Gallop
                 Color film = _timelineFilmColor.Value;
                 float power = Mathf.Clamp01(_timelineFilmPower);
 
-                // colorFilter holds an additive offset per-channel in urp, so
-                // add-mode film maps to a positive gain toward the film color
-                // (brightening gel) and mul-mode to a negative one (darkening
-                // gel); lerp keeps the legacy white-toward-color mix.
-                float addPower = power * 0.55f;
-                float mulPower = power * 0.70f;
-                float lerpPower = power * 0.85f;
+                // colorFilter is a multiplier in urp, so every blend maps to a
+                // value >= the authored color and <= a safe brightening cap:
+                // add-mode lifts the frame toward white-plus-color (screen),
+                // mul-mode scales toward the film color (dark gel), lerp mixes
+                // from white as before.
                 Color filter;
                 switch (_timelineFilmBlend)
                 {
                     case PostFilmBlend.Add:
-                        filter = film * addPower;
+                        // screen-style: 1 + c*p brightens; clamp keeps the
+                        // frame from blooming past recoverable range.
+                        filter = new Color(
+                            Mathf.Clamp01(1f - (1f - film.r) * (1f - power * 0.35f)),
+                            Mathf.Clamp01(1f - (1f - film.g) * (1f - power * 0.35f)),
+                            Mathf.Clamp01(1f - (1f - film.b) * (1f - power * 0.35f)),
+                            1f);
                         break;
                     case PostFilmBlend.Mul:
-                        filter = new Color(
-                            -(1f - film.r) * mulPower,
-                            -(1f - film.g) * mulPower,
-                            -(1f - film.b) * mulPower,
-                            0f);
+                        // multiply darkens toward the film color, floored at
+                        // 40% brightness so the stage never crushes to black.
+                        filter = Color.Lerp(
+                            new Color(
+                                Mathf.Max(0.4f, film.r),
+                                Mathf.Max(0.4f, film.g),
+                                Mathf.Max(0.4f, film.b),
+                                1f),
+                            Color.white,
+                            1f - power * 0.7f);
                         break;
                     default:
-                        filter = Color.Lerp(Color.white, film, lerpPower);
+                        filter = Color.Lerp(Color.white, film, power * 0.85f);
                         break;
                 }
 
