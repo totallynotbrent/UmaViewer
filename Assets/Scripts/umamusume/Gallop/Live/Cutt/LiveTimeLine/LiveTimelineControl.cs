@@ -85,6 +85,7 @@ namespace Gallop.Live.Cutt
         public event BgColor2UpdateInfoDelegate OnUpdateBgColor2;
         public event PostFilmUpdateInfoDelegate OnUpdatePostFilm;
         public event Action<float> OnUpdateStageGrade;
+        public event Action<float, Color> OnUpdateVolumeLight;
 
         public event TransformUpdateInfoDelegate OnUpdateTransform;
 
@@ -492,6 +493,7 @@ namespace Gallop.Live.Cutt
             AlterUpdate_BgColor2(camSheet, _currentFrame);
             AlterUpdate_PostFilm(camSheet, _currentFrame);
             AlterUpdate_StageGrade(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_VolumeLight(camSheet, Mathf.RoundToInt(_currentFrame));
 
             _isNowAlterUpdate = false;
 
@@ -2238,6 +2240,39 @@ namespace Gallop.Live.Cutt
         }
 
         // 后处理(歌曲封面/胶片)属于全局画面效果，只使用主 worksheet，与BgColor2同层级。
+        // sun-shaft glow: first enabled volumeLight entry reports power+color so
+        // the apply side can lift bloom from the authored shaft direction.
+        private void AlterUpdate_VolumeLight(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            var handler = OnUpdateVolumeLight;
+            if (handler == null || sheet == null || sheet.volumeLightKeys == null)
+                return;
+
+            for (int i = 0; i < sheet.volumeLightKeys.Count; i++)
+            {
+                var entry = sheet.volumeLightKeys[i];
+                if (entry == null || entry.keys == null || entry.keys.Count == 0)
+                    continue;
+                FindTimelineKey(out var cur, out var next, entry.keys, currentFrame);
+                if (cur is LiveTimelineKeyVolumeLightData key && key.enable)
+                {
+                    Color shaftColor = key.color1;
+                    float power = key.power;
+                    if (next is LiveTimelineKeyVolumeLightData nk && nk.IsInterpolateKey())
+                    {
+                        float t = CalculateInterpolationValue(
+                            (LiveTimelineKeyWithInterpolate)cur,
+                            (LiveTimelineKeyWithInterpolate)next,
+                            currentFrame);
+                        shaftColor = Color.Lerp(key.color1, nk.color1, t);
+                        power = Mathf.Lerp(key.power, nk.power, t);
+                    }
+                    handler(power, shaftColor);
+                    return;
+                }
+            }
+        }
+
         // stage color grade: the first enabled colorCorrection entry drives the
         // volume saturation so the scene grade follows the authored track.
         private void AlterUpdate_StageGrade(LiveTimelineWorkSheet sheet, int currentFrame)

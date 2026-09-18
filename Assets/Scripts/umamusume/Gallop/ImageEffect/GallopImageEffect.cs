@@ -62,6 +62,23 @@ namespace Gallop
         // float.min means no track drove it this frame.
         private float _timelineStageSaturation = float.MinValue;
 
+        // sun-shaft tint from the volumeLight track; tints the bloom color so
+        // the glow reads in the authored shaft hue.
+        private Color? _volumeLightTint;
+
+        public void SetVolumeLightTint(Color color)
+        {
+            _volumeLightTint = color;
+        }
+
+        // per-frame shaft lift set by Director; folded into bloom intensity once.
+        private float _volumeLightBloomLift;
+
+        public void SetVolumeLightBloomLift(float lift)
+        {
+            _volumeLightBloomLift = lift;
+        }
+
         public void SetTimelineStageSaturation(float saturation)
         {
             _timelineStageSaturation = saturation;
@@ -287,7 +304,7 @@ namespace Gallop
             // diffusion contribute only a tightly-bounded soft kick.
             float bloomIntensity = param.IsEnableBloom ? Mathf.Max(0f, param.BloomIntensity) : 0f;
             float diffusionHint = param.IsEnableDiffusion ? Mathf.Max(0f, param.DiffusionBright) : 0f;
-            float totalIntensity = bloomIntensity + Mathf.Min(diffusionHint * 0.02f, 0.4f);
+            float totalIntensity = bloomIntensity + Mathf.Min(diffusionHint * 0.02f, 0.4f) + _volumeLightBloomLift;
 
             bool enabled = (param.IsEnableBloom || param.IsEnableDiffusion) && totalIntensity > 0f;
             _bloom.active = enabled;
@@ -327,6 +344,18 @@ namespace Gallop
             // bound the hot-source contribution before the tonemap so a single led does not
             // clamp the whole pyramid to white.
             _bloom.clamp.value = _bloomClamp;
+
+            // sun-shaft tint: colorize the bloom toward the authored shaft hue.
+            if (_volumeLightTint.HasValue)
+            {
+                _bloom.tint.overrideState = true;
+                _bloom.tint.value = _volumeLightTint.Value;
+            }
+            else
+            {
+                _bloom.tint.overrideState = true;
+                _bloom.tint.value = Color.white;
+            }
 
             // bicubic upsample removes the sparkle on the bright reconstruction.
             _bloom.highQualityFiltering.value = true;

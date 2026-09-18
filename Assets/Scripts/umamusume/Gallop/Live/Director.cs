@@ -489,6 +489,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateSpotlight3d += OnUpdateSpotlight3d;
             _liveTimelineControl.OnUpdatePostFilm += OnUpdatePostFilm;
             _liveTimelineControl.OnUpdateStageGrade += OnUpdateStageGrade;
+            _liveTimelineControl.OnUpdateVolumeLight += OnUpdateVolumeLight;
 
 
             _liveTimelineControl.OnUpdateCameraSwitcher += delegate (int cameraIndex_)
@@ -1277,6 +1278,21 @@ namespace Gallop.Live
         }
 
 
+        // sun-shaft glow approximated as a bounded bloom lift in the shaft color;
+        // a dedicated light-shaft pass can replace this mapping later.
+        private void OnUpdateVolumeLight(float power, Color color)
+        {
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null)
+                return;
+
+            // store the shaft lift per frame (set, never accumulate) and let the
+            // bloom track's own handler own the base intensity.
+            imageEffect.SetVolumeLightBloomLift(Mathf.Min(power * 0.02f, 1.2f));
+            imageEffect.SetVolumeLightTint(color);
+        }
+
+
         // authored stage grade (exposure/colorCorrection saturation) drives the
         // volume's saturation so dark/bright scenes track the game's grade.
         private void OnUpdateStageGrade(float saturation)
@@ -1377,6 +1393,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateSpotlight3d -= OnUpdateSpotlight3d;
             _liveTimelineControl.OnUpdatePostFilm -= OnUpdatePostFilm;
             _liveTimelineControl.OnUpdateStageGrade -= OnUpdateStageGrade;
+            _liveTimelineControl.OnUpdateVolumeLight -= OnUpdateVolumeLight;
         }
 
         // radial blur keys drive the existing motion-blur volume override: power maps to
