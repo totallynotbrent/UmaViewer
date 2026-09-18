@@ -92,9 +92,48 @@ namespace Gallop.Live
             if (main == null || main.AbList == null)
                 return false;
 
-            // Find the prop bundle entry: match by propsName against AbList keys.
-            // Prop bundles are typed UmaFileType.prop in the manifest (e.g. 3d/prop/...).
-            UmaDatabaseEntry entry = FindPropEntry(main.AbList, group.propsName);
+            // chara props reference their exact prefab by major/minor id; stage
+            // dressing falls back to the common prop bundle by propsName code.
+            UmaDatabaseEntry entry = null;
+            string prefabName = null;
+            if (group.isCharaProps && group.charaPropsMajorId > 0)
+            {
+                string kind = group.IsRichProp ? "richprop"
+                    : group.IsToonProp ? "toonprop"
+                    : "prop";
+                string prefix = group.IsRichProp ? "pfb_rich_prop"
+                    : group.IsToonProp ? "pfb_toon_prop"
+                    : "pfb_chr_prop";
+                int major = group.charaPropsMajorId;
+                int minor = group.charaPropsMinorId;
+                for (int v = minor; v >= 0 && entry == null; v--)
+                {
+                    prefabName = $"{prefix}{major}_{v:00}";
+                    // bundle keys follow 3d/chara/<kind>/prop<major>_<minor>/<prefabName>;
+                    // rich/toon dirs share the same prop<major> folder shape.
+                    string bundleKey = $"3d/chara/{kind}/prop{major}_{v:00}/{prefabName}";
+                    if (main.AbList.TryGetValue(bundleKey, out var exact))
+                    {
+                        entry = exact;
+                    }
+                    else
+                    {
+                        // fall back to any AbList key ending in the prefab name.
+                        foreach (var kv in main.AbList)
+                        {
+                            if (kv.Key.EndsWith(prefabName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                entry = kv.Value;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (entry == null && !string.IsNullOrEmpty(group.propsName))
+                entry = FindPropEntry(main.AbList, group.propsName);
+
             if (entry == null)
             {
                 Director.FileLog($"{PROP_LOG_TAG} prop bundle not found for '{group.propsName}'");
@@ -165,17 +204,20 @@ namespace Gallop.Live
             attachedGo.transform.localRotation = Quaternion.identity;
             attachedGo.transform.localScale = Vector3.one;
 
-            // bundle roots carry both a handheld "mic" and a "standmic" stage
-            // dressing; the game attaches only the handheld part to the
-            // character, so strip the stand (and its lights) from the instance.
-            foreach (Transform child in attachedGo.GetComponentsInChildren<Transform>(true))
+            // stage-dressing bundles carry both a handheld "mic" and a "standmic"
+            // under one root; a chara prop IS the handheld item, so only strip
+            // the stand (and its lights) for stage dressing instances.
+            if (!group.isCharaProps)
             {
-                if (child == attachedGo.transform)
-                    continue;
-                if (child.name == "standmic" || child.name.EndsWith("_light") || child.name.StartsWith("light"))
+                foreach (Transform child in attachedGo.GetComponentsInChildren<Transform>(true))
                 {
-                    UnityEngine.Object.Destroy(child.gameObject);
-                    break;
+                    if (child == attachedGo.transform)
+                        continue;
+                    if (child.name == "standmic" || child.name.EndsWith("_light") || child.name.StartsWith("light"))
+                    {
+                        UnityEngine.Object.Destroy(child.gameObject);
+                        break;
+                    }
                 }
             }
 
@@ -251,13 +293,31 @@ namespace Gallop.Live
         private static string[] OrderAttachCandidates(string[] attachJointNames, int attachCount)
         {
             var candidates = new List<string>(attachCount);
+            // a handheld mic anchors at the rig's Mic_Attach_00 bone; prefer it
+            // over the generic hand joints when the group lists it.
+            bool hasMicAnchor = false;
+            for (int i = 0; i < attachCount; i++)
+            {
+                string n = attachJointNames[i];
+                if (!string.IsNullOrEmpty(n) && n.StartsWith("Mic_Attach", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasMicAnchor = true;
+                    break;
+                }
+            }
+
             for (int i = 0; i < attachCount; i++)
             {
                 string name = attachJointNames[i];
                 if (string.IsNullOrEmpty(name))
                     continue;
-                if (name.EndsWith("_loc", StringComparison.OrdinalIgnoreCase) ||
-                    name.EndsWith("_R", StringComparison.OrdinalIgnoreCase))
+
+                bool priority = hasMicAnchor
+                    ? name.StartsWith("Mic_Attach", StringComparison.OrdinalIgnoreCase) && !name.EndsWith("_loc", StringComparison.OrdinalIgnoreCase)
+                    : name.EndsWith("_loc", StringComparison.OrdinalIgnoreCase) ||
+                      name.EndsWith("_R", StringComparison.OrdinalIgnoreCase);
+
+                if (priority)
                     candidates.Insert(0, name);
                 else
                     candidates.Add(name);

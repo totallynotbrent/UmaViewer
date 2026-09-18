@@ -1017,6 +1017,12 @@ namespace Gallop.Live
             }
         }
 
+        // csv text for other drivers (projector cookies read type=11 rows).
+        public string GetCurrentLiveSettingsCsv(int musicId)
+        {
+            return ResolveLiveSettingsCsvText(musicId);
+        }
+
         private string ResolveLiveSettingsCsvText(int musicId)
         {
             string bundledText = LoadLiveSettingsTextFromAssetBundle(musicId);
@@ -1216,6 +1222,51 @@ namespace Gallop.Live
             }
 
             return null;
+        }
+
+        // projector texture rows: type=11 param1 = texture number (P000..);
+        // the stage's floor projector gets this cookie from the common set.
+        public static List<int> ParseLiveSettingsProjectorTextureRows(string csvText)
+        {
+            var rows = new List<int>();
+            if (string.IsNullOrWhiteSpace(csvText))
+                return rows;
+
+            string[] lines = csvText.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                string[] cols = line.Split(',');
+                if (cols.Length < 3)
+                    continue;
+
+                int type = ParseCsvInt(cols, 1, -1);
+                if (type != 11)
+                    continue;
+
+                string resourceName = GetCsvCell(cols, 2);
+                int slot = ParseCsvInt(cols, 3, 0);
+                int texNum = ParseProjectorTextureNumber(resourceName);
+                if (texNum >= 0)
+                    rows.Add(texNum);
+            }
+            return rows;
+        }
+
+        private static int ParseProjectorTextureNumber(string resourceName)
+        {
+            if (string.IsNullOrEmpty(resourceName))
+                return -1;
+            // names look like tex_env_live_cmn_projectorNNN or _mirrorballNNN.
+            int idx = resourceName.LastIndexOf("projector", StringComparison.OrdinalIgnoreCase);
+            string tail = idx >= 0 ? resourceName.Substring(idx + "projector".Length) : resourceName;
+            int end = 0;
+            while (end < tail.Length && char.IsDigit(tail[end]))
+                end++;
+            return end > 0 && int.TryParse(tail.Substring(0, end), out int n) ? n : -1;
         }
 
         private static List<LiveSettingsUvMovieRow> ParseLiveSettingsUvMovieRows(string csvText)

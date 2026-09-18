@@ -46,6 +46,8 @@ namespace Gallop.Live.Cutt
         {
             public string propsName;
             public bool isCharaProps;
+            public bool IsToonProp;
+            public bool IsRichProp;
             public int charaPropsMajorId;
             public int charaPropsMinorId;
             public string[] attachJointNames;
