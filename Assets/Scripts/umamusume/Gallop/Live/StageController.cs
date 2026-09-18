@@ -164,6 +164,7 @@ namespace Gallop.Live
             AutoAddDriver("StageHideWhiteRectangles");
             AutoAddDriver("StageFindWhiteRectangles");
             AutoAddDriver("StageCameraTimelineDriver");
+            AutoAddDriver("StageAudienceAnimator");
             AutoAddDriver("CySpringTuner");
             AutoAddDriver("LivePhysicsConfig");
 
