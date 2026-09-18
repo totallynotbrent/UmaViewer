@@ -1242,9 +1242,10 @@ namespace Gallop.Live
             // authored focal distance; otherwise dofFocalPoint is an absolute
             // plane distance from the camera.
             float authoredDistance = Mathf.Max(0.1f, updateInfo.dofFocalPoint);
+            imageEffect.SetTimelineFocusSpread(Mathf.Max(0.05f, updateInfo.blurSpread));
             imageEffect.SetTimelineFocus(
                 authoredDistance,
-                Mathf.Max(0.05f, updateInfo.forcalSize),
+                Mathf.Max(0f, updateInfo.forcalSize),
                 updateInfo.charactor == 1);
         }
 
@@ -1340,13 +1341,22 @@ namespace Gallop.Live
                 mode == PostFilmMode.VignetteAdd ||
                 mode == PostFilmMode.VignetteMul;
 
+            // the authored blend rides along with the strongest layer:
+            // Add brightens toward the color, Mul darkens, Lerp mixes.
+            GallopImageEffect.PostFilmBlend blend =
+                mode == PostFilmMode.Add || mode == PostFilmMode.VignetteAdd
+                    ? GallopImageEffect.PostFilmBlend.Add
+                    : mode == PostFilmMode.Mul || mode == PostFilmMode.VignetteMul
+                        ? GallopImageEffect.PostFilmBlend.Mul
+                        : GallopImageEffect.PostFilmBlend.Lerp;
+
             // prefer the strongest powered layer seen this frame; Director's
             // per-frame reset happens in ClearFrameFilmState below.
             float power = Mathf.Clamp01(updateInfo.filmPower);
             if (power > _filmBestPower)
             {
                 _filmBestPower = power;
-                imageEffect.ApplyTimelineFilm(updateInfo.color0, power, isVignette);
+                imageEffect.ApplyTimelineFilm(updateInfo.color0, power, isVignette, blend);
             }
         }
 

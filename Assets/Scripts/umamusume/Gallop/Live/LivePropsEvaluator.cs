@@ -160,6 +160,13 @@ namespace Gallop.Live
             if (prefab == null)
                 return false;
 
+            // stage dressing (stand mics, furniture) plants whole at the
+            // performer's standing spot; only character props ride joints.
+            if (!group.isCharaProps)
+            {
+                return PlantStageDressing(prefab, group, charaContainers, charaIndex);
+            }
+
             int attachCount = group.attachJointNames?.Length ?? 0;
 
             if (attachCount <= 0)
@@ -204,24 +211,51 @@ namespace Gallop.Live
             attachedGo.transform.localRotation = Quaternion.identity;
             attachedGo.transform.localScale = Vector3.one;
 
-            // stage-dressing bundles carry both a handheld "mic" and a "standmic"
-            // under one root; a chara prop IS the handheld item, so only strip
-            // the stand (and its lights) for stage dressing instances.
-            if (!group.isCharaProps)
+            StagePropsDriver.RegisterPropRenderers(jointName, attachedGo.GetComponentsInChildren<Renderer>());
+            return true;
+        }
+
+        /// <summary>
+        /// Plant a stage-dressing prop (stand mic, furniture) whole at the
+        /// performer's standing spot; one instance per targeted slot. The
+        /// bundle root carries the stand + base + mic head together, so the
+        /// instance keeps all of it and sits where the performer starts.
+        /// </summary>
+        private static bool PlantStageDressing(
+            GameObject prefab,
+            LiveTimelinePropsSettings.PropsDataGroup group,
+            List<UmaContainerCharacter> charaContainers,
+            int charaIndex)
+        {
+            var director = Director.instance;
+            if (director == null)
+                return false;
+
+            if (charaIndex < 0 || charaIndex >= (charaContainers?.Count ?? 0))
             {
-                foreach (Transform child in attachedGo.GetComponentsInChildren<Transform>(true))
-                {
-                    if (child == attachedGo.transform)
-                        continue;
-                    if (child.name == "standmic" || child.name.EndsWith("_light") || child.name.StartsWith("light"))
-                    {
-                        UnityEngine.Object.Destroy(child.gameObject);
-                        break;
-                    }
-                }
+                // untargeted dressing: place at stage center under the director.
+                var plain = UnityEngine.Object.Instantiate(prefab, director.transform);
+                plain.name = $"Prop_{group.propsName}";
+                plain.transform.localPosition = Vector3.zero;
+                return true;
             }
 
-            StagePropsDriver.RegisterPropRenderers(jointName, attachedGo.GetComponentsInChildren<Renderer>());
+            var container = charaContainers[charaIndex];
+            if (container == null)
+                return false;
+
+            // plant at the performer's initial standing position, parented to
+            // the stage root so it glides with the character when the position
+            // track moves the formation.
+            var go = UnityEngine.Object.Instantiate(prefab, director._stageController != null
+                ? director._stageController.transform
+                : director.transform);
+            go.name = $"Prop_{group.propsName}_slot{charaIndex}";
+            Vector3 stand = container.LiveLocator != null
+                ? container.LiveLocator.liveCharaInitialPosition
+                : container.transform.position;
+            go.transform.position = new Vector3(stand.x, 0f, stand.z);
+            Director.FileLog($"{PROP_LOG_TAG} planted '{group.propsName}' at slot {charaIndex} pos=({stand.x:F2},{stand.z:F2})");
             return true;
         }
 

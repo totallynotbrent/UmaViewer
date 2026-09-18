@@ -44,11 +44,21 @@ namespace Gallop
         private Color? _timelineFilmColor;
         private float _timelineFilmPower;
         private bool _timelineFilmIsVignette;
+        private PostFilmBlend _timelineFilmBlend = PostFilmBlend.Lerp;
+
+        // authored blend mode of the active film layer.
+        public enum PostFilmBlend
+        {
+            Lerp = 0,
+            Add = 1,
+            Mul = 2
+        }
 
         // authored dof focus from the keys: absolute distance + aperture size,
         // with a character-lock flag for shots focused on a performer.
         private float _timelineFocusDistance = -1f;
         private float _timelineFocusSize = 1.5f;
+        private float _timelineFocusSpread = 1f;
         private bool _timelineFocusOnChara;
         private bool _depthOfFieldActive;
 
@@ -100,11 +110,25 @@ namespace Gallop
             _timelineFocusOnChara = onChara;
         }
 
+        // authored dof pass-through: blurSpread straight from the keys.
+        public void SetTimelineFocusSpread(float blurSpread)
+        {
+            _timelineFocusSpread = blurSpread;
+        }
+
         public void ApplyTimelineFilm(Color color, float power, bool isVignette)
+        {
+            ApplyTimelineFilm(color, power, isVignette, PostFilmBlend.Lerp);
+        }
+
+        // blend semantics from the authored filmMode: Add layers brighten (screen),
+        // Mul layers darken, Lerp replaces; Vignette* layers also push the edges.
+        public void ApplyTimelineFilm(Color color, float power, bool isVignette, PostFilmBlend blend)
         {
             _timelineFilmColor = color;
             _timelineFilmPower = power;
             _timelineFilmIsVignette = isVignette;
+            _timelineFilmBlend = blend;
         }
 
         public void ClearTimelineFilm()
@@ -227,14 +251,38 @@ namespace Gallop
                 Color film = _timelineFilmColor.Value;
                 float power = Mathf.Clamp01(_timelineFilmPower);
 
+                // colorFilter holds an additive offset per-channel in urp, so
+                // add-mode film maps to a positive gain toward the film color
+                // (brightening gel) and mul-mode to a negative one (darkening
+                // gel); lerp keeps the legacy white-toward-color mix.
+                float addPower = power * 0.55f;
+                float mulPower = power * 0.70f;
+                float lerpPower = power * 0.85f;
+                Color filter;
+                switch (_timelineFilmBlend)
+                {
+                    case PostFilmBlend.Add:
+                        filter = film * addPower;
+                        break;
+                    case PostFilmBlend.Mul:
+                        filter = new Color(
+                            -(1f - film.r) * mulPower,
+                            -(1f - film.g) * mulPower,
+                            -(1f - film.b) * mulPower,
+                            0f);
+                        break;
+                    default:
+                        filter = Color.Lerp(Color.white, film, lerpPower);
+                        break;
+                }
+
+                _colorAdjust.colorFilter.overrideState = true;
+                _colorAdjust.colorFilter.value = filter;
+
                 if (_timelineFilmIsVignette && _vignette != null)
                 {
-                    // the official grade is a vignette-tinted frame: the film
-                    // color washes the whole image and deepens toward the
-                    // edges, so tint the filter AND boost the vignette in it.
-                    _colorAdjust.colorFilter.overrideState = true;
-                    _colorAdjust.colorFilter.value =
-                        Color.Lerp(Color.white, film, power * 0.75f);
+                    // vignette modes also deepen the frame edges in the film
+                    // color at a fraction of the authored power.
                     _vignette.color.overrideState = true;
                     _vignette.color.value = film;
                     _vignette.intensity.overrideState = true;
@@ -246,11 +294,6 @@ namespace Gallop
                 }
                 else
                 {
-                    // full-screen tint at authored power; white-preserving lerp
-                    // keeps bright colors from washing to solid color.
-                    _colorAdjust.colorFilter.overrideState = true;
-                    _colorAdjust.colorFilter.value =
-                        Color.Lerp(Color.white, film, power * 0.85f);
                     _vignette.color.overrideState = true;
                     _vignette.color.value = Color.black;
                 }
@@ -515,9 +558,21 @@ namespace Gallop
             _dof.focalLength.overrideState = true;
             _dof.focalLength.value = Gallop.Math.GetFocalLength(_camera.fieldOfView);
             _dof.aperture.overrideState = true;
-            float authoredAperture = _depthOfFieldActive
-                ? Mathf.Clamp(32f - Mathf.Clamp(_timelineFocusSize, 0f, 30f), 1f, 32f)
-                : _dofAperture;
+            // authored semantics: forcalSize is the sharp band around the focal
+            // plane (0 = razor focus, 30 = deep stage) so aperture rises with it;
+            // blurSpread widens the bokeh and divides back down to f-stops.
+            float authoredAperture;
+            if (_depthOfFieldActive && _timelineFocusSize >= 0f)
+            {
+                float blurSpread = Mathf.Max(0.05f, _timelineFocusSpread);
+                authoredAperture = Mathf.Clamp(
+                    44f / (1f + Mathf.Clamp(_timelineFocusSize, 0f, 30f) * 0.5f) / blurSpread,
+                    1.1f, 32f);
+            }
+            else
+            {
+                authoredAperture = _dofAperture;
+            }
             _dof.aperture.value = authoredAperture;
             _dof.bladeCount.overrideState = true;
             _dof.bladeCount.value = 6;
