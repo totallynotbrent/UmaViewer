@@ -21,6 +21,8 @@ namespace Gallop.Live.Cutt
         private const float OVERRIDE_ANIMATOR_FACIAL_WAIT = 1;
         private int _prevFrame; // 0x5C
         private float _prevFrameAnimationTime; // 0x60
+        private AnimationClip _lastSampledAnim;
+        private float _lastSampledAnimTime = float.MinValue;
 
         //Testing
         private Transform _tempTarget;
@@ -165,12 +167,21 @@ namespace Gallop.Live.Cutt
 
                 if (anim)
                 {
+                    // sampling the rig is the frame-budget hot spot; skip it when
+                    // the computed clip time is unchanged from the last sample.
+                    float sampledTime = arg.loop ? Mathf.Repeat(currentAnimationTime, _tempAnim[anim.name].length) : currentAnimationTime;
+                    if (Mathf.Approximately(sampledTime, _lastSampledAnimTime) && _lastSampledAnim != null)
+                        return;
+
                     var state = _tempAnim[anim.name];
                     state.enabled = true;
                     state.weight = 1;
-                    state.time = arg.loop ? Mathf.Repeat(currentAnimationTime, state.length) : currentAnimationTime;
+                    state.time = sampledTime;
                     _tempAnim.Sample();
                     state.enabled = false;
+
+                    _lastSampledAnim = anim;
+                    _lastSampledAnimTime = sampledTime;
                 }
             }
             _prevFrameAnimationTime = currentTime;

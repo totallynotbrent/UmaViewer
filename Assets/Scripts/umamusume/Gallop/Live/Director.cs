@@ -180,6 +180,29 @@ namespace Gallop.Live
                     
 
                     _liveTimelineControl.StageObjectMap = _stageController.StageObjectMap;
+
+                    // one-shot census: which timeline objectList names exist on
+                    // the loaded stage, so missing fixtures get named in the log.
+                    var objSheet = _liveTimelineControl.data?.worksheetList != null && _liveTimelineControl.data.worksheetList.Count > 0
+                        ? _liveTimelineControl.data.worksheetList[0].objectList
+                        : null;
+                    if (objSheet != null && _stageController.StageObjectMap != null)
+                    {
+                        int stageFound = 0, stageAbsent = 0;
+                        foreach (var entry in objSheet)
+                        {
+                            if (entry == null || string.IsNullOrEmpty(entry.name))
+                                continue;
+                            if (_stageController.StageObjectMap.ContainsKey(entry.name))
+                                stageFound++;
+                            else
+                            {
+                                stageAbsent++;
+                                Director.FileLog($"[stageobj] timeline object '{entry.name}' missing from stage map");
+                            }
+                        }
+                        Director.FileLog($"[stageobj] census: objects={stageFound + stageAbsent} found={stageFound} missing={stageAbsent}");
+                    }
                 }
 
 
