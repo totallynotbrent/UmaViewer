@@ -58,6 +58,15 @@ namespace Gallop
             set => _depthOfFieldActive = value;
         }
 
+        // authored stage saturation from the exposure/colorCorrection tracks;
+        // float.min means no track drove it this frame.
+        private float _timelineStageSaturation = float.MinValue;
+
+        public void SetTimelineStageSaturation(float saturation)
+        {
+            _timelineStageSaturation = saturation;
+        }
+
         public void SetTimelineFocus(float distance, float size, bool onChara)
         {
             _timelineFocusDistance = distance;
@@ -333,7 +342,12 @@ namespace Gallop
                 _colorAdjust.contrast.overrideState = true;
                 _colorAdjust.contrast.value = 5f;
                 _colorAdjust.saturation.overrideState = true;
-                _colorAdjust.saturation.value = -5f;
+                // authored stage grade wins over the static lift when a track
+                // drove saturation this frame.
+                _colorAdjust.saturation.value =
+                    _timelineStageSaturation != float.MinValue
+                        ? _timelineStageSaturation
+                        : -5f;
             }
         }
 

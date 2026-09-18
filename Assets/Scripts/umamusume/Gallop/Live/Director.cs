@@ -488,6 +488,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdatePropsAttach += OnUpdatePropsAttach;
             _liveTimelineControl.OnUpdateSpotlight3d += OnUpdateSpotlight3d;
             _liveTimelineControl.OnUpdatePostFilm += OnUpdatePostFilm;
+            _liveTimelineControl.OnUpdateStageGrade += OnUpdateStageGrade;
 
 
             _liveTimelineControl.OnUpdateCameraSwitcher += delegate (int cameraIndex_)
@@ -1276,6 +1277,18 @@ namespace Gallop.Live
         }
 
 
+        // authored stage grade (exposure/colorCorrection saturation) drives the
+        // volume's saturation so dark/bright scenes track the game's grade.
+        private void OnUpdateStageGrade(float saturation)
+        {
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null)
+                return;
+
+            float remapped = Mathf.Clamp((saturation - 1f) * 100f, -100f, 100f);
+            imageEffect.SetTimelineStageSaturation(remapped);
+        }
+
         // the game composites up to three PostFilm layers; the strongest active
         // layer drives the volume tint this frame.
         private void OnUpdatePostFilm(
@@ -1363,6 +1376,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdatePropsAttach -= OnUpdatePropsAttach;
             _liveTimelineControl.OnUpdateSpotlight3d -= OnUpdateSpotlight3d;
             _liveTimelineControl.OnUpdatePostFilm -= OnUpdatePostFilm;
+            _liveTimelineControl.OnUpdateStageGrade -= OnUpdateStageGrade;
         }
 
         // radial blur keys drive the existing motion-blur volume override: power maps to

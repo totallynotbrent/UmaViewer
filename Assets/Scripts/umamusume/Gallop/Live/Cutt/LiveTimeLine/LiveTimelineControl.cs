@@ -84,6 +84,7 @@ namespace Gallop.Live.Cutt
 
         public event BgColor2UpdateInfoDelegate OnUpdateBgColor2;
         public event PostFilmUpdateInfoDelegate OnUpdatePostFilm;
+        public event Action<float> OnUpdateStageGrade;
 
         public event TransformUpdateInfoDelegate OnUpdateTransform;
 
@@ -490,6 +491,7 @@ namespace Gallop.Live.Cutt
             //不遍历所有 worksheet,避免同名LaserA/LaserB轨道在同一帧互相覆盖。
             AlterUpdate_BgColor2(camSheet, _currentFrame);
             AlterUpdate_PostFilm(camSheet, _currentFrame);
+            AlterUpdate_StageGrade(camSheet, Mathf.RoundToInt(_currentFrame));
 
             _isNowAlterUpdate = false;
 
@@ -2236,6 +2238,39 @@ namespace Gallop.Live.Cutt
         }
 
         // 后处理(歌曲封面/胶片)属于全局画面效果，只使用主 worksheet，与BgColor2同层级。
+        // stage color grade: the first enabled colorCorrection entry drives the
+        // volume saturation so the scene grade follows the authored track.
+        private void AlterUpdate_StageGrade(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            var handler = OnUpdateStageGrade;
+            if (handler == null || sheet == null)
+                return;
+
+            if (sheet.exposureKeys != null && sheet.exposureKeys.Count > 0)
+            {
+                FindTimelineKey(out var exCur, out _, sheet.exposureKeys, currentFrame);
+                if (exCur is LiveTimelineKeyColorCorrectionData exKey && exKey.enable)
+                    handler(exKey.saturation);
+                return;
+            }
+
+            if (sheet.colorCorrectionDataLists != null)
+            {
+                for (int i = 0; i < sheet.colorCorrectionDataLists.Count; i++)
+                {
+                    var entry = sheet.colorCorrectionDataLists[i];
+                    if (entry == null || entry.keys == null || entry.keys.Count == 0)
+                        continue;
+                    FindTimelineKey(out var cur, out _, entry.keys, currentFrame);
+                    if (cur is LiveTimelineKeyColorCorrectionData key && key.enable)
+                    {
+                        handler(key.saturation);
+                        return;
+                    }
+                }
+            }
+        }
+
         private void AlterUpdate_PostFilm(LiveTimelineWorkSheet sheet, float currentFrame)
         {
             if (OnUpdatePostFilm == null) return;
