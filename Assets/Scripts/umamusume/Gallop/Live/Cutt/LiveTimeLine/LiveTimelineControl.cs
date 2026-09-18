@@ -87,6 +87,7 @@ namespace Gallop.Live.Cutt
         public event Action<float> OnUpdateStageGrade;
         public event Action<float, Color> OnUpdateVolumeLight;
         public event Action<float> OnUpdateChromaticAberration;
+        public event System.Action<LiveTimelineAudienceData, Vector3, Quaternion, Vector3, int, float> OnUpdateAudience;
 
         public event TransformUpdateInfoDelegate OnUpdateTransform;
 
@@ -481,6 +482,7 @@ namespace Gallop.Live.Cutt
 
                 AlterUpdate_TransformControl(ws, _currentFrame);
                 AlterUpdate_ObjectControl(ws, _currentFrame);
+                AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
                 AlterUpdate_BlinkLight(ws, _currentFrame);
@@ -2242,6 +2244,44 @@ namespace Gallop.Live.Cutt
         }
 
         // 后处理(歌曲封面/胶片)属于全局画面效果，只使用主 worksheet，与BgColor2同层级。
+        // audience blocks: transform + cyalume tint + crowd animation selection.
+        private void AlterUpdate_Audience(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            var handler = OnUpdateAudience;
+            if (handler == null || sheet == null || sheet.audienceList == null)
+                return;
+
+            int count = sheet.audienceList.Count;
+            for (int i = 0; i < count; i++)
+            {
+                var entry = sheet.audienceList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count == 0)
+                    continue;
+
+                FindTimelineKey(out var curBase, out var nextBase, entry.keys, currentFrame);
+                var cur = curBase as LiveTimelineKeyAudienceData;
+                if (cur == null)
+                    continue;
+                var next = nextBase as LiveTimelineKeyAudienceData;
+
+                Vector3 pos = cur.position;
+                Vector3 rot = cur.rotate;
+                Vector3 scl = cur.scale;
+                if (next != null && next.IsInterpolateKey())
+                {
+                    float t = CalculateInterpolationValue(
+                        (LiveTimelineKeyWithInterpolate)cur,
+                        (LiveTimelineKeyWithInterpolate)next,
+                        currentFrame);
+                    pos = Vector3.Lerp(cur.position, next.position, t);
+                    rot = Vector3.Lerp(cur.rotate, next.rotate, t);
+                    scl = Vector3.Lerp(cur.scale, next.scale, t);
+                }
+
+                handler(entry, pos, Quaternion.Euler(rot), scl, cur.animationIndex, cur.animationSpeed);
+            }
+        }
+
         // lens fringe: first enabled chromatic aberration entry reports its power.
         private void AlterUpdate_ChromaticAberration(LiveTimelineWorkSheet sheet, int currentFrame)
         {
