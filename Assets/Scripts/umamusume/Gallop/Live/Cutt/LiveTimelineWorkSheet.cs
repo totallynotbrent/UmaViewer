@@ -443,6 +443,7 @@ namespace Gallop.Live.Cutt
         [SerializeField] public LiveTimelineKeyColorCorrectionDataList exposureKeys;
         [SerializeField] public LiveTimelineKeyColorCorrectionDataList toneCurveKeys;
         [SerializeField] public List<LiveTimelineVolumeLightData> volumeLightKeys;
+        [SerializeField] public List<LiveTimelineChromaticAberrationData> chromaticAberrationList;
 
         [SerializeField]
         public List<LiveTimelineHdrBloomData> hdrBloomList;

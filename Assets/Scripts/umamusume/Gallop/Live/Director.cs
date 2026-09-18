@@ -490,6 +490,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdatePostFilm += OnUpdatePostFilm;
             _liveTimelineControl.OnUpdateStageGrade += OnUpdateStageGrade;
             _liveTimelineControl.OnUpdateVolumeLight += OnUpdateVolumeLight;
+            _liveTimelineControl.OnUpdateChromaticAberration += OnUpdateChromaticAberration;
 
 
             _liveTimelineControl.OnUpdateCameraSwitcher += delegate (int cameraIndex_)
@@ -1278,6 +1279,17 @@ namespace Gallop.Live
         }
 
 
+        // lens fringe from the chromatic aberration track; URP override does the
+        // actual fringe, we only feed the authored strength.
+        private void OnUpdateChromaticAberration(float power)
+        {
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null)
+                return;
+
+            imageEffect.SetChromaticAberration(Mathf.Clamp01(power * 0.05f));
+        }
+
         // sun-shaft glow approximated as a bounded bloom lift in the shaft color;
         // a dedicated light-shaft pass can replace this mapping later.
         private void OnUpdateVolumeLight(float power, Color color)
@@ -1394,6 +1406,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdatePostFilm -= OnUpdatePostFilm;
             _liveTimelineControl.OnUpdateStageGrade -= OnUpdateStageGrade;
             _liveTimelineControl.OnUpdateVolumeLight -= OnUpdateVolumeLight;
+            _liveTimelineControl.OnUpdateChromaticAberration -= OnUpdateChromaticAberration;
         }
 
         // radial blur keys drive the existing motion-blur volume override: power maps to

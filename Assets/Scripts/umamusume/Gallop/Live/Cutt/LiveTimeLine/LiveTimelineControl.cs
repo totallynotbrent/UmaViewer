@@ -86,6 +86,7 @@ namespace Gallop.Live.Cutt
         public event PostFilmUpdateInfoDelegate OnUpdatePostFilm;
         public event Action<float> OnUpdateStageGrade;
         public event Action<float, Color> OnUpdateVolumeLight;
+        public event Action<float> OnUpdateChromaticAberration;
 
         public event TransformUpdateInfoDelegate OnUpdateTransform;
 
@@ -494,6 +495,7 @@ namespace Gallop.Live.Cutt
             AlterUpdate_PostFilm(camSheet, _currentFrame);
             AlterUpdate_StageGrade(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_VolumeLight(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_ChromaticAberration(camSheet, Mathf.RoundToInt(_currentFrame));
 
             _isNowAlterUpdate = false;
 
@@ -2240,6 +2242,36 @@ namespace Gallop.Live.Cutt
         }
 
         // 后处理(歌曲封面/胶片)属于全局画面效果，只使用主 worksheet，与BgColor2同层级。
+        // lens fringe: first enabled chromatic aberration entry reports its power.
+        private void AlterUpdate_ChromaticAberration(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            var handler = OnUpdateChromaticAberration;
+            if (handler == null || sheet == null || sheet.chromaticAberrationList == null)
+                return;
+
+            for (int i = 0; i < sheet.chromaticAberrationList.Count; i++)
+            {
+                var entry = sheet.chromaticAberrationList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count == 0)
+                    continue;
+                FindTimelineKey(out var cur, out var next, entry.keys, currentFrame);
+                if (cur is LiveTimelineKeyChromaticAberrationData key && key.isEnable)
+                {
+                    float power = key.power;
+                    if (next is LiveTimelineKeyChromaticAberrationData nk && nk.IsInterpolateKey())
+                    {
+                        float t = CalculateInterpolationValue(
+                            (LiveTimelineKeyWithInterpolate)cur,
+                            (LiveTimelineKeyWithInterpolate)next,
+                            currentFrame);
+                        power = Mathf.Lerp(key.power, nk.power, t);
+                    }
+                    handler(power);
+                    return;
+                }
+            }
+        }
+
         // sun-shaft glow: first enabled volumeLight entry reports power+color so
         // the apply side can lift bloom from the authored shaft direction.
         private void AlterUpdate_VolumeLight(LiveTimelineWorkSheet sheet, int currentFrame)

@@ -71,6 +71,15 @@ namespace Gallop
             _volumeLightTint = color;
         }
 
+        // lens fringe from the chromatic aberration track; -1 = no track input.
+        private float _timelineChromaticAberration = -1f;
+        private UnityEngine.Rendering.Universal.ChromaticAberration _chromatic;
+
+        public void SetChromaticAberration(float power)
+        {
+            _timelineChromaticAberration = power;
+        }
+
         // per-frame shaft lift set by Director; folded into bloom intensity once.
         private float _volumeLightBloomLift;
 
@@ -178,7 +187,28 @@ namespace Gallop
             ApplyMotionBlur();
             ApplyVignette();
             ApplyTimelineFilmLayers();
+            ApplyChromaticAberration();
             SectionProfiler.End();
+        }
+
+        // lens fringe: authored strength drives the URP chromatic aberration.
+        private void ApplyChromaticAberration()
+        {
+            if (_chromatic == null)
+                InitializeVolume();
+            if (_chromatic == null)
+                return;
+
+            if (_timelineChromaticAberration >= 0f)
+            {
+                _chromatic.active = true;
+                _chromatic.intensity.overrideState = true;
+                _chromatic.intensity.value = _timelineChromaticAberration;
+            }
+            else
+            {
+                _chromatic.active = false;
+            }
         }
 
         // maps the game's PostFilm layers onto the volume: vignette-mode films
@@ -273,6 +303,9 @@ namespace Gallop
 
             if (!_runtimeProfile.TryGet(out _vignette))
                 _vignette = _runtimeProfile.Add<Vignette>(true);
+
+            if (!_runtimeProfile.TryGet(out _chromatic))
+                _chromatic = _runtimeProfile.Add<UnityEngine.Rendering.Universal.ChromaticAberration>(true);
         }
 
         public void ApplyBloomParameter()
