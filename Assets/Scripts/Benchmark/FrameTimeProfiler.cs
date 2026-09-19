@@ -25,6 +25,7 @@ public class FrameTimeProfiler : MonoBehaviour
 
     private bool _sampling;
     private float _clock;
+    private float _lastBeat = -1f;
     private readonly List<float> _frameTimes = new List<float>(65536);
     private long _gcAllocAccumulated;
     private long _gcLastTotalMemory;
@@ -135,6 +136,15 @@ public class FrameTimeProfiler : MonoBehaviour
         // wall-clock only: the stage load produces multi-second frames, so scaled
         // time would burn the warm-up instantly and contaminate the sample.
         _clock += Time.unscaledDeltaTime;
+
+        // heartbeat every 10s of wall clock: proves the loop ticks and names the
+        // gate the clock is stuck at when the harness times out.
+        float beat = Mathf.Floor(_clock / 10f);
+        if (beat > _lastBeat)
+        {
+            _lastBeat = beat;
+            WriteMarker($"uma_bench_beat_{Mathf.Min((int)beat, 9999):D4}.txt");
+        }
 
         if (!_sampling && _clock < _warmupSeconds)
             return;
