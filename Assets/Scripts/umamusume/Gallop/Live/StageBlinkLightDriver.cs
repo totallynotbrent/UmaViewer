@@ -905,6 +905,7 @@ namespace Gallop.Live
         {
             var rc = GetOrBuildRootCache(runtimeKey, rootGo);
             if (rc.slotCount <= 0) return;
+            rc.lastNameCheckFrame = Time.frameCount;
 
             var rt = GetOrCreateRuntime(runtimeKey);
             ApplyUpdateInfoToRuntime(rt, rc.slotCount, updateInfo, liveNow);
@@ -923,7 +924,12 @@ namespace Gallop.Live
                     continue;
                 }
 
-                string childName = ResolveIndexedOwnerName(r.transform, rc.rootGo.transform) ?? "";
+                // names are stable mid-live; re-resolve at 1hz instead of per frame
+                string childName = e.cachedChildName;
+                if (Time.frameCount - rc.lastNameCheckFrame >= 60)
+                {
+                    childName = ResolveIndexedOwnerName(r.transform, rc.rootGo.transform) ?? "";
+                }
 
                 if (!ReferenceEquals(childName, e.cachedChildName) && childName != e.cachedChildName)
                 {
