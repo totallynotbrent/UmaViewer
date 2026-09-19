@@ -171,13 +171,18 @@ public class UmaViewerUI : MonoBehaviour
         catch { }
     }
 
+    // track ui refresh cadence; 4hz is plenty for a progress bar and cuts the
+    // per-frame string + tmp mesh churn that shows up as gc pressure.
+    private float _trackUiClock = -1f;
+
     private void Update()
     {
         if (Builder.CurrentAudioSources.Count > 0 && Builder.CurrentAudioSources[0])
         {
             AudioSource MianSource = Builder.CurrentAudioSources[0];
-            if (MianSource.clip)
+            if (MianSource.clip && Time.unscaledTime - _trackUiClock >= 0.25f)
             {
+                _trackUiClock = Time.unscaledTime;
                 AudioSettings.UpdateTrack(MianSource);
             }
         }

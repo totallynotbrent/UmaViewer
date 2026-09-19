@@ -54,6 +54,10 @@ namespace Gallop.Cyalume
 
         protected readonly Dictionary<int, Texture2D> _textureSet = new Dictionary<int, Texture2D>();
         protected MaterialPropertyBlock _mpb;
+        // material -> (texture property, texture scale) so the per-frame scroll pass
+        // touches no shader property lookups; invalidated when materials swap.
+        private readonly Dictionary<Material, (string prop, Vector2 scale)> _scrollCache =
+            new Dictionary<Material, (string, Vector2)>();
         protected int _mainTexStPropertyId = -1;
 
         protected CyalumePlaybackProvider _playbackProvider;
@@ -981,8 +985,19 @@ namespace Gallop.Cyalume
                     if (material == null)
                         continue;
 
-                    string prop = ResolveTextureProperty(material);
-                    if (string.IsNullOrEmpty(prop) || !material.HasProperty(prop))
+                    // cache the texture-scale pair per material: property lookup and
+                    // GetTextureScale are shader-side calls, far too hot per frame per
+                    // penlight renderer.
+                    if (!_scrollCache.TryGetValue(material, out var cached))
+                    {
+                        string prop = ResolveTextureProperty(material);
+                        cached = (string.IsNullOrEmpty(prop) || !material.HasProperty(prop))
+                            ? (null, Vector2.one)
+                            : (prop, material.GetTextureScale(prop));
+                        _scrollCache[material] = cached;
+                    }
+
+                    if (cached.Item1 == null)
                         continue;
 
                     // Use MPB only to avoid material instance cloning
@@ -990,9 +1005,8 @@ namespace Gallop.Cyalume
 #if UNITY_2021_2_OR_NEWER
                     if (_mainTexStPropertyId >= 0)
                     {
-                        var scale = material.GetTextureScale(prop);
                         renderer.GetPropertyBlock(_mpb, slot);
-                        _mpb.SetVector(_mainTexStPropertyId, new Vector4(scale.x, scale.y, 0f, yOffset));
+                        _mpb.SetVector(_mainTexStPropertyId, new Vector4(cached.Item2.x, cached.Item2.y, 0f, yOffset));
                         renderer.SetPropertyBlock(_mpb, slot);
                     }
 #endif

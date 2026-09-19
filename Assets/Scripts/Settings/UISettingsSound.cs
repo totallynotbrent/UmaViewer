@@ -20,13 +20,19 @@ public class UISettingsSound : MonoBehaviour
     public Sprite PauseIcon;
     public Text LyricsText;
 
+    private string _cachedLyric;
+
     internal void UpdateTrack(AudioSource mianSource)
     {
         TitleText.text = mianSource.clip.name;
         ProgressText.text = string.Format("{0} / {1}", ToTimeFormat(mianSource.time), ToTimeFormat(mianSource.clip.length));
         ProgressSlider.SetValueWithoutNotify(mianSource.time / mianSource.clip.length);
-        LyricsText.text = UmaUtility.GetCurrentLyrics(mianSource.time, UmaViewerBuilder.Instance.CurrentLyrics);
-        LyricsText.text = LyricsText.text;
+        string lyric = UmaUtility.GetCurrentLyrics(mianSource.time, UmaViewerBuilder.Instance.CurrentLyrics);
+        if (!string.Equals(lyric, _cachedLyric, System.StringComparison.Ordinal))
+        {
+            _cachedLyric = lyric;
+            LyricsText.text = lyric;
+        }
         UpdatePlayButtonIcon(mianSource.isPlaying);
     }
 

@@ -186,9 +186,17 @@ namespace Gallop.Live.Cyalume
 
         private void LateUpdate()
         {
-            TryBindGroupTimeline();
-            FlushGroupMatrix();
-            FlushMobShadowIfNeeded();
+            Gallop.Live.SectionProfiler.Begin("cyalume.late");
+            try
+            {
+                TryBindGroupTimeline();
+                FlushGroupMatrix();
+                FlushMobShadowIfNeeded();
+            }
+            finally
+            {
+                Gallop.Live.SectionProfiler.End();
+            }
         }
 
         private void StartForceReplaceWarmup()

@@ -191,9 +191,15 @@ public class LiveViewerUI : MonoBehaviour
         FrameRateDropDown.onValueChanged.AddListener(SetFrameRate);
     }
 
+    private string _cachedLyric;
+
     public void UpdateLyrics(float time)
     {
         var text = UmaUtility.GetCurrentLyrics(time, CurrentLyrics);
-        LyricsText.text = text;
+        if (!string.Equals(text, _cachedLyric, System.StringComparison.Ordinal))
+        {
+            _cachedLyric = text;
+            LyricsText.text = text;
+        }
     }
 }

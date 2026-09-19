@@ -147,6 +147,7 @@ namespace Gallop.Live
 
         private sealed class RootCache
         {
+            public int lastNameCheckFrame = -1;
             public string rootName;
             public GameObject rootGo;
             public bool rootIsUv;
@@ -221,10 +222,6 @@ namespace Gallop.Live
             public float smoothedP;
             public bool renderOnState;
         }
-
-        private static readonly Regex ReLightPrefix = new Regex(@"^light(\d+)(?:_|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex ReSuffixNumber = new Regex(@"_(\d+)$", RegexOptions.Compiled);
-        private static readonly Regex ReLastDigits = new Regex(@"(\d+)(?!.*\d)", RegexOptions.Compiled);
 
         private void Awake()
         {
@@ -302,35 +299,36 @@ namespace Gallop.Live
             return new IndexToken { valid = false, mode = IndexMode.Invalid, n = 0 };
         }
 
-        private static IndexToken ParseIndexToken(string childName)
-        {
-            if (string.IsNullOrEmpty(childName))
-                return InvalidToken();
-
-            var m = ReLightPrefix.Match(childName);
-            if (m.Success && int.TryParse(m.Groups[1].Value, out int lightN))
-                return new IndexToken { valid = true, mode = IndexMode.LightPrefixNumber, n = lightN };
-
-            m = ReSuffixNumber.Match(childName);
-            if (m.Success && int.TryParse(m.Groups[1].Value, out int suffixN))
-                return new IndexToken { valid = true, mode = IndexMode.SuffixNumber, n = suffixN };
-
-            m = ReLastDigits.Match(childName);
-            if (m.Success && int.TryParse(m.Groups[1].Value, out int lastN))
-                return new IndexToken { valid = true, mode = IndexMode.LastDigits, n = lastN };
-
-            return InvalidToken();
-        }
 
         private static bool TryParseLightOwnerIndex(string name, out int index)
         {
+            // manual parse of "light<digits>_" beats a regex on this per-frame
+            // hot path; no allocation, no match object.
             index = -1;
-            if (string.IsNullOrEmpty(name)) return false;
+            if (string.IsNullOrEmpty(name) || name.Length < 6) return false;
 
-            var m = ReLightPrefix.Match(name);
-            if (!m.Success) return false;
+            if (name[0] != 'l' && name[0] != 'L') return false;
+            if (name[1] != 'i' && name[1] != 'I') return false;
+            if (name[2] != 'g' && name[2] != 'G') return false;
+            if (name[3] != 'h' && name[3] != 'H') return false;
+            if (name[4] != 't' && name[4] != 'T') return false;
 
-            return int.TryParse(m.Groups[1].Value, out index);
+            int i = 5;
+            int value = 0;
+            bool any = false;
+            while (i < name.Length && name[i] >= '0' && name[i] <= '9')
+            {
+                value = value * 10 + (name[i] - '0');
+                any = true;
+                i++;
+                if (value > 100000) return false;
+            }
+
+            if (!any) return false;
+            if (i < name.Length && name[i] != '_') return false;
+
+            index = value;
+            return true;
         }
 
         private string ResolveIndexedOwnerName(Transform t, Transform root)
@@ -472,6 +470,19 @@ namespace Gallop.Live
         }
 
         private void LateUpdate()
+        {
+            SectionProfiler.Begin("stage.blinklight");
+            try
+            {
+            LateUpdateInner();
+            }
+            finally
+            {
+            SectionProfiler.End();
+            }
+        }
+
+        private void LateUpdateInner()
         {
             if (_ctl == null || _stage == null)
                 BindIfPossible();
@@ -841,19 +852,36 @@ namespace Gallop.Live
 
             if (_groundChosen.Count == 0) return;
 
-            foreach (var kv in _stage.StageObjectMap)
+            // the ground-panel subset of the object map is stable mid-live, so
+            // collecting it once avoids a full-map string scan every frame.
+            if (_groundPanelEntries == null || _groundPanelMapVersion != _stage.StageObjectMapVersion)
             {
-                string name = kv.Key;
-                var go = kv.Value;
+                _groundPanelMapVersion = _stage.StageObjectMapVersion;
+                _groundPanelEntries?.Clear();
+                _groundPanelEntries ??= new List<KeyValuePair<string, GameObject>>(32);
+                foreach (var kv in _stage.StageObjectMap)
+                {
+                    if (GetGroundPanelGroupBase(kv.Key) == null) continue;
+                    if (kv.Value == null) continue;
+                    _groundPanelEntries.Add(new KeyValuePair<string, GameObject>(kv.Key, kv.Value));
+                }
+            }
+
+            for (int i = 0; i < _groundPanelEntries.Count; i++)
+            {
+                string name = _groundPanelEntries[i].Key;
+                var go = _groundPanelEntries[i].Value;
                 if (go == null) continue;
 
                 string g = GetGroundPanelGroupBase(name);
-                if (g == null) continue;
 
                 if (_groundChosen.TryGetValue(g, out var pick) && name != pick.root)
                     ApplyRootOffCached(name, go);
             }
         }
+
+        private List<KeyValuePair<string, GameObject>> _groundPanelEntries;
+        private int _groundPanelMapVersion = -1;
 
         private static string GetGroundPanelGroupBase(string rootName)
         {

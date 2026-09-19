@@ -950,7 +950,9 @@ namespace Gallop
                         break;
                     }
 
-                    Thread.Sleep(0);
+                    // a 1ms yield frees the core instead of spinning it while the
+                    // cloth worker finishes; the wait is sub-frame so latency holds.
+                    Thread.Sleep(1);
 
                     float elapsed = Time.realtimeSinceStartup - startTime;
                     if (elapsed > 10.0f)

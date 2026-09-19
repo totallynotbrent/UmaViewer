@@ -69,6 +69,10 @@ namespace Gallop.Live
         public StageObjectUnit[] _stageObjectUnits;
         public Dictionary<string, StageObjectUnit> StageObjectUnitMap = new Dictionary<string, StageObjectUnit>();
         public Dictionary<string, GameObject> StageObjectMap = new Dictionary<string, GameObject>();
+
+        // bumped on every StageObjectMap insert so per-frame drivers can cache
+        // derived subsets without rescanning the map each frame.
+        public int StageObjectMapVersion { get; private set; }
         public Dictionary<string, Transform> StageParentMap = new Dictionary<string, Transform>();
         [SerializeField] private bool _autoAddBlinkDriver = true;
 
@@ -1146,6 +1150,7 @@ namespace Gallop.Live
                 foreach (var child in instance.GetComponentsInChildren<Transform>(true))
                 {
                     if (!StageObjectMap.ContainsKey(child.name))
+                        StageObjectMapVersion++;
                     {
                         if (child.name.IndexOf("light", StringComparison.OrdinalIgnoreCase) >= 0)
                         {
@@ -1154,6 +1159,7 @@ namespace Gallop.Live
 
                         var tmp_name = child.name.Replace("(Clone)", "");
                         StageObjectMap[tmp_name] = child.gameObject;
+                        StageObjectMapVersion++;
                     }
                 }
             }

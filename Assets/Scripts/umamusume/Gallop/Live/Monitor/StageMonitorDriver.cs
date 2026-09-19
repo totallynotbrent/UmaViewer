@@ -138,7 +138,15 @@ namespace Gallop.Live
             if (!_hasBuiltCache)
                 RebuildCache();
 
-            ApplyMonitorTimeline();
+            SectionProfiler.Begin("stage.monitor");
+            try
+            {
+                ApplyMonitorTimeline();
+            }
+            finally
+            {
+                SectionProfiler.End();
+            }
         }
 
         private void BindIfPossible()

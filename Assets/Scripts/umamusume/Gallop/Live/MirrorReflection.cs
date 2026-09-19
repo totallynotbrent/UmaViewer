@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 #pragma warning disable CS0414 // ponytail: keep official field for parity
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -28,7 +29,7 @@ public class MirrorReflection : MonoBehaviour
 
     [Header("镜面基础设置")]
     [SerializeField] private LayerMask _renderLayers = ~0;
-    [SerializeField] private int _mirrorTextureSize = 512;
+    [SerializeField] private int _mirrorTextureSize = 384;
     [SerializeField] private float _mirrorClipPlaneOffset = 0.07f;
     [SerializeField] private Camera _baseCamera;
     [SerializeField] private float _mirrorReflectionRate = 0f;
@@ -239,7 +240,45 @@ public class MirrorReflection : MonoBehaviour
         if (_mirrorSkipFrame)
             return;
 
+        // one mirror renders per frame across the whole stage: a big-venue mirror
+        // wall otherwise submits dozens of full-scene renders in the same frame.
+        if (!AcquireFrameBudget())
+            return;
+
         ForceRenderOnce();
+    }
+
+    // round-robin ticket so mirror renders spread across frames instead of
+    // stacking; each mirror still refreshes, just not all in one frame.
+    private static int _frameBudgetFrame = -1;
+    private static int _budgetCursor;
+    private static readonly List<MirrorReflection> _budgetQueue = new List<MirrorReflection>();
+    private int _budgetTicket = -1;
+
+    private bool AcquireFrameBudget()
+    {
+        if (Time.frameCount != _frameBudgetFrame)
+        {
+            _frameBudgetFrame = Time.frameCount;
+            _budgetCursor = 0;
+        }
+
+        if (_budgetTicket < 0)
+        {
+            _budgetTicket = _budgetQueue.Count;
+            _budgetQueue.Add(this);
+        }
+
+        // the cursor picks one queue member per frame; wrap by queue size so
+        // every mirror gets its turn over consecutive frames.
+        int slot = _budgetCursor % _budgetQueue.Count;
+        if (slot == _budgetTicket)
+        {
+            _budgetCursor++;
+            return true;
+        }
+
+        return false;
     }
 
     private void OnDestroy()
@@ -964,6 +1003,7 @@ public class MirrorReflection : MonoBehaviour
             return;
 
         _isRenderingNow = true;
+        Gallop.Live.SectionProfiler.Begin("mirror.render");
         try
         {
             UpdateRenderTexture();
@@ -1003,6 +1043,7 @@ public class MirrorReflection : MonoBehaviour
         {
             OnPostDraw?.Invoke(this);
             _endCameraRenderingCallbacks?.Invoke(default, _mirrorCamera);
+            Gallop.Live.SectionProfiler.End();
             _isRenderingNow = false;
         }
     }
