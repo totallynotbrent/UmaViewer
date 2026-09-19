@@ -1070,7 +1070,9 @@ public class UmaContainerCharacter : UmaContainer
         {
             // cap the step so low-fps frames don't feed an oversized dt into the cloth sim
             float dt = Mathf.Clamp(Time.deltaTime, 0f, 1f / 60f);
+            Gallop.Live.SectionProfiler.Begin("cyspring.begin");
             _cySpringController.BeginSimulation(dt, false);
+            Gallop.Live.SectionProfiler.End();
         }
     }
 
@@ -1078,12 +1080,16 @@ public class UmaContainerCharacter : UmaContainer
     {
         if (EnablePhysics && _cySpringLoaded && _cySpringController != null)
         {
+            Gallop.Live.SectionProfiler.Begin("cyspring.end");
             _cySpringController.EndSimulation();
+            Gallop.Live.SectionProfiler.End();
         }
 
         // 官方 AlterLateUpdatePost 是 EndSimulation 后 UpdateBodyLightDir / UpdateFaceLight。
         // 现在先补脸部，身体光照后面再看 UpdateBodyLightDir。
+        Gallop.Live.SectionProfiler.Begin("chara.facelight");
         UpdateFaceLightRuntime();
+        Gallop.Live.SectionProfiler.End();
     }
 
     private void InitFaceLightRuntime()

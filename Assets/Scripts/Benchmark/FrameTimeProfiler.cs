@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using Gallop.Live;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 public class FrameTimeProfiler : MonoBehaviour
 {
@@ -141,8 +142,37 @@ public class FrameTimeProfiler : MonoBehaviour
         _gcLastTotalMemory = gcNow;
 
         _frameTimes.Add(Time.unscaledDeltaTime * 1000f);
+        CaptureFrameTiming();
         SectionProfiler.SetEnabled(true);
     }
+
+    // frame-timing accumulation: splits each frame into cpu main-thread work,
+    // render-thread work, present wait, and gpu time, so a low-utilization
+    // stall is distinguishable from real main-thread cost.
+    private double _ftCpuMainThreadMs;
+    private double _ftCpuRenderThreadMs;
+    private double _ftPresentWaitMs;
+    private double _ftGpuMs;
+    private int _ftSamples;
+
+    private void CaptureFrameTiming()
+    {
+        uint got = FrameTimingManager.GetLatestTimings((uint)_frameTimings.Length, _frameTimings);
+        for (int i = 0; i < got; i++)
+        {
+            var t = _frameTimings[i];
+            // unity reports these in microseconds; convert to ms once here.
+            _ftCpuMainThreadMs += t.cpuMainThreadFrameTime / 1000.0;
+            _ftCpuRenderThreadMs += t.cpuRenderThreadFrameTime / 1000.0;
+            _ftGpuMs += t.gpuFrameTime / 1000.0;
+            // present-wait is implied: frame wall time minus cpu main work
+            // and gpu time is queue/present overhead on this engine version.
+            _ftPresentWaitMs += (t.cpuFrameTime - t.cpuMainThreadFrameTime) / 1000.0;
+            _ftSamples++;
+        }
+    }
+
+    private FrameTiming[] _frameTimings = new FrameTiming[1];
 
     private void WriteSummary()
     {
@@ -201,7 +231,9 @@ public class FrameTimeProfiler : MonoBehaviour
             $"gc_alloc_mb={_gcAllocAccumulated / 1048576.0:F2}",
             $"gc_collections={gcColsNow - _gcCollectionsBefore}",
             $"target_fps={Application.targetFrameRate} resolution={Screen.width}x{Screen.height}",
-            "thread/gpu timings: unavailable (frame-timing module not compiled)",
+            _ftSamples > 0
+                ? $"frame-timing avg: cpu_main={_ftCpuMainThreadMs / _ftSamples:F2}ms cpu_render={_ftCpuRenderThreadMs / _ftSamples:F2}ms present_wait={_ftPresentWaitMs / _ftSamples:F2}ms gpu={_ftGpuMs / _ftSamples:F2}ms samples={_ftSamples}"
+                : "frame-timing: capture unavailable in this build",
             sectionReport);
 
         string outPath = Path.Combine(OutputDirectory(), SummaryName);
