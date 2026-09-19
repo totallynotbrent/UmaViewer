@@ -1071,7 +1071,9 @@ public class UmaContainerCharacter : UmaContainer
             // cap the step so low-fps frames don't feed an oversized dt into the cloth sim
             float dt = Mathf.Clamp(Time.deltaTime, 0f, 1f / 60f);
             Gallop.Live.SectionProfiler.Begin("cyspring.begin");
-            _cySpringController.BeginSimulation(dt, false);
+            // threaded mode: the sim runs on the cloth worker thread; the main
+            // thread only gathers posture here and waits in end-sim below.
+            _cySpringController.BeginSimulation(dt, true);
             Gallop.Live.SectionProfiler.End();
         }
     }

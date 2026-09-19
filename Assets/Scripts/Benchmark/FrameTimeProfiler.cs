@@ -82,6 +82,21 @@ public class FrameTimeProfiler : MonoBehaviour
         _gcLastTotalMemory = GC.GetTotalMemory(false);
         _gcCollectionsBefore = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
         Debug.Log($"[bench] armed: manual={_manualMode} warmup={_warmupSeconds}s sample={_sampleSeconds}s");
+        WriteMarker("uma_bench_armed.txt");
+    }
+
+    // the headless harness polls marker files; managed Debug.Log never reaches
+    // the player log on this build, so state changes must land on disk.
+    private static void WriteMarker(string name)
+    {
+        try
+        {
+            File.WriteAllText(Path.Combine(OutputDirectory(), name), DateTime.UtcNow.ToString("o"));
+        }
+        catch
+        {
+            // markers are harness convenience; a failed write must not kill the bench.
+        }
     }
 
     private void Update()
@@ -127,6 +142,7 @@ public class FrameTimeProfiler : MonoBehaviour
         if (!_sampling)
         {
             _sampling = true;
+            WriteMarker("uma_bench_sampling.txt");
         }
 
         if (_clock >= _warmupSeconds + _sampleSeconds)
@@ -241,6 +257,7 @@ public class FrameTimeProfiler : MonoBehaviour
         {
             Directory.CreateDirectory(Path.GetDirectoryName(outPath));
             File.WriteAllText(outPath, summary);
+            WriteMarker("uma_bench_summary_seen.txt");
             Debug.Log($"[bench] summary written -> {outPath}");
         }
         catch (Exception ex)
