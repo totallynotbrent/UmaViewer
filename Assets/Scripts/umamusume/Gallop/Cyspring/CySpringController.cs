@@ -692,7 +692,7 @@ namespace Gallop
                 // private const int DEFAULT_QUEUE_SIZE = 0x80;
                 // private const int DEFAULT_THREAD_NUM = 1;
                 //_instance = new CySpringThread(DEFAULT_QUEUE_SIZE, DEFAULT_THREAD_NUM);
-                    _instance = new CySpringThread(128, 1);
+                    _instance = new CySpringThread(128, 3);
                 }
 
                 return _instance;
@@ -857,6 +857,8 @@ namespace Gallop
                 }
                 while (Interlocked.CompareExchange(ref _nGetPointer, next, index) != index);
 
+                // read the slot before decrementing the count: another worker
+                // can claim the next slot and null it only after this read.
                 CySpringController cySpring = _taskQueueArray[index].cySpring;
 
                 int newTaskCount = Interlocked.Decrement(ref _numTasks);

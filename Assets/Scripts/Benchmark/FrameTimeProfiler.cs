@@ -83,20 +83,19 @@ public class FrameTimeProfiler : MonoBehaviour
         _gcLastTotalMemory = GC.GetTotalMemory(false);
         _gcCollectionsBefore = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
         Debug.Log($"[bench] armed: manual={_manualMode} warmup={_warmupSeconds}s sample={_sampleSeconds}s");
-        WriteMarker("uma_bench_armed.txt");
+        StateLog($"armed manual={_manualMode} warmup={_warmupSeconds}s sample={_sampleSeconds}s");
     }
 
-    // the headless harness polls marker files; managed Debug.Log never reaches
-    // the player log on this build, so state changes must land on disk.
-    private static void WriteMarker(string name)
+    // bench state rides the runtime log so a run reports with a single file.
+    private static void StateLog(string message)
     {
         try
         {
-            File.WriteAllText(Path.Combine(OutputDirectory(), name), DateTime.UtcNow.ToString("o"));
+            Gallop.Live.Director.FileLog($"[bench] {message}");
         }
         catch
         {
-            // markers are harness convenience; a failed write must not kill the bench.
+            // state lines are diagnostics; never let one kill the bench.
         }
     }
 
@@ -143,7 +142,7 @@ public class FrameTimeProfiler : MonoBehaviour
         if (beat > _lastBeat)
         {
             _lastBeat = beat;
-            WriteMarker($"uma_bench_beat_{Mathf.Min((int)beat, 9999):D4}.txt");
+            StateLog($"beat t={_clock:F0}s sampling={_sampling}");
         }
 
         if (!_sampling && _clock < _warmupSeconds)
@@ -152,7 +151,7 @@ public class FrameTimeProfiler : MonoBehaviour
         if (!_sampling)
         {
             _sampling = true;
-            WriteMarker("uma_bench_sampling.txt");
+            StateLog($"sampling open at t={_clock:F0}s");
         }
 
         if (_clock >= _warmupSeconds + _sampleSeconds)
@@ -260,6 +259,9 @@ public class FrameTimeProfiler : MonoBehaviour
             _ftSamples > 0
                 ? $"frame-timing avg: cpu_main={_ftCpuMainThreadMs / _ftSamples:F2}ms cpu_render={_ftCpuRenderThreadMs / _ftSamples:F2}ms present_wait={_ftPresentWaitMs / _ftSamples:F2}ms gpu={_ftGpuMs / _ftSamples:F2}ms samples={_ftSamples}"
                 : "frame-timing: capture unavailable in this build",
+            _ftSamples > 0 && avg > 0f
+                ? $"load: main_thread={100f * (float)(_ftCpuMainThreadMs / _ftSamples) / avg:F1}% of frame gpu={100f * (float)(_ftGpuMs / _ftSamples) / avg:F1}% of frame cores={SystemInfo.processorCount} cpu_type={SystemInfo.processorType}"
+                : "",
             sectionReport);
 
         string outPath = Path.Combine(OutputDirectory(), SummaryName);
@@ -267,7 +269,6 @@ public class FrameTimeProfiler : MonoBehaviour
         {
             Directory.CreateDirectory(Path.GetDirectoryName(outPath));
             File.WriteAllText(outPath, summary);
-            WriteMarker("uma_bench_summary_seen.txt");
             Debug.Log($"[bench] summary written -> {outPath}");
         }
         catch (Exception ex)
