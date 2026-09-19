@@ -262,16 +262,49 @@ namespace Gallop.Live
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
             go.transform.localScale = Vector3.one;
+
+            // the character node origin is the performer's feet; the stand prefab's
+            // own origin sits mid-pole, so lift the root by its bounds so the stand
+            // base lands on the floor instead of sinking under it.
+            var bounds = CalculateLocalBounds(go);
+            if (bounds.HasValue)
+            {
+                Vector3 localCenterOffset = go.transform.InverseTransformVector(
+                    bounds.Value.center - go.transform.position);
+                go.transform.localPosition = new Vector3(
+                    0f,
+                    -localCenterOffset.y + bounds.Value.extents.y,
+                    0f);
+            }
+
             Vector3 world = go.transform.position;
             Director.FileLog($"{PROP_LOG_TAG} planted '{group.propsName}' at slot {charaIndex} world=({world.x:F2},{world.y:F2},{world.z:F2})");
             return true;
         }
 
-        /// <summary>
-        /// Decide which character slots a prop group targets. Chara props keep
-        /// their resolved slot; stage props collect every CharaPosition value the
-        /// conditions name. Returns null when nothing matches.
-        /// </summary>
+        // world-space bounds of every renderer under the prop instance; used to
+        // plant dressing props base-down on the stage floor.
+        private static Bounds? CalculateLocalBounds(GameObject go)
+        {
+            bool any = false;
+            Bounds bounds = default;
+            foreach (Renderer r in go.GetComponentsInChildren<Renderer>())
+            {
+                if (r == null)
+                    continue;
+                if (!any)
+                {
+                    bounds = r.bounds;
+                    any = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(r.bounds);
+                }
+            }
+            return any ? bounds : (Bounds?)null;
+        }
+
         private static List<int> ResolveTargetSlots(
             LiveTimelinePropsSettings.PropsDataGroup group,
             List<UmaContainerCharacter> charaContainers)
@@ -636,6 +669,52 @@ namespace Gallop.Live
                     if (child.name.StartsWith("Prop_", StringComparison.Ordinal))
                     {
                         child.localPosition = offsetPosition;
+                        return;
+                    }
+                }
+            }
+
+            // no prop rides the joint yet: the handheld mic lives inside the stand
+            // dressing until the grab key fires, then it moves to the hand.
+            GrabMicHeadFromStands(jointName, offsetPosition);
+        }
+
+        // pull the 'mic' child out of a planted stand and parent it to the named
+        // joint with the authored grab offset, so the handheld mic follows the hand.
+        private static void GrabMicHeadFromStands(string jointName, Vector3 offsetPosition)
+        {
+            var director = Director.instance;
+            if (director == null || director.CharaContainerScript == null)
+                return;
+
+            foreach (var container in director.CharaContainerScript)
+            {
+                if (container == null)
+                    continue;
+
+                Transform joint = ResolveJoint(
+                    new List<UmaContainerCharacter> { container },
+                    director.CharaContainerScript.IndexOf(container),
+                    jointName);
+                if (joint == null)
+                    continue;
+
+                foreach (Transform stand in container.GetComponentsInChildren<Transform>(true))
+                {
+                    if (stand == null || !stand.name.StartsWith("Prop_", StringComparison.Ordinal))
+                        continue;
+
+                    foreach (Transform mic in stand.GetComponentsInChildren<Transform>(true))
+                    {
+                        if (mic == null || mic.name != "mic")
+                            continue;
+                        mic.SetParent(joint, false);
+                        mic.localPosition = offsetPosition;
+                        mic.localRotation = Quaternion.identity;
+                        mic.localScale = Vector3.one;
+                        mic.name = $"Prop_mic_{jointName}";
+                        StagePropsDriver.RegisterPropRenderers(jointName, mic.GetComponentsInChildren<Renderer>());
+                        Director.FileLog($"{PROP_LOG_TAG} grabbed mic head to '{jointName}' with offset {offsetPosition}");
                         return;
                     }
                 }

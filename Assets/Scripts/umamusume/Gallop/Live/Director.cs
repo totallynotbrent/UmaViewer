@@ -1388,6 +1388,7 @@ namespace Gallop.Live
         private void OnDestroy()
         {
             UnbindTimelineEvents();
+            _fixtureLights.Clear();
 
             if (_instance == this)
                 _instance = null;
@@ -1527,6 +1528,10 @@ namespace Gallop.Live
                 target.transform.SetParent(stage.transform, false);
                 target.transform.localPosition = new Vector3(slot.x, hang.y, slot.z);
 
+                // a real spotlight rides the fixture: beam from the hung head
+                // down to the authored slot, in the track's color and power.
+                DriveRealSpotlight(target, updateInfo, stage);
+
                 // tint the fixture materials once per fixture (cached) so the
                 // pool matches the authored color without per-frame material churn.
                 if (!_spotlightMaterialTinted.TryGetValue(target, out bool tinted) || !tinted)
@@ -1550,6 +1555,46 @@ namespace Gallop.Live
                     _spotlightMaterialTinted[target] = true;
                 }
             }
+        }
+
+        // cache of the real Light per spotlight3d fixture so per-frame updates
+        // only touch the light, never re-add components.
+        private static readonly Dictionary<GameObject, Light> _fixtureLights =
+            new Dictionary<GameObject, Light>();
+
+        // ensures each fixture carries a Unity spotlight aimed at the authored
+        // target slot; color/power follow the timeline track each active frame.
+        private void DriveRealSpotlight(GameObject fixture, Spotlight3dUpdateInfo updateInfo, StageController stage)
+        {
+            if (fixture == null)
+                return;
+
+            if (!_fixtureLights.TryGetValue(fixture, out Light light) || light == null)
+            {
+                Transform head = fixture.transform;
+                var lightGo = new GameObject("spotlight_beam");
+                lightGo.transform.SetParent(head, false);
+                light = lightGo.AddComponent<Light>();
+                light.type = LightType.Spot;
+                light.spotAngle = 34f;
+                light.range = 30f;
+                light.intensity = 4f;
+                light.shadows = LightShadows.None;
+                _fixtureLights[fixture] = light;
+            }
+
+            Color c = updateInfo.color;
+            c.a = 1f;
+            light.color = c;
+            light.intensity = Mathf.Max(1.2f, 4f * Mathf.Max(updateInfo.colorPower, 0.35f));
+
+            // aim from the fixture head at the authored floor slot.
+            Vector3 from = fixture.transform.position;
+            Vector3 to = stage.transform.TransformPoint(
+                new Vector3(updateInfo.characterPosition.x, 1.2f, updateInfo.characterPosition.z));
+            Vector3 dir = to - from;
+            if (dir.sqrMagnitude > 0.0001f)
+                light.transform.rotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
         }
 
         // loads the shared spotlight3d controller prefab once and clones it per
