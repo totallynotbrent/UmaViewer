@@ -124,7 +124,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1e6578d3419414d9d86c37d481263769, type: 3}
   m_Name: CopyCameraToRTFeature
   m_EditorClassIdentifier: 
-  m_Active: 1
+  m_Active: 0
   settings:
     target: {fileID: 8400000, guid: c70d1b3875c224e5784ec6d613e6cd44, type: 2}
     passEvent: 1000

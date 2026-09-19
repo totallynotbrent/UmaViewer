@@ -187,13 +187,13 @@ public class FrameTimeProfiler : MonoBehaviour
         for (int i = 0; i < got; i++)
         {
             var t = _frameTimings[i];
-            // unity reports these in microseconds; convert to ms once here.
-            _ftCpuMainThreadMs += t.cpuMainThreadFrameTime / 1000.0;
-            _ftCpuRenderThreadMs += t.cpuRenderThreadFrameTime / 1000.0;
-            _ftGpuMs += t.gpuFrameTime / 1000.0;
-            // present-wait is implied: frame wall time minus cpu main work
-            // and gpu time is queue/present overhead on this engine version.
-            _ftPresentWaitMs += (t.cpuFrameTime - t.cpuMainThreadFrameTime) / 1000.0;
+            // unity's FrameTiming fields are already milliseconds; accumulate raw.
+            _ftCpuMainThreadMs += t.cpuMainThreadFrameTime;
+            _ftCpuRenderThreadMs += t.cpuRenderThreadFrameTime;
+            _ftGpuMs += t.gpuFrameTime;
+            // present-wait: total cpu frame time minus the main-thread slice is
+            // the render-queue/present overhead on this engine version.
+            _ftPresentWaitMs += t.cpuFrameTime - t.cpuMainThreadFrameTime;
             _ftSamples++;
         }
     }

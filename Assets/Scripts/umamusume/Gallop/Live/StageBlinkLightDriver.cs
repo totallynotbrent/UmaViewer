@@ -188,6 +188,8 @@ namespace Gallop.Live
         {
             public Renderer r;
             public int stableSlot;
+            public int lastSortingOrder;
+            public bool wasEnabled;
 
             public string cachedChildName;
             public IndexToken token;
@@ -997,8 +999,20 @@ namespace Gallop.Live
                 Color currentColor = new Color(slotColor.x, slotColor.y, slotColor.z, 1f);
 
                 int uvBias = (rc.rootIsUv || e.isUvAlphaMask) ? uvSortingBias : 0;
-                r.sortingOrder = baseOrder + uvBias + e.stableSlot * stride;
-                r.enabled = true;
+
+                // sorting order is constant for this renderer's whole lifetime;
+                // writing it per frame dirties the sort key 1181x per frame.
+                int desiredOrder = baseOrder + uvBias + e.stableSlot * stride;
+                if (e.lastSortingOrder != desiredOrder)
+                {
+                    e.lastSortingOrder = desiredOrder;
+                    r.sortingOrder = desiredOrder;
+                }
+                if (!e.wasEnabled)
+                {
+                    e.wasEnabled = true;
+                    r.enabled = true;
+                }
 
                 EnsureLightBlinkBlendState(r, ref e, rt.lightBlendMode);
 

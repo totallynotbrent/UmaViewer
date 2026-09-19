@@ -554,6 +554,8 @@ namespace Gallop.Live
             return null;
         }
 
+        private static Camera _fallbackCamera;
+
         private static Camera GetActiveCamera()
         {
             var builder = UmaViewerBuilder.Instance;
@@ -563,7 +565,20 @@ namespace Gallop.Live
             var cam = Camera.main;
             if (cam != null) return cam;
 
-            return GameObject.FindObjectsOfType<Camera>().FirstOrDefault(c => c != null && c.enabled);
+            // the live timeline cameras carry no MainCamera tag, so this fallback
+            // runs every frame; cache the found camera instead of rescanning.
+            if (_fallbackCamera != null && _fallbackCamera.enabled) return _fallbackCamera;
+
+            var all = GameObject.FindObjectsOfType<Camera>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (all[i] != null && all[i].enabled)
+                {
+                    _fallbackCamera = all[i];
+                    return _fallbackCamera;
+                }
+            }
+            return null;
         }
 
         private static void ApplyTextureToMaterial(Material mat, Texture2D tex)

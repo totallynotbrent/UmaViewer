@@ -112,7 +112,7 @@ jobs:
             $cpu = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
             $os = Get-CimInstance Win32_OperatingSystem
             $ramUsed = 100 * (1 - ($os.FreePhysicalMemory / $os.TotalVisibleMemorySize))
-            Write-Output ("RESOURCE CPU={0:N1}% RAM={1:N1}%" -f $cpu, $ramUsed)
+            ("RESOURCE CPU={0:N1}% RAM={1:N1}%" -f $cpu, $ramUsed) | Out-File "$env:RUNNER_TEMP\monitor.log" -Append -Encoding utf8
             Start-Sleep -Seconds 10
           }
           '@
