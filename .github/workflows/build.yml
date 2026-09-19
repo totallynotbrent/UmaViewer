@@ -61,9 +61,9 @@ jobs:
           # cache, which is additive and safe to reuse across code churn. Hashing
           # Assets/** made every code change produce a fresh key -> full cold
           # re-import on every push. Unity reconciles stale imports incrementally.
-          key: Library-${{ runner.os }}-StandaloneWindows64
+          key: Library-${{ runner.os }}-Unity-2022.3.62f2-StandaloneWindows64
           restore-keys: |
-            Library-${{ runner.os }}-StandaloneWindows64
+            Library-${{ runner.os }}-Unity-2022.3.62f2-StandaloneWindows64
 
       - name: Cache IL2CPP incremental build (Bee)
         uses: actions/cache@v4
@@ -75,17 +75,9 @@ jobs:
           # churn; only the target + OS invalidate it.
           path: |
             Library/bee_cache
-          key: il2cpp-bee-${{ runner.os }}-StandaloneWindows64
+          key: il2cpp-bee-${{ runner.os }}-Unity-2022.3.62f2-StandaloneWindows64
           restore-keys: |
-            il2cpp-bee-${{ runner.os }}-StandaloneWindows64
-
-      - name: Free disk space (IL2CPP Windows editor image is large)
-        if: runner.os == 'Linux'
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: true
-          swap-storage: false
+            il2cpp-bee-${{ runner.os }}-Unity-2022.3.62f2-StandaloneWindows64
 
       - name: Generate build commit stamp
         shell: pwsh
@@ -94,6 +86,40 @@ jobs:
           $short = $sha.Substring(0, 7)
           $content = "public static class BuildCommit { public const string Sha = `"$short`"; }"
           Set-Content -Path "Assets/Scripts/BuildCommit.cs" -Value $content -Encoding UTF8
+
+      - name: Show runner hardware
+        shell: pwsh
+        run: |
+          Write-Host "=== CPU ==="
+          Get-CimInstance Win32_Processor |
+            Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed |
+            Format-List
+          Write-Host "=== RAM ==="
+          $ram = Get-CimInstance Win32_ComputerSystem
+          Write-Host "Total RAM: $([math]::Round($ram.TotalPhysicalMemory / 1GB, 2)) GB"
+          Write-Host "=== Disk ==="
+          Get-Volume C |
+            Select-Object DriveLetter, FileSystem, SizeRemaining, Size |
+            Format-List
+          Write-Host "=== Environment ==="
+          Write-Host "PROCESSOR_COUNT = $env:NUMBER_OF_PROCESSORS"
+
+      - name: Start resource monitor
+        shell: pwsh
+        run: |
+          $script = @'
+          while ($true) {
+            $cpu = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
+            $os = Get-CimInstance Win32_OperatingSystem
+            $ramUsed = 100 * (1 - ($os.FreePhysicalMemory / $os.TotalVisibleMemorySize))
+            Write-Output ("RESOURCE CPU={0:N1}% RAM={1:N1}%" -f $cpu, $ramUsed)
+            Start-Sleep -Seconds 10
+          }
+          '@
+          $path = "$env:RUNNER_TEMP\monitor.ps1"
+          Set-Content $path $script
+          $proc = Start-Process pwsh -ArgumentList "-NoProfile","-File",$path -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:RUNNER_TEMP\monitor.log"
+          $proc.Id | Set-Content "$env:RUNNER_TEMP\monitor.pid"
 
       - name: Build Windows player with IL2CPP
         # v4.8.0+ includes the vcredist2013 activation fix (PR #757) — without it the
@@ -119,6 +145,19 @@ jobs:
           # stale bundleVersion 2.1.34 the old Custom scheme inherited from upstream.
           versioning: Semantic
 
+      - name: Stop resource monitor
+        if: always()
+        shell: pwsh
+        run: |
+          $pidFile = "$env:RUNNER_TEMP\monitor.pid"
+          if (Test-Path $pidFile) {
+            $procId = [int](Get-Content $pidFile)
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+          }
+          if (Test-Path "$env:RUNNER_TEMP\monitor.log") {
+            Get-Content "$env:RUNNER_TEMP\monitor.log" | Write-Host
+          }
+
       - name: Package Windows build
         shell: pwsh
         run: |
@@ -132,11 +171,13 @@ jobs:
           $hash = Get-FileHash "UmaViewer-Windows-x64.zip" -Algorithm SHA256
           ("{0}  UmaViewer-Windows-x64.zip" -f $hash.Hash.ToLower()) | Set-Content -Path "UmaViewer-Windows-x64.zip.sha256" -Encoding ascii
 
-      - name: Upload workflow artifact (single clean zip of the build)
+      - name: Upload workflow artifact (release zip as-is)
         uses: actions/upload-artifact@v4
         with:
           name: UmaViewer-Windows-x64
-          path: build/StandaloneWindows64
+          path: |
+            UmaViewer-Windows-x64.zip
+            UmaViewer-Windows-x64.zip.sha256
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
