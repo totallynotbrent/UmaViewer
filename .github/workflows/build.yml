@@ -108,17 +108,19 @@ jobs:
         shell: pwsh
         run: |
           $script = @'
+          param([string]$LogPath)
           while ($true) {
             $cpu = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
             $os = Get-CimInstance Win32_OperatingSystem
             $ramUsed = 100 * (1 - ($os.FreePhysicalMemory / $os.TotalVisibleMemorySize))
-            ("RESOURCE CPU={0:N1}% RAM={1:N1}%" -f $cpu, $ramUsed) | Out-File "$env:RUNNER_TEMP\monitor.log" -Append -Encoding utf8
+            ("RESOURCE CPU={0:N1}% RAM={1:N1}%" -f $cpu, $ramUsed) | Add-Content -Path $LogPath -Encoding utf8
             Start-Sleep -Seconds 10
           }
           '@
           $path = "$env:RUNNER_TEMP\monitor.ps1"
+          $logPath = "$env:RUNNER_TEMP\monitor.log"
           Set-Content $path $script
-          $proc = Start-Process pwsh -ArgumentList "-NoProfile","-File",$path -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:RUNNER_TEMP\monitor.log"
+          $proc = Start-Process pwsh -ArgumentList "-NoProfile","-File",$path,"-LogPath",$logPath -PassThru -WindowStyle Hidden
           $proc.Id | Set-Content "$env:RUNNER_TEMP\monitor.pid"
 
       - name: Build Windows player with IL2CPP
