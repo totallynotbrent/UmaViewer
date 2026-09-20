@@ -18,7 +18,7 @@ set /p CH=Pick a channel:
 if "!CH!"=="2" (set "RELURL=https://api.github.com/repos/%REPO%/releases/tags/experimental") else (if "!CH!"=="1" (set "RELURL=https://api.github.com/repos/%REPO%/releases/latest") else (goto menu))
 
 echo Resolving release ...
-powershell %PSARGS% "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ErrorActionPreference='Stop'; $r=Invoke-RestMethod '!RELURL!'; $r.assets | ForEach-Object { $_.browser_download_url }" > "!URLFILE!" 2>"!ERRFILE!"
+powershell %PSARGS% "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ErrorActionPreference='Stop'; $r=Invoke-RestMethod '!RELURL!'; $r.assets | ForEach-Object { $_.browser_download_url }; ''; $r.body" > "!URLFILE!" 2>"!ERRFILE!"
 if errorlevel 1 goto fail
 
 set "ZURL="
@@ -34,6 +34,13 @@ powershell %PSARGS% "$l=Get-Content '!URLFILE!'; if($l.Count -gt 1){$l[1]}" > "%
 set /p SURL=<"%TEMP%\uma_side.txt" 2>nul
 
 echo Downloading !ZURL! ...
+powershell %PSARGS% "$l=Get-Content '!URLFILE!'; $i=[Array]::IndexOf($l,''); if($i -ge 0 -and $i+1 -lt $l.Count){ $l[($i+1)..($l.Count-1)] }" > "%TEMP%\uma_note.txt" 2>nul
+if exist "%TEMP%\uma_note.txt" (
+  for /f "usebackq delims=" %%N in ("%TEMP%\uma_note.txt") do (
+    if not "%%N"=="" echo %%N
+  )
+)
+
 powershell %PSARGS% "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object System.Net.WebClient; $wc.Proxy=[System.Net.WebRequest]::GetSystemWebProxy(); $wc.Proxy.Credentials=[System.Net.CredentialCache]::DefaultCredentials; $wc.DownloadFile('!ZURL!','!TMPZIP!')" 2>>"!ERRFILE!"
 if errorlevel 1 goto fail
 if not exist "!TMPZIP!" goto fail
@@ -61,6 +68,7 @@ del "!URLFILE!" 2>nul
 del "!ERRFILE!" 2>nul
 del "%TEMP%\uma_viewer.sha256" 2>nul
 del "%TEMP%\uma_side.txt" 2>nul
+del "%TEMP%\uma_note.txt" 2>nul
 
 echo Update applied. Start UmaViewer.exe when ready.
 pause

@@ -84,6 +84,21 @@ public class FrameTimeProfiler : MonoBehaviour
         _gcCollectionsBefore = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
         Debug.Log($"[bench] armed: manual={_manualMode} warmup={_warmupSeconds}s sample={_sampleSeconds}s");
         StateLog($"armed manual={_manualMode} warmup={_warmupSeconds}s sample={_sampleSeconds}s");
+        WrapEnginePhases();
+    }
+
+    // brackets unity's own player-loop subsystems so the bench summary attributes
+    // engine work (animation, physics, render prep) the script sections never see.
+    private static void WrapEnginePhases()
+    {
+        try
+        {
+            SectionProfiler.WrapUpdateGroupSubsystems();
+        }
+        catch
+        {
+            // a failed wrap only costs the section rows; never kill the bench.
+        }
     }
 
     // bench state rides the runtime log so a run reports with a single file.
@@ -237,7 +252,7 @@ public class FrameTimeProfiler : MonoBehaviour
 
         int gcColsNow = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
         SectionProfiler.SetEnabled(false);
-        string sectionReport = SectionProfiler.Dump(15) + "\n" + SectionProfiler.GapReport();
+        string sectionReport = SectionProfiler.Dump(30) + "\n" + SectionProfiler.GapReport();
         SectionProfiler.Reset();
         SectionProfiler.ResetAccounting();
 

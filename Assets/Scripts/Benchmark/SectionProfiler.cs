@@ -100,6 +100,72 @@ namespace Gallop.Live
                 stat.MaxMs = ms;
         }
 
+        // walks the live player loop and brackets every leaf subsystem by its
+        // own name across all phase groups; the whole loop is written back once.
+        public static void WrapUpdateGroupSubsystems()
+        {
+            var loop = UnityEngine.LowLevel.PlayerLoop.GetCurrentPlayerLoop();
+            for (int i = 0; i < loop.subSystemList.Length; i++)
+            {
+                var group = loop.subSystemList[i];
+                if (group.type == null)
+                    continue;
+
+                string prefix = "engine." + group.type.Name;
+                if (group.subSystemList != null && group.subSystemList.Length > 0)
+                {
+                    group.subSystemList = WrapSubsystemList(prefix, group.subSystemList);
+                }
+                else if (group.updateDelegate != null)
+                {
+                    group.updateDelegate = WrapUpdateDelegate(prefix, group.updateDelegate);
+                }
+                loop.subSystemList[i] = group;
+            }
+            UnityEngine.LowLevel.PlayerLoop.SetPlayerLoop(loop);
+        }
+
+        private static UnityEngine.LowLevel.PlayerLoopSystem[] WrapSubsystemList(
+            string prefix, UnityEngine.LowLevel.PlayerLoopSystem[] list)
+        {
+            if (list == null)
+                return list;
+            for (int i = 0; i < list.Length; i++)
+            {
+                var sub = list[i];
+                if (sub.type == null)
+                    continue;
+                string section = prefix + "." + sub.type.Name;
+                if (sub.subSystemList != null && sub.subSystemList.Length > 0)
+                {
+                    sub.subSystemList = WrapSubsystemList(section, sub.subSystemList);
+                }
+                else if (sub.updateDelegate != null)
+                {
+                    sub.updateDelegate = WrapUpdateDelegate(section, sub.updateDelegate);
+                }
+                list[i] = sub;
+            }
+            return list;
+        }
+
+        private static UnityEngine.LowLevel.PlayerLoopSystem.UpdateFunction WrapUpdateDelegate(
+            string name, UnityEngine.LowLevel.PlayerLoopSystem.UpdateFunction inner)
+        {
+            return delegate
+            {
+                // the frame clock brackets whole phases too, so the gap line stays honest.
+                if (!_enabled)
+                {
+                    inner?.Invoke();
+                    return;
+                }
+                Begin(name);
+                try { inner?.Invoke(); }
+                finally { End(); }
+            };
+        }
+
         // ranked report: sections sorted by total time, with per-call ms and
         // managed MB allocated across the window.
         public static string Dump(int maxRows)
