@@ -100,70 +100,74 @@ namespace Gallop.Live
                 stat.MaxMs = ms;
         }
 
-        // walks the live player loop and brackets every leaf subsystem by its
-        // own name across all phase groups; the whole loop is written back once.
+        // marker subsystem type inserted between the engine's own loop entries;
+        // native phases expose no managed delegate to wrap, so timing them
+        // needs gaps measured between subsystems instead.
+        private sealed class Probe
+        {
+        }
+
+        private static long _lastMarkerTicks;
+
+        // rewrites the live player loop so a timing marker sits before and
+        // after every engine subsystem; each measured segment lands in the
+        // stats under the name of the subsystem that ran right before it.
         public static void WrapUpdateGroupSubsystems()
         {
             var loop = UnityEngine.LowLevel.PlayerLoop.GetCurrentPlayerLoop();
             for (int i = 0; i < loop.subSystemList.Length; i++)
             {
                 var group = loop.subSystemList[i];
-                if (group.type == null)
+                if (group.subSystemList == null || group.subSystemList.Length == 0)
                     continue;
 
-                string prefix = "engine." + group.type.Name;
-                if (group.subSystemList != null && group.subSystemList.Length > 0)
+                string groupName = group.type != null ? group.type.Name : ("Group" + i);
+                var oldList = group.subSystemList;
+                var newList = new UnityEngine.LowLevel.PlayerLoopSystem[oldList.Length * 2 + 1];
+                int idx = 0;
+                newList[idx++] = MakeMarker("engine." + groupName + ".pre");
+                for (int j = 0; j < oldList.Length; j++)
                 {
-                    group.subSystemList = WrapSubsystemList(prefix, group.subSystemList);
+                    newList[idx++] = oldList[j];
+                    string subName = oldList[j].type != null ? oldList[j].type.Name : ("Sub" + j);
+                    newList[idx++] = MakeMarker("engine." + groupName + "." + subName);
                 }
-                else if (group.updateDelegate != null)
-                {
-                    group.updateDelegate = WrapUpdateDelegate(prefix, group.updateDelegate);
-                }
+                group.subSystemList = newList;
                 loop.subSystemList[i] = group;
             }
             UnityEngine.LowLevel.PlayerLoop.SetPlayerLoop(loop);
         }
 
-        private static UnityEngine.LowLevel.PlayerLoopSystem[] WrapSubsystemList(
-            string prefix, UnityEngine.LowLevel.PlayerLoopSystem[] list)
+        private static UnityEngine.LowLevel.PlayerLoopSystem MakeMarker(string section)
         {
-            if (list == null)
-                return list;
-            for (int i = 0; i < list.Length; i++)
+            return new UnityEngine.LowLevel.PlayerLoopSystem
             {
-                var sub = list[i];
-                if (sub.type == null)
-                    continue;
-                string section = prefix + "." + sub.type.Name;
-                if (sub.subSystemList != null && sub.subSystemList.Length > 0)
-                {
-                    sub.subSystemList = WrapSubsystemList(section, sub.subSystemList);
-                }
-                else if (sub.updateDelegate != null)
-                {
-                    sub.updateDelegate = WrapUpdateDelegate(section, sub.updateDelegate);
-                }
-                list[i] = sub;
-            }
-            return list;
+                type = typeof(Probe),
+                updateDelegate = () => Marker(section),
+            };
         }
 
-        private static UnityEngine.LowLevel.PlayerLoopSystem.UpdateFunction WrapUpdateDelegate(
-            string name, UnityEngine.LowLevel.PlayerLoopSystem.UpdateFunction inner)
+        private static void Marker(string section)
         {
-            return delegate
+            long now = Stopwatch.GetTimestamp();
+            double ms = (now - _lastMarkerTicks) * 1000.0 / Stopwatch.Frequency;
+            _lastMarkerTicks = now;
+            if (!_enabled)
+                return;
+            AddSegment(section, ms);
+        }
+
+        private static void AddSegment(string name, double ms)
+        {
+            if (!_stats.TryGetValue(name, out Stat stat))
             {
-                // the frame clock brackets whole phases too, so the gap line stays honest.
-                if (!_enabled)
-                {
-                    inner?.Invoke();
-                    return;
-                }
-                Begin(name);
-                try { inner?.Invoke(); }
-                finally { End(); }
-            };
+                stat = new Stat();
+                _stats[name] = stat;
+            }
+            stat.TotalMs += ms;
+            stat.Calls++;
+            if (ms > stat.MaxMs)
+                stat.MaxMs = ms;
         }
 
         // ranked report: sections sorted by total time, with per-call ms and
