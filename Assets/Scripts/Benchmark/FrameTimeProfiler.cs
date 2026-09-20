@@ -101,6 +101,34 @@ public class FrameTimeProfiler : MonoBehaviour
         }
     }
 
+    // logs every enabled MonoBehaviour in the scene grouped by type once per window
+    // so a slow frame can be traced to the scripts that actually run every frame.
+    private static void LogBehaviourCensus()
+    {
+        try
+        {
+            var all = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>(true);
+            var counts = new System.Collections.Generic.Dictionary<string, int>();
+            foreach (var b in all)
+            {
+                if (b == null || !b.gameObject.activeInHierarchy)
+                    continue;
+                string key = b.GetType().FullName;
+                counts.TryGetValue(key, out int n);
+                counts[key] = n + 1;
+            }
+            Gallop.Live.Director.FileLog($"[bench] behaviour census: types={counts.Count} instances={all.Length}");
+            var rows = new System.Collections.Generic.List<string>(counts.Keys);
+            rows.Sort();
+            foreach (var key in rows)
+                Gallop.Live.Director.FileLog($"[bench] behaviour {key} x{counts[key]}");
+        }
+        catch
+        {
+            // the census is diagnostics; never let it kill the bench.
+        }
+    }
+
     // bench state rides the runtime log so a run reports with a single file.
     private static void StateLog(string message)
     {
@@ -167,6 +195,7 @@ public class FrameTimeProfiler : MonoBehaviour
         {
             _sampling = true;
             StateLog($"sampling open at t={_clock:F0}s");
+            LogBehaviourCensus();
         }
 
         if (_clock >= _warmupSeconds + _sampleSeconds)
