@@ -25,6 +25,39 @@ namespace Gallop.Live
         private static readonly Stack<(string name, long startTicks, long startAlloc)> _stack = new();
         private static bool _enabled;
 
+        // whole-frame clock so the summary can report attributed vs total frame
+        // time; the gap names the cost of everything not inside a section.
+        private static double _frameTotalMs;
+        private static int _frameCount;
+
+        public static void AccountFrame(double frameMs)
+        {
+            _frameTotalMs += frameMs;
+            _frameCount++;
+        }
+
+        public static string GapReport()
+        {
+            if (_frameCount == 0)
+                return "";
+            double attributed = 0;
+            foreach (var kv in _stats)
+            {
+                // nested sections overlap; top-level sum only would need depth
+                // tracking, so cap the gap at 0 when attribution exceeds reality.
+                attributed += kv.Value.TotalMs;
+            }
+            double total = _frameTotalMs;
+            double gap = total - attributed;
+            return $"attribution: frame_total_ms={(total / _frameCount):F1} attributed_ms={(attributed / _frameCount):F1} unattributed_ms={(gap > 0 ? gap : 0) / _frameCount:F1} frames={_frameCount}";
+        }
+
+        public static void ResetAccounting()
+        {
+            _frameTotalMs = 0;
+            _frameCount = 0;
+        }
+
         // gate controlled by the bench window; sampling off costs one bool check.
         public static void SetEnabled(bool value)
         {

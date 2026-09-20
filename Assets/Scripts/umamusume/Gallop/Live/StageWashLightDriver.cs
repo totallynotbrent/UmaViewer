@@ -36,6 +36,19 @@ namespace Gallop.Live
 
         private void LateUpdate()
         {
+            Gallop.Live.SectionProfiler.Begin("stage.washlight");
+            try
+            {
+            LateUpdateInner();
+            }
+            finally
+            {
+            Gallop.Live.SectionProfiler.End();
+            }
+        }
+
+        private void LateUpdateInner()
+        {
             if (_ctl == null || _stage == null)
                 BindIfPossible();
 

@@ -131,6 +131,19 @@ namespace Gallop.Live.Cyalume
 
         private void Update()
         {
+            Gallop.Live.SectionProfiler.Begin("cyalume.update");
+            try
+            {
+            UpdateInner();
+            }
+            finally
+            {
+            Gallop.Live.SectionProfiler.End();
+            }
+        }
+
+        private void UpdateInner()
+        {
             TryBindGroupTimeline();
 
             if (!_isEnabledCyalume || !_initializedObjects || !_isInitialized)

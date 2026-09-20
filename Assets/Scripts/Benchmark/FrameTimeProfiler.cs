@@ -167,6 +167,7 @@ public class FrameTimeProfiler : MonoBehaviour
         _gcLastTotalMemory = gcNow;
 
         _frameTimes.Add(Time.unscaledDeltaTime * 1000f);
+        SectionProfiler.AccountFrame(Time.unscaledDeltaTime * 1000f);
         CaptureFrameTiming();
         SectionProfiler.SetEnabled(true);
     }
@@ -236,8 +237,9 @@ public class FrameTimeProfiler : MonoBehaviour
 
         int gcColsNow = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
         SectionProfiler.SetEnabled(false);
-        string sectionReport = SectionProfiler.Dump(15);
+        string sectionReport = SectionProfiler.Dump(15) + "\n" + SectionProfiler.GapReport();
         SectionProfiler.Reset();
+        SectionProfiler.ResetAccounting();
 
         // note: per-thread and gpu timings are not available here; the FrameTiming
         // manager module is not compiled into this project's player build.
