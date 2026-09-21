@@ -20,6 +20,7 @@ public class FrameTimeProfiler : MonoBehaviour
     private static float _sampleSeconds = 30f;
     private static bool _manualMode;
 
+        private static string[] _ablateTypes = new string[0];
     // manual-mode state
     private bool _liveWasPlaying;
 
@@ -40,6 +41,7 @@ public class FrameTimeProfiler : MonoBehaviour
             else if (args[i] == "--bench-manual") { _enabled = true; _manualMode = true; }
             else if (args[i] == "--bench-warmup" && i + 1 < args.Length) float.TryParse(args[i + 1], out _warmupSeconds);
             else if (args[i] == "--bench-seconds" && i + 1 < args.Length) float.TryParse(args[i + 1], out _sampleSeconds);
+            else if (args[i] == "--bench-ablate" && i + 1 < args.Length) _ablateTypes = args[i + 1].Split(',');
         }
     }
 
@@ -98,6 +100,41 @@ public class FrameTimeProfiler : MonoBehaviour
         catch
         {
             // a failed wrap only costs the section rows; never kill the bench.
+        }
+    }
+
+    // disables the behaviour types named by --bench-ablate so a run can measure what a
+    // suspect system actually costs by comparing against the un-ablated baseline.
+    private static void ApplyAblations()
+    {
+        if (_ablateTypes.Length == 0)
+            return;
+        try
+        {
+            foreach (var name in _ablateTypes)
+            {
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+                int disabled = 0;
+                var all = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>(true);
+                foreach (var b in all)
+                {
+                    if (b == null)
+                        continue;
+                    var t = b.GetType();
+                    if (t.Name == name || t.FullName == name)
+                    {
+                        b.enabled = false;
+                        disabled++;
+                    }
+                }
+                StateLog($"ablated {name} x{disabled}");
+            }
+            StateLog("ablation active; compare this run against the un-ablated baseline");
+        }
+        catch (Exception ex)
+        {
+            StateLog($"ablation failed: {ex.Message}");
         }
     }
 
@@ -196,6 +233,7 @@ public class FrameTimeProfiler : MonoBehaviour
             _sampling = true;
             StateLog($"sampling open at t={_clock:F0}s");
             LogBehaviourCensus();
+            ApplyAblations();
         }
 
         if (_clock >= _warmupSeconds + _sampleSeconds)
