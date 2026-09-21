@@ -33,6 +33,10 @@ public class HandleManager : MonoBehaviour
 
     private void Update()
     {
+        // pose handles only exist in pose mode; an empty list skips the whole pass.
+        if (AllHandles.Count == 0)
+            return;
+
         var camera = Camera.main;
         var poseModeOn = UmaViewerUI.Instance.PoseManager.PoseModeOn;
 

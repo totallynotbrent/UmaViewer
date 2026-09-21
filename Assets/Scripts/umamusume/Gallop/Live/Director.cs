@@ -650,7 +650,9 @@ namespace Gallop.Live
             SectionProfiler.End();
             if (!_soloMode)
             {
+                SectionProfiler.Begin("audio.parts");
                 UmaViewerAudio.AlterUpdate(_liveCurrentTime, partInfo, liveVocal, sliderControl.is_Outed);
+                SectionProfiler.End();
             }
         }
 
@@ -785,12 +787,14 @@ namespace Gallop.Live
                     }
                 }
 
+                SectionProfiler.Begin("director.camera");
                 UpdateMainCamera();
 
                 // 时间轴和主相机都更新完后再同步 Laser Renderer/朝向。
                 // 这样既不会读取上一帧 LaserUpdateInfo，也不会读取上一帧相机姿态。
                 if (_stageController != null)
                     _stageController.AlterUpdateLaserControllers();
+                SectionProfiler.End();
             }
         }
 

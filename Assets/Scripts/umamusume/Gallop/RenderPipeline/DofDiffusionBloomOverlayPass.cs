@@ -10,9 +10,4 @@ public class DofDiffusionBloomOverlayPass : MonoBehaviour
         
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
     }
-}
