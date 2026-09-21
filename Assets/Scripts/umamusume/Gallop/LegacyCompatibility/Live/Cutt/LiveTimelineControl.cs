@@ -327,13 +327,6 @@ namespace Gallop.Live.Cutt
 
         public void AlterLateUpdate()
         {
-            SectionProfiler.Begin("timeline.lateupdate");
-            AlterLateUpdateInner();
-            SectionProfiler.End();
-        }
-
-        private void AlterLateUpdateInner()
-        {
             LiveTimelineWorkSheet workSheet = data.worksheetList[0];
             _isNowAlterUpdate = true;
             Vector3 outLookAt = Vector3.zero;

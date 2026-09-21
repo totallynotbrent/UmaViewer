@@ -85,6 +85,7 @@ namespace Gallop.Live.Cutt
         public event BgColor2UpdateInfoDelegate OnUpdateBgColor2;
         public event PostFilmUpdateInfoDelegate OnUpdatePostFilm;
         public event Action<float> OnUpdateStageGrade;
+        public event System.Action<float> OnUpdateExposure;
         public event Action<float, Color> OnUpdateVolumeLight;
         public event Action<float> OnUpdateChromaticAberration;
         public event System.Action<LiveTimelineAudienceData, Vector3, Quaternion, Vector3, int, float> OnUpdateAudience;
@@ -441,6 +442,13 @@ namespace Gallop.Live.Cutt
             if (data == null || data.worksheetList == null || data.worksheetList.Count == 0)
                 return;
 
+            Gallop.Live.SectionProfiler.Begin("timeline.lateupdate");
+            AlterLateUpdateInner();
+            Gallop.Live.SectionProfiler.End();
+        }
+
+        private void AlterLateUpdateInner()
+        {
             LiveTimelineWorkSheet camSheet = data.worksheetList[0];
 
             _isNowAlterUpdate = true;
@@ -480,15 +488,17 @@ namespace Gallop.Live.Cutt
                 var ws = data.worksheetList[w];
                 if (ws == null) continue;
 
+                Gallop.Live.SectionProfiler.Begin("timeline.lighttracks");
+                AlterUpdate_BlinkLight(ws, _currentFrame);
+                AlterUpdate_WashLight(ws, _currentFrame);
+                AlterUpdate_Laser(ws, _currentFrame);
+                AlterUpdate_UVScrollLight(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
                 AlterUpdate_TransformControl(ws, _currentFrame);
                 AlterUpdate_ObjectControl(ws, _currentFrame);
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
-                AlterUpdate_BlinkLight(ws, _currentFrame);
-                AlterUpdate_WashLight(ws, _currentFrame);
-                AlterUpdate_Laser(ws, _currentFrame);
-                AlterUpdate_UVScrollLight(ws, _currentFrame);
             }
 
             //BgColor2属于全局舞台颜色控制，只使用主 worksheet。
@@ -2353,12 +2363,19 @@ namespace Gallop.Live.Cutt
             if (handler == null || sheet == null)
                 return;
 
-            if (sheet.exposureKeys != null && sheet.exposureKeys.Count > 0)
+            if (sheet.ExposureKeys != null && sheet.ExposureKeys.Count > 0)
             {
-                FindTimelineKey(out var exCur, out _, sheet.exposureKeys, currentFrame);
-                if (exCur is LiveTimelineKeyColorCorrectionData exKey && exKey.enable)
-                    handler(exKey.saturation);
-                return;
+                FindTimelineKey(out var exCur, out var exNext, sheet.ExposureKeys, currentFrame);
+                if (exCur is LiveTimelineKeyExposureData exKey && exKey.IsEnable)
+                {
+                    float gain = exKey.Gain;
+                    if (exNext is LiveTimelineKeyExposureData exNextKey && exNextKey.interpolateType != 0)
+                    {
+                        float t = CalculateInterpolationValue(exKey, exNextKey, currentFrame);
+                        gain = LerpWithoutClamp(exKey.Gain, exNextKey.Gain, t);
+                    }
+                    OnUpdateExposure?.Invoke(gain);
+                }
             }
 
             if (sheet.colorCorrectionDataLists != null)
@@ -2697,9 +2714,9 @@ namespace Gallop.Live.Cutt
         private void AlterUpdate_WashLight(LiveTimelineWorkSheet workSheet, float currentFrame)
         {
             if (OnUpdateWashLight == null) return;
-            if (workSheet == null || workSheet.washLightList == null) return;
+            if (workSheet == null || workSheet.WashLightList == null) return;
 
-            var list = workSheet.washLightList;
+            var list = workSheet.WashLightList;
             if (list.Count <= 0) return;
 
             for (int i = 0; i < list.Count; i++)

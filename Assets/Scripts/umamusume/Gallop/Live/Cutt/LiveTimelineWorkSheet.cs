@@ -440,8 +440,8 @@ namespace Gallop.Live.Cutt
         public LiveTimelineKeyPostFilmDataList postFilmKeys;
 
         [SerializeField] public List<LiveTimelineColorCorrectionData> colorCorrectionDataLists;
-        [SerializeField] public LiveTimelineKeyColorCorrectionDataList exposureKeys;
-        [SerializeField] public LiveTimelineKeyColorCorrectionDataList toneCurveKeys;
+        [SerializeField] public LiveTimelineKeyExposureDataList ExposureKeys;
+        [SerializeField] public LiveTimelineKeyToneCurveDataList ToneCurveKeys;
         [SerializeField] public List<LiveTimelineVolumeLightData> volumeLightKeys;
         [SerializeField] public List<LiveTimelineChromaticAberrationData> chromaticAberrationList;
         [SerializeField] public List<LiveTimelineAudienceData> audienceList;
@@ -465,7 +465,7 @@ namespace Gallop.Live.Cutt
         [SerializeField] public List<LiveTimelineBgColor1Data> bgColor1List;
         [SerializeField] public List<LiveTimelineBgColor2Data> bgColor2List;
         [SerializeField] public List<LiveTimelineBlinkLightData> blinkLightList;
-        [SerializeField] public List<LiveTimelineWashLightData> washLightList;
+        [SerializeField] public List<LiveTimelineWashLightData> WashLightList;
         [SerializeField] public List<LiveTimelineMonitorControlData> monitorControlList;
         [SerializeField] public List<LiveTimelineMonitorCameraPositionData> monitorCameraPosKeys;
         [SerializeField] public List<LiveTimelineMonitorCameraLookAtData> monitorCameraLookAtKeys;

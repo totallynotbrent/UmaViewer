@@ -72,6 +72,7 @@ namespace Gallop
         // float.min means no track drove it this frame.
         private float _timelineStageSaturation = float.MinValue;
 
+        private float _timelineExposure = float.MinValue;
         // sun-shaft tint from the volumeLight track; tints the bloom color so
         // the glow reads in the authored shaft hue.
         private Color? _volumeLightTint;
@@ -101,6 +102,12 @@ namespace Gallop
         public void SetTimelineStageSaturation(float saturation)
         {
             _timelineStageSaturation = saturation;
+        }
+
+        // authored exposure gain (stops) from the exposure track; applied in ApplyGrade.
+        public void SetTimelineExposure(float gain)
+        {
+            _timelineExposure = gain;
         }
 
         public void SetTimelineFocus(float distance, float size, bool onChara)
@@ -449,7 +456,7 @@ namespace Gallop
             // exposes a tuning slider, and the renderer keeps its chosen value here.
             if (_colorAdjust != null)
             {
-                float exp = 0f;
+                float exp = _timelineExposure != float.MinValue ? _timelineExposure : 0f;
                 _colorAdjust.postExposure.overrideState = true;
                 _colorAdjust.postExposure.value = exp;
                 // subtle lift to hit the dark concert grade without crushing the mids.

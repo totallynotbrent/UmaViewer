@@ -106,6 +106,38 @@ namespace Gallop.Live
         private Transform _mainCameraTransform;
     private MaterialPropertyBlock _cachedGlobalLightMPB, _cachedBgColorMPB; // ponytail: lazy init in Awake/Initialize to avoid ctor not allowed
 
+        // last-applied global-light signature; a repeat frame skips the renderer walk.
+        private GlobalLightUpdateInfo _globalLightLast;
+        private bool _globalLightLastValid;
+
+        // last-applied bg-color state so identical keys skip the renderer walk.
+        private BgColor1UpdateInfo _bgColor1Last;
+        private int _bgColor1LastFlags;
+        private bool _bgColor1LastValid;
+
+        // true when the light state moved since the last applied frame.
+        private bool _globalLightDirty(ref GlobalLightUpdateInfo u)
+        {
+            if (!_globalLightLastValid)
+                return true;
+            return u.flags != _globalLightLast.flags ||
+                   u.lightRotation != _globalLightLast.lightRotation ||
+                   u.rimColor != _globalLightLast.rimColor ||
+                   u.rimColor2 != _globalLightLast.rimColor2 ||
+                   u.rimStep != _globalLightLast.rimStep ||
+                   u.rimFeather != _globalLightLast.rimFeather ||
+                   u.rimSpecRate != _globalLightLast.rimSpecRate ||
+                   u.rimStep2 != _globalLightLast.rimStep2 ||
+                   u.rimFeather2 != _globalLightLast.rimFeather2 ||
+                   u.rimSpecRate2 != _globalLightLast.rimSpecRate2 ||
+                   u.globalRimShadowRate != _globalLightLast.globalRimShadowRate ||
+                   u.globalRimShadowRate2 != _globalLightLast.globalRimShadowRate2 ||
+                   u.RimHorizonOffset != _globalLightLast.RimHorizonOffset ||
+                   u.RimVerticalOffset != _globalLightLast.RimVerticalOffset ||
+                   u.RimHorizonOffset2 != _globalLightLast.RimHorizonOffset2 ||
+                   u.RimVerticalOffset2 != _globalLightLast.RimVerticalOffset2;
+        }
+
         // ponytail: respects isUseHQParticle flag from LiveTimelineData; stdlib already has particlePrefabNames, use flag to skip HQ load
         public bool ShouldUseHQParticle => _liveTimelineControl?.data?.isUseHQParticle ?? false;
         private static readonly Dictionary<string, UmaDatabaseEntry> _laserBundleCache
@@ -397,6 +429,12 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdateGlobalLight += delegate (ref GlobalLightUpdateInfo updateInfo)
             {
+                // the locator/renderer property walk only runs when the light moved.
+                if (!_globalLightDirty(ref updateInfo))
+                    return;
+                _globalLightLast = updateInfo;
+                _globalLightLastValid = true;
+
                 var tmpPos = -(updateInfo.lightRotation * Vector3.forward).normalized;
                 if (_cachedGlobalLightMPB == null) _cachedGlobalLightMPB = new MaterialPropertyBlock();
                 // ponytail: cache MPB - allocates once per frame, not per locator; ceiling: per-renderer MPB if you need per-uma rim offset
@@ -438,6 +476,19 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdateBgColor1 += delegate (ref BgColor1UpdateInfo updateInfo)
             {
+                // most bg-color keys repeat the same color; skip identical applications.
+                if (_bgColor1LastValid &&
+                    updateInfo.flags == _bgColor1LastFlags &&
+                    updateInfo.color == _bgColor1Last.color &&
+                    updateInfo.toonDarkColor == _bgColor1Last.toonDarkColor &&
+                    updateInfo.toonBrightColor == _bgColor1Last.toonBrightColor &&
+                    updateInfo.outlineColor == _bgColor1Last.outlineColor &&
+                    updateInfo.Saturation == _bgColor1Last.Saturation)
+                    return;
+                _bgColor1Last = updateInfo;
+                _bgColor1LastFlags = updateInfo.flags;
+                _bgColor1LastValid = true;
+
                 foreach (var locator in _liveTimelineControl.liveCharactorLocators)
                 {
                     var EFlags = (LiveCharaPositionFlag)updateInfo.flags;
@@ -489,6 +540,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateSpotlight3d += OnUpdateSpotlight3d;
             _liveTimelineControl.OnUpdatePostFilm += OnUpdatePostFilm;
             _liveTimelineControl.OnUpdateStageGrade += OnUpdateStageGrade;
+            _liveTimelineControl.OnUpdateExposure += OnUpdateExposureGain;
             _liveTimelineControl.OnUpdateVolumeLight += OnUpdateVolumeLight;
             _liveTimelineControl.OnUpdateChromaticAberration += OnUpdateChromaticAberration;
 
@@ -1322,6 +1374,16 @@ namespace Gallop.Live
             imageEffect.SetTimelineStageSaturation(remapped);
         }
 
+        // authored exposure gain (stops) straight into the color adjust.
+        private void OnUpdateExposureGain(float gain)
+        {
+            GallopImageEffect imageEffect = GetActivePostEffect();
+            if (imageEffect == null)
+                return;
+
+            imageEffect.SetTimelineExposure(Mathf.Clamp(gain, -3f, 3f));
+        }
+
         // the game composites up to three PostFilm layers; the strongest active
         // layer drives the volume tint this frame.
         private void OnUpdatePostFilm(
@@ -1420,6 +1482,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateSpotlight3d -= OnUpdateSpotlight3d;
             _liveTimelineControl.OnUpdatePostFilm -= OnUpdatePostFilm;
             _liveTimelineControl.OnUpdateStageGrade -= OnUpdateStageGrade;
+            _liveTimelineControl.OnUpdateExposure -= OnUpdateExposureGain;
             _liveTimelineControl.OnUpdateVolumeLight -= OnUpdateVolumeLight;
             _liveTimelineControl.OnUpdateChromaticAberration -= OnUpdateChromaticAberration;
         }
