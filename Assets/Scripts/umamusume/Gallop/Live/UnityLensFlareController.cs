@@ -1,18 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
+// marker component the stage bundles attach to their flare objects; it keeps no
+// per-frame methods so a few hundred instances never enter the behaviour lists.
 public class UnityLensFlareController : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
 }

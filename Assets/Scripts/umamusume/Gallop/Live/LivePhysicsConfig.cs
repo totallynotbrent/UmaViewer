@@ -37,6 +37,7 @@ namespace Gallop.Live
         private float _applyTimer;
         private bool _hasApplied;
         private int _lastControllerCount;
+        private float _scanTimer;
         
         // Singleton for global access
         public static LivePhysicsConfig Instance { get; private set; }
@@ -86,9 +87,15 @@ namespace Gallop.Live
                 return;
             }
             
-            // Auto-apply to new characters
+            // Auto-apply to new characters; the scan is far too heavy for every frame
+            // so it runs once a second and reuses the array between checks.
             if (_applyToNewCharacters && _hasApplied)
             {
+                _scanTimer += Time.deltaTime;
+                if (_scanTimer < 1f)
+                    return;
+                _scanTimer = 0f;
+
                 var currentControllers = FindObjectsOfType<CySpringController>();
                 if (currentControllers.Length != _lastControllerCount)
                 {

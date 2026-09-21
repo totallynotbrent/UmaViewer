@@ -174,14 +174,20 @@ public class DynamicBone : MonoBehaviour
 #else
             float dt = Time.deltaTime;
 #endif
+            Gallop.Live.SectionProfiler.Begin("dynbone.solve");
             UpdateDynamicBones(dt);
+            Gallop.Live.SectionProfiler.End();
         }
     }
 
     void PreUpdate()
     {
         if (m_Weight > 0 && !(m_DistantDisable && m_DistantDisabled))
+        {
+            Gallop.Live.SectionProfiler.Begin("dynbone.pre");
             InitTransforms();
+            Gallop.Live.SectionProfiler.End();
+        }
     }
 
     void CheckDistance()

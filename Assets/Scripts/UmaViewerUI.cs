@@ -188,9 +188,12 @@ public class UmaViewerUI : MonoBehaviour
         }
 
         var umaContainer = Builder.CurrentUMAContainer;
-        if (umaContainer != null && umaContainer.OverrideController != null)
+        if (umaContainer != null && umaContainer.OverrideController != null && AnimationSettings != null)
         {
-            AnimationSettings.UpdateAnimationInfo(umaContainer);
+            // the panel is deactivated outside the animation screen, so skip its
+            // per-frame text and slider writes whenever it is not on screen.
+            if (AnimationSettings.gameObject.activeInHierarchy)
+                AnimationSettings.UpdateAnimationInfo(umaContainer);
         }
     }
 
