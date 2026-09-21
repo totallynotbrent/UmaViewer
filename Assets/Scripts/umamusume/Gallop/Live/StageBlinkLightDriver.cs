@@ -56,6 +56,7 @@ namespace Gallop.Live
         private static readonly int ColorPowerMultiplyId = Shader.PropertyToID("_ColorPowerMultiply");
         private static readonly int AppTimeId = Shader.PropertyToID("_AppTime");
         private static readonly int BlinkLightColorId = Shader.PropertyToID("_BlinkLightColor");
+        private static readonly int UseNormalCorrectionId = Shader.PropertyToID("_UseNormalCorrection");
         private Func<float> _liveNowGetter;
 
         private float LiveNow()
@@ -223,6 +224,7 @@ namespace Gallop.Live
 
             public bool blendConfigured;
             public int blendConfiguredMode;
+            public int blendAssertFrame;
 
             public Material[] cachedSharedMaterialsRef;
             public int cachedSharedMaterialsLen;
@@ -1355,24 +1357,24 @@ namespace Gallop.Live
 
                     if (e.isUvAlphaMask)
                     {
-                        _mpb.SetColor("_MulColor0", Color.black);
-                        _mpb.SetColor("_MulColor1", Color.black);
-                        _mpb.SetFloat("_ColorPower", 0f);
-                        _mpb.SetFloat("_ColorPowerMultiply", emissionBoost);
-                        _mpb.SetFloat("_AppTime", LiveNow());
+                        _mpb.SetColor(MulColor0Id, Color.black);
+                        _mpb.SetColor(MulColor1Id, Color.black);
+                        _mpb.SetFloat(ColorPowerId, 0f);
+                        _mpb.SetFloat(ColorPowerMultiplyId, emissionBoost);
+                        _mpb.SetFloat(AppTimeId, LiveNow());
                     }
                     else if (e.isLightAdd1)
                     {
-                        _mpb.SetColor("_MulColor0", Color.black);
-                        _mpb.SetColor("_MulColor1", Color.black);
-                        _mpb.SetFloat("_ColorPower", 0f);
-                        if (e.hasColorPowerMultiply) _mpb.SetFloat("_ColorPowerMultiply", emissionBoost);
+                        _mpb.SetColor(MulColor0Id, Color.black);
+                        _mpb.SetColor(MulColor1Id, Color.black);
+                        _mpb.SetFloat(ColorPowerId, 0f);
+                        if (e.hasColorPowerMultiply) _mpb.SetFloat(ColorPowerMultiplyId, emissionBoost);
                     }
                     else if (e.isBlinkSimple)
                     {
-                        _mpb.SetColor("_BlinkLightColor", Color.black);
-                        _mpb.SetFloat("_ColorPower", 0f);
-                        _mpb.SetFloat("_UseNormalCorrection", blinkSimpleUseNormalCorrection);
+                        _mpb.SetColor(BlinkLightColorId, Color.black);
+                        _mpb.SetFloat(ColorPowerId, 0f);
+                        _mpb.SetFloat(UseNormalCorrectionId, blinkSimpleUseNormalCorrection);
                     }
 
                     r.SetPropertyBlock(_mpb);
@@ -1540,6 +1542,7 @@ namespace Gallop.Live
             if (touched)
             {
                 e.blendConfigured = true;
+                e.blendAssertFrame = Time.frameCount;
                 e.blendConfiguredMode = modeId;
             }
         }
