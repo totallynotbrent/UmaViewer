@@ -106,38 +106,6 @@ namespace Gallop.Live
         private Transform _mainCameraTransform;
     private MaterialPropertyBlock _cachedGlobalLightMPB, _cachedBgColorMPB; // ponytail: lazy init in Awake/Initialize to avoid ctor not allowed
 
-        // last-applied global-light signature; a repeat frame skips the renderer walk.
-        private GlobalLightUpdateInfo _globalLightLast;
-        private bool _globalLightLastValid;
-
-        // last-applied bg-color state so identical keys skip the renderer walk.
-        private BgColor1UpdateInfo _bgColor1Last;
-        private int _bgColor1LastFlags;
-        private bool _bgColor1LastValid;
-
-        // true when the light state moved since the last applied frame.
-        private bool _globalLightDirty(ref GlobalLightUpdateInfo u)
-        {
-            if (!_globalLightLastValid)
-                return true;
-            return u.flags != _globalLightLast.flags ||
-                   u.lightRotation != _globalLightLast.lightRotation ||
-                   u.rimColor != _globalLightLast.rimColor ||
-                   u.rimColor2 != _globalLightLast.rimColor2 ||
-                   u.rimStep != _globalLightLast.rimStep ||
-                   u.rimFeather != _globalLightLast.rimFeather ||
-                   u.rimSpecRate != _globalLightLast.rimSpecRate ||
-                   u.rimStep2 != _globalLightLast.rimStep2 ||
-                   u.rimFeather2 != _globalLightLast.rimFeather2 ||
-                   u.rimSpecRate2 != _globalLightLast.rimSpecRate2 ||
-                   u.globalRimShadowRate != _globalLightLast.globalRimShadowRate ||
-                   u.globalRimShadowRate2 != _globalLightLast.globalRimShadowRate2 ||
-                   u.RimHorizonOffset != _globalLightLast.RimHorizonOffset ||
-                   u.RimVerticalOffset != _globalLightLast.RimVerticalOffset ||
-                   u.RimHorizonOffset2 != _globalLightLast.RimHorizonOffset2 ||
-                   u.RimVerticalOffset2 != _globalLightLast.RimVerticalOffset2;
-        }
-
         // ponytail: respects isUseHQParticle flag from LiveTimelineData; stdlib already has particlePrefabNames, use flag to skip HQ load
         public bool ShouldUseHQParticle => _liveTimelineControl?.data?.isUseHQParticle ?? false;
         private static readonly Dictionary<string, UmaDatabaseEntry> _laserBundleCache
@@ -429,12 +397,8 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdateGlobalLight += delegate (ref GlobalLightUpdateInfo updateInfo)
             {
-                // the locator/renderer property walk only runs when the light moved.
-                if (!_globalLightDirty(ref updateInfo))
-                    return;
-                _globalLightLast = updateInfo;
-                _globalLightLastValid = true;
-
+                // the game re-applies the light state every frame so any competing
+                // writer (blink driver, wash, prefabs) loses to the authored track.
                 var tmpPos = -(updateInfo.lightRotation * Vector3.forward).normalized;
                 if (_cachedGlobalLightMPB == null) _cachedGlobalLightMPB = new MaterialPropertyBlock();
                 // ponytail: cache MPB - allocates once per frame, not per locator; ceiling: per-renderer MPB if you need per-uma rim offset
@@ -476,19 +440,8 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdateBgColor1 += delegate (ref BgColor1UpdateInfo updateInfo)
             {
-                // most bg-color keys repeat the same color; skip identical applications.
-                if (_bgColor1LastValid &&
-                    updateInfo.flags == _bgColor1LastFlags &&
-                    updateInfo.color == _bgColor1Last.color &&
-                    updateInfo.toonDarkColor == _bgColor1Last.toonDarkColor &&
-                    updateInfo.toonBrightColor == _bgColor1Last.toonBrightColor &&
-                    updateInfo.outlineColor == _bgColor1Last.outlineColor &&
-                    updateInfo.Saturation == _bgColor1Last.Saturation)
-                    return;
-                _bgColor1Last = updateInfo;
-                _bgColor1LastFlags = updateInfo.flags;
-                _bgColor1LastValid = true;
-
+                // bg-color keys are the authored authority for character tint, so the
+                // walk re-applies every frame exactly like the game does.
                 foreach (var locator in _liveTimelineControl.liveCharactorLocators)
                 {
                     var EFlags = (LiveCharaPositionFlag)updateInfo.flags;
@@ -1385,8 +1338,11 @@ namespace Gallop.Live
             imageEffect.SetTimelineExposure(Mathf.Clamp(gain, -3f, 3f));
         }
 
-        // authored global fog drives the built-in fog each frame; a disabled track
-        // (fogMode 2 with black color reads as the game's off state) clears it.
+        private bool _globalFogLogged;
+
+        // authored global fog mapped onto the engine fog; the game applies its fog as a
+        // camera effect but the authored values (mode/color/density/range) are honored
+        // as-is, and the first application logs so a washed-out frame is traceable.
         private void OnUpdateGlobalFog(ref GlobalFogUpdateInfo info)
         {
             bool on = info.isDistance || info.isHeight;
@@ -1394,13 +1350,17 @@ namespace Gallop.Live
             if (!on)
                 return;
 
-            RenderSettings.fogMode = info.fogMode == 1
-                ? FogMode.Exponential
-                : FogMode.ExponentialSquared;
+            RenderSettings.fogMode = (FogMode)Mathf.Clamp(info.fogMode, 1, 3);
             RenderSettings.fogColor = info.color;
             RenderSettings.fogDensity = Mathf.Max(0.0001f, info.expDensity);
             RenderSettings.fogStartDistance = info.start;
             RenderSettings.fogEndDistance = info.end;
+
+            if (!_globalFogLogged)
+            {
+                _globalFogLogged = true;
+                FileLog($"[fog] authored fog active: mode={info.fogMode} color={info.color} density={info.expDensity:F4} range={info.start}-{info.end}");
+            }
         }
 
         // the game composites up to three PostFilm layers; the strongest active

@@ -1064,11 +1064,6 @@ public class UmaContainerCharacter : UmaContainer
         // 现在先不补，先修 FaceLight。
     }
 
-    // sims queued this frame wait for the last cloth container's late update,
-    // so all rigs simulate in parallel with the main thread instead of the
-    // main thread serially blocking on each rig's sim.
-    private static readonly List<UmaContainerCharacter> _clothPending = new List<UmaContainerCharacter>();
-
     private void AlterLateUpdateRuntime()
     {
         if (EnablePhysics && _cySpringLoaded && _cySpringController != null)
@@ -1076,10 +1071,10 @@ public class UmaContainerCharacter : UmaContainer
             // cap the step so low-fps frames don't feed an oversized dt into the cloth sim
             float dt = Mathf.Clamp(Time.deltaTime, 0f, 1f / 60f);
             Gallop.Live.SectionProfiler.Begin("cyspring.begin");
-            // threaded mode: the sim runs on the cloth worker thread; the main
-            // thread only gathers posture here and never waits per rig.
+            // the game's CySpringUpdater runs begin and end back to back per rig in
+            // LateUpdate, keeping the spring post-write interleaved with the other
+            // bone systems instead of all rigs resolving after them.
             _cySpringController.BeginSimulation(dt, true);
-            _clothPending.Add(this);
             Gallop.Live.SectionProfiler.End();
         }
     }
@@ -1089,7 +1084,7 @@ public class UmaContainerCharacter : UmaContainer
         if (EnablePhysics && _cySpringLoaded && _cySpringController != null)
         {
             Gallop.Live.SectionProfiler.Begin("cyspring.end");
-            DrainPendingClothSims();
+            _cySpringController.EndSimulation();
             Gallop.Live.SectionProfiler.End();
         }
 
@@ -1100,36 +1095,6 @@ public class UmaContainerCharacter : UmaContainer
         Gallop.Live.SectionProfiler.End();
     }
 
-    // the last cloth container to run this frame ends every queued sim at once:
-    // earlier sims finished under the main thread's other work, so the wait is
-    // only whatever tail is still running instead of one serial block per rig.
-    private static void DrainPendingClothSims()
-    {
-        int capable = 0;
-        var containers = Gallop.Live.Director.instance != null
-            ? Gallop.Live.Director.instance.CharaContainerScript
-            : null;
-        if (containers != null)
-        {
-            for (int i = 0; i < containers.Count; i++)
-            {
-                var c = containers[i];
-                if (c != null && c.EnablePhysics && c._cySpringLoaded && c._cySpringController != null)
-                    capable++;
-            }
-        }
-
-        if (_clothPending.Count < capable)
-            return;
-
-        for (int i = 0; i < _clothPending.Count; i++)
-        {
-            var c = _clothPending[i];
-            if (c != null && c._cySpringController != null)
-                c._cySpringController.EndSimulation();
-        }
-        _clothPending.Clear();
-    }
 
     private void InitFaceLightRuntime()
     {

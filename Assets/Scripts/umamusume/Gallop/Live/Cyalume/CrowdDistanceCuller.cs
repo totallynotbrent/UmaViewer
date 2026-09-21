@@ -15,7 +15,7 @@ namespace Gallop.Live.Cyalume
     public class CrowdDistanceCuller : MonoBehaviour
     {
         [SerializeField] private float cullDistance = 80f;
-        [SerializeField] private int frameInterval = 4;
+        [SerializeField] private int frameInterval = 1;
 
         private List<Renderer> crowdRenderers = new List<Renderer>(512);
         private Transform cameraTransform;

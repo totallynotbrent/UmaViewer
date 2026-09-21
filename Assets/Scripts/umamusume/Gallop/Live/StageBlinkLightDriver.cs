@@ -224,7 +224,6 @@ namespace Gallop.Live
 
             public bool blendConfigured;
             public int blendConfiguredMode;
-            public int blendAssertFrame;
 
             public Material[] cachedSharedMaterialsRef;
             public int cachedSharedMaterialsLen;
@@ -234,25 +233,9 @@ namespace Gallop.Live
             public bool renderOnState;
         }
 
-        private static StageBlinkLightDriver _activeInstance;
-
         private void Awake()
         {
-            // stages can carry the driver in their prefab while the controller adds
-            // another; only the first instance may run the per-frame apply pass.
-            if (_activeInstance != null && _activeInstance != this)
-            {
-                Destroy(this);
-                return;
-            }
-            _activeInstance = this;
             _mpb = new MaterialPropertyBlock();
-        }
-
-        private void OnDestroy()
-        {
-            if (_activeInstance == this)
-                _activeInstance = null;
         }
 
         private void OnEnable()
@@ -1473,13 +1456,8 @@ namespace Gallop.Live
 
             int modeId = (int)mode;
 
-            // the defensive rebuild below allocates a materials array per renderer per
-            // frame, so it re-asserts once a second instead of every frame; external
-            // stomps still get corrected within a second.
-            if (e.blendConfigured && e.blendConfiguredMode == modeId &&
-                Time.frameCount - e.blendAssertFrame < 60)
-                return;
-
+            // the game re-asserts the blend state every frame so external writers
+            // never win; keep that contract.
             var mats = r.materials;
             if (mats == null || mats.Length == 0)
                 return;
@@ -1559,7 +1537,6 @@ namespace Gallop.Live
             if (touched)
             {
                 e.blendConfigured = true;
-                e.blendAssertFrame = Time.frameCount;
                 e.blendConfiguredMode = modeId;
             }
         }

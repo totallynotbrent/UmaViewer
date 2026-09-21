@@ -56,7 +56,6 @@ namespace Gallop.Live
             new Dictionary<string, UVScrollLightController>(64);
 
         private int _lastRebuildFrame = -1000;
-        private readonly HashSet<string> _missingNames = new HashSet<string>();
         private readonly HashSet<string> _missingLogged =
             new HashSet<string>();
 
@@ -138,17 +137,14 @@ namespace Gallop.Live
                     out UVScrollLightController controller) ||
                 controller == null)
             {
-                // the full stage material scan reruns once per missing name; after
-                // that the name is logged and never rescanned again this live.
+                // the rebuild retries at most once a second so permanently missing
+                // names stay cheap while late-arriving controllers still bind.
                 if (rebuildCacheWhenTargetMissing &&
-                    !_missingNames.Contains(materialName) &&
                     Time.frameCount - _lastRebuildFrame >= 60)
                 {
                     _lastRebuildFrame = Time.frameCount;
                     RebuildCache();
                     _controllerMap.TryGetValue(materialName, out controller);
-                    if (controller == null)
-                        _missingNames.Add(materialName);
                 }
             }
 
