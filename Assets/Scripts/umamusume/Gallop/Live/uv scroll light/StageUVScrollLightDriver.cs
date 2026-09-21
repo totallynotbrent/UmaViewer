@@ -55,6 +55,7 @@ namespace Gallop.Live
         private readonly Dictionary<string, UVScrollLightController> _controllerMap =
             new Dictionary<string, UVScrollLightController>(64);
 
+        private int _lastRebuildFrame = -1000;
         private readonly HashSet<string> _missingLogged =
             new HashSet<string>();
 
@@ -136,8 +137,14 @@ namespace Gallop.Live
                     out UVScrollLightController controller) ||
                 controller == null)
             {
-                if (rebuildCacheWhenTargetMissing)
+                // the full stage material scan only reruns once a second per miss so a
+                // permanently unmatched name cannot rebuild every frame.
+                if (rebuildCacheWhenTargetMissing &&
+                    Time.frameCount - _lastRebuildFrame >= 60)
+                {
+                    _lastRebuildFrame = Time.frameCount;
                     RebuildCache();
+                }
 
                 _controllerMap.TryGetValue(materialName, out controller);
             }

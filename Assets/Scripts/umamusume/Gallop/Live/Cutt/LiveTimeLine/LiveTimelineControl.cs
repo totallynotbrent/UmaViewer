@@ -488,10 +488,16 @@ namespace Gallop.Live.Cutt
                 var ws = data.worksheetList[w];
                 if (ws == null) continue;
 
-                Gallop.Live.SectionProfiler.Begin("timeline.lighttracks");
+                Gallop.Live.SectionProfiler.Begin("light.blink");
                 AlterUpdate_BlinkLight(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("light.wash");
                 AlterUpdate_WashLight(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("light.laser");
                 AlterUpdate_Laser(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("light.uvscroll");
                 AlterUpdate_UVScrollLight(ws, _currentFrame);
                 Gallop.Live.SectionProfiler.End();
                 AlterUpdate_TransformControl(ws, _currentFrame);

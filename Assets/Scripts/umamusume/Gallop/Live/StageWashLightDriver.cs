@@ -17,6 +17,7 @@ namespace Gallop.Live
         private readonly Dictionary<int, WashLightController> _controllerMap =
             new Dictionary<int, WashLightController>(256);
 
+        private int _lastRebuildFrame = -1000;
         private readonly List<WashLightController> _controllers =
             new List<WashLightController>(256);
 
@@ -124,7 +125,13 @@ namespace Gallop.Live
 
             if (!_controllerMap.TryGetValue(updateInfo.NameHash, out WashLightController controller) || controller == null)
             {
-                RebuildCache();
+                // a full stage renderer scan per miss is far too heavy for every frame,
+                // so unmatched names retry the rebuild at most once a second.
+                if (Time.frameCount - _lastRebuildFrame >= 60)
+                {
+                    _lastRebuildFrame = Time.frameCount;
+                    RebuildCache();
+                }
                 _controllerMap.TryGetValue(updateInfo.NameHash, out controller);
             }
 
