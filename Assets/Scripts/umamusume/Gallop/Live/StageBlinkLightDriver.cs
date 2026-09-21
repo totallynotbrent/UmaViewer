@@ -1457,11 +1457,12 @@ namespace Gallop.Live
 
             int modeId = (int)mode;
 
-            // 不要再提前 return。
-            // 官方 Update 末尾每帧都会 TrySetLightBlendModeMaterialProperty。
-            // 你这里如果 cache return，材质被 timeline / prefab / 其他脚本改回 One/One 后就不会再修。
-            // if (e.blendConfigured && e.blendConfiguredMode == modeId)
-            //     return;
+            // the defensive rebuild below allocates a materials array per renderer per
+            // frame, so it re-asserts once a second instead of every frame; external
+            // stomps still get corrected within a second.
+            if (e.blendConfigured && e.blendConfiguredMode == modeId &&
+                Time.frameCount - e.blendAssertFrame < 60)
+                return;
 
             var mats = r.materials;
             if (mats == null || mats.Length == 0)
