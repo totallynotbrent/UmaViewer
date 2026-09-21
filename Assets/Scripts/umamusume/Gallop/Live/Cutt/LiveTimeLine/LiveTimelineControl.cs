@@ -86,6 +86,8 @@ namespace Gallop.Live.Cutt
         public event PostFilmUpdateInfoDelegate OnUpdatePostFilm;
         public event Action<float> OnUpdateStageGrade;
         public event System.Action<float> OnUpdateExposure;
+        public delegate void GlobalFogHandler(ref GlobalFogUpdateInfo info);
+        public event GlobalFogHandler OnUpdateGlobalFog;
         public event Action<float, Color> OnUpdateVolumeLight;
         public event Action<float> OnUpdateChromaticAberration;
         public event System.Action<LiveTimelineAudienceData, Vector3, Quaternion, Vector3, int, float> OnUpdateAudience;
@@ -509,6 +511,7 @@ namespace Gallop.Live.Cutt
 
             //BgColor2属于全局舞台颜色控制，只使用主 worksheet。
             //不遍历所有 worksheet,避免同名LaserA/LaserB轨道在同一帧互相覆盖。
+            AlterUpdate_GlobalFog(camSheet, _currentFrame);
             AlterUpdate_BgColor2(camSheet, _currentFrame);
             AlterUpdate_PostFilm(camSheet, _currentFrame);
             AlterUpdate_StageGrade(camSheet, Mathf.RoundToInt(_currentFrame));
@@ -2398,6 +2401,59 @@ namespace Gallop.Live.Cutt
                         return;
                     }
                 }
+            }
+        }
+
+        // authored global fog: the first enabled GlobalFog track drives distance or
+        // height fog each frame, with lerp between adjacent keys.
+        private void AlterUpdate_GlobalFog(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            var handler = OnUpdateGlobalFog;
+            if (handler == null || sheet == null || sheet.globalFogDataLists == null)
+                return;
+
+            for (int i = 0; i < sheet.globalFogDataLists.Count; i++)
+            {
+                var entry = sheet.globalFogDataLists[i];
+                if (entry == null || entry.keys == null || entry.keys.Count == 0)
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable))
+                    continue;
+                if (!entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curBase, out var nextBase, entry.keys, currentFrame);
+                var cur = curBase as LiveTimelineKeyGlobalFogData;
+                var next = nextBase as LiveTimelineKeyGlobalFogData;
+                if (cur == null)
+                    continue;
+
+                GlobalFogUpdateInfo info = default;
+                info.isDistance = cur.isDistance;
+                info.startDistance = cur.startDistance;
+                info.isHeight = cur.isHeight;
+                info.height = cur.height;
+                info.heightDensity = cur.heightDensity;
+                info.color = cur.color;
+                info.fogMode = cur.fogMode;
+                info.expDensity = cur.expDensity;
+                info.start = cur.start;
+                info.end = cur.end;
+                info.useRadialDistance = cur.useRadialDistance;
+
+                if (next != null && next.interpolateType != 0)
+                {
+                    float t = CalculateInterpolationValue(cur, next, currentFrame);
+                    info.color = Color.Lerp(cur.color, next.color, t);
+                    info.heightDensity = LerpWithoutClamp(cur.heightDensity, next.heightDensity, t);
+                    info.expDensity = LerpWithoutClamp(cur.expDensity, next.expDensity, t);
+                    info.start = LerpWithoutClamp(cur.start, next.start, t);
+                    info.end = LerpWithoutClamp(cur.end, next.end, t);
+                    info.height = LerpWithoutClamp(cur.height, next.height, t);
+                }
+
+                handler(ref info);
+                return;
             }
         }
 

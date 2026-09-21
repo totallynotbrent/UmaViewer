@@ -541,6 +541,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdatePostFilm += OnUpdatePostFilm;
             _liveTimelineControl.OnUpdateStageGrade += OnUpdateStageGrade;
             _liveTimelineControl.OnUpdateExposure += OnUpdateExposureGain;
+            _liveTimelineControl.OnUpdateGlobalFog += OnUpdateGlobalFog;
             _liveTimelineControl.OnUpdateVolumeLight += OnUpdateVolumeLight;
             _liveTimelineControl.OnUpdateChromaticAberration += OnUpdateChromaticAberration;
 
@@ -1384,6 +1385,24 @@ namespace Gallop.Live
             imageEffect.SetTimelineExposure(Mathf.Clamp(gain, -3f, 3f));
         }
 
+        // authored global fog drives the built-in fog each frame; a disabled track
+        // (fogMode 2 with black color reads as the game's off state) clears it.
+        private void OnUpdateGlobalFog(ref GlobalFogUpdateInfo info)
+        {
+            bool on = info.isDistance || info.isHeight;
+            RenderSettings.fog = on;
+            if (!on)
+                return;
+
+            RenderSettings.fogMode = info.fogMode == 1
+                ? FogMode.Exponential
+                : FogMode.ExponentialSquared;
+            RenderSettings.fogColor = info.color;
+            RenderSettings.fogDensity = Mathf.Max(0.0001f, info.expDensity);
+            RenderSettings.fogStartDistance = info.start;
+            RenderSettings.fogEndDistance = info.end;
+        }
+
         // the game composites up to three PostFilm layers; the strongest active
         // layer drives the volume tint this frame.
         private void OnUpdatePostFilm(
@@ -1483,6 +1502,7 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdatePostFilm -= OnUpdatePostFilm;
             _liveTimelineControl.OnUpdateStageGrade -= OnUpdateStageGrade;
             _liveTimelineControl.OnUpdateExposure -= OnUpdateExposureGain;
+            _liveTimelineControl.OnUpdateGlobalFog -= OnUpdateGlobalFog;
             _liveTimelineControl.OnUpdateVolumeLight -= OnUpdateVolumeLight;
             _liveTimelineControl.OnUpdateChromaticAberration -= OnUpdateChromaticAberration;
         }
