@@ -234,9 +234,25 @@ namespace Gallop.Live
             public bool renderOnState;
         }
 
+        private static StageBlinkLightDriver _activeInstance;
+
         private void Awake()
         {
+            // stages can carry the driver in their prefab while the controller adds
+            // another; only the first instance may run the per-frame apply pass.
+            if (_activeInstance != null && _activeInstance != this)
+            {
+                Destroy(this);
+                return;
+            }
+            _activeInstance = this;
             _mpb = new MaterialPropertyBlock();
+        }
+
+        private void OnDestroy()
+        {
+            if (_activeInstance == this)
+                _activeInstance = null;
         }
 
         private void OnEnable()

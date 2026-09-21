@@ -15,7 +15,7 @@ namespace Gallop.Live.Cyalume
     public class CrowdDistanceCuller : MonoBehaviour
     {
         [SerializeField] private float cullDistance = 80f;
-        [SerializeField] private int frameInterval = 1;
+        [SerializeField] private int frameInterval = 4;
 
         private List<Renderer> crowdRenderers = new List<Renderer>(512);
         private Transform cameraTransform;
@@ -74,6 +74,8 @@ namespace Gallop.Live.Cyalume
             frameCounter++;
             if ((frameCounter % frameInterval) != 0) return;
 
+            Gallop.Live.SectionProfiler.Begin("crowd.cull");
+
             Vector3 camPos = cameraTransform.position;
             // Update frustum planes for culling
             GeometryUtility.CalculateFrustumPlanes(mainCamera, frustumPlanes);
@@ -101,6 +103,7 @@ namespace Gallop.Live.Cyalume
                 if (r.enabled != shouldBeEnabled)
                     r.enabled = shouldBeEnabled;
             }
+        Gallop.Live.SectionProfiler.End();
         }
 
         public void SetCullDistance(float distance)
