@@ -281,7 +281,7 @@ public class FrameTimeProfiler : MonoBehaviour
 
         int gcColsNow = GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2);
         SectionProfiler.SetEnabled(false);
-        string sectionReport = SectionProfiler.Dump(40) + "\n" + SectionProfiler.GapReport();
+        string sectionReport = SectionProfiler.Dump(70) + "\n" + SectionProfiler.GapReport();
         SectionProfiler.Reset();
         SectionProfiler.ResetAccounting();
 
