@@ -59,6 +59,10 @@ namespace Gallop.Live.Cutt
 
         public int _isAllSettings;
 
+        // resolved once per wash track so the per-frame walk skips StringToHash.
+        [System.NonSerialized] public int _nameHash;
+        [System.NonSerialized] public bool _nameHashResolved;
+
         public override ILiveTimelineKeyDataList GetKeyList()
         {
             return keys;

@@ -2572,14 +2572,25 @@ namespace Gallop.Live.Cutt
             info.progressTime = Mathf.Max(0f, localTime);
             info.keyIndex = GetBlinkLightKeyIndex(key);
 
-            info.LightBlendMode = ToLightBlendMode(key.LightBlendMode);
+            // blend-mode conversion is cached per key so the walk stays allocation-free.
+            if (!_blinkBlendModeCache.TryGetValue(key, out LiveDefine.LightBlendMode convertedBlend))
+            {
+                convertedBlend = ToLightBlendMode(key.LightBlendMode);
+                _blinkBlendModeCache[key] = convertedBlend;
+            }
+            info.LightBlendMode = convertedBlend;
 
             info.color0Array = key.color0Array;
             info.color1Array = key.color1Array;
             info.powerArray = key.powerArray;
 
-            // 官方 BlinkLightUpdateInfo 是 bool[]
-            info.isReverseHueArray = ConvertReverseHueArray(key.isReverseHueArray);
+            // 官方 BlinkLightUpdateInfo 是 bool[]; the converted array is cached per key.
+            if (!_blinkReverseHueCache.TryGetValue(key, out bool[] convertedHue))
+            {
+                convertedHue = ConvertReverseHueArray(key.isReverseHueArray);
+                _blinkReverseHueCache[key] = convertedHue;
+            }
+            info.isReverseHueArray = convertedHue;
 
             info.pattern = (BlinkLightPattern)key.pattern;
             info.colorType = (BlinkLightColorType)key.colorType;
@@ -2643,10 +2654,26 @@ namespace Gallop.Live.Cutt
             return null;
         }
 
+        // reflection results per key are stable; resolving them once per key keeps the
+        // per-frame blink walk allocation- and reflection-free.
+        private static readonly System.Collections.Generic.Dictionary<LiveTimelineKeyBlinkLightData, int> _blinkKeyIndexCache = new();
+        private static readonly System.Collections.Generic.Dictionary<LiveTimelineKeyBlinkLightData, bool[]> _blinkReverseHueCache = new();
+        private static readonly System.Collections.Generic.Dictionary<LiveTimelineKeyBlinkLightData, bool> _blinkWashBlendCache = new();
+        private static readonly System.Collections.Generic.Dictionary<LiveTimelineKeyBlinkLightData, LiveDefine.LightBlendMode> _blinkBlendModeCache = new();
+
         private static int GetBlinkLightKeyIndex(LiveTimelineKeyBlinkLightData key)
         {
             if (key == null)
                 return 0;
+            if (_blinkKeyIndexCache.TryGetValue(key, out int cachedIndex))
+                return cachedIndex;
+            int resolved = ResolveBlinkLightKeyIndex(key);
+            _blinkKeyIndexCache[key] = resolved;
+            return resolved;
+        }
+
+        private static int ResolveBlinkLightKeyIndex(LiveTimelineKeyBlinkLightData key)
+        {
 
             var t = key.GetType();
             const System.Reflection.BindingFlags flags =
@@ -2677,6 +2704,17 @@ namespace Gallop.Live.Cutt
         }
 
         private static bool ReadUseWashLightBlendModeFromKey(LiveTimelineKeyBlinkLightData key)
+        {
+            if (key == null)
+                return false;
+            if (_blinkWashBlendCache.TryGetValue(key, out bool cachedBlend))
+                return cachedBlend;
+            bool resolvedBlend = ResolveUseWashLightBlendModeFromKey(key);
+            _blinkWashBlendCache[key] = resolvedBlend;
+            return resolvedBlend;
+        }
+
+        private static bool ResolveUseWashLightBlendModeFromKey(LiveTimelineKeyBlinkLightData key)
         {
             if (key == null)
                 return false;
@@ -2766,9 +2804,14 @@ namespace Gallop.Live.Cutt
 
                 WashLightUpdateInfo info = default;
 
-                info.NameHash = !string.IsNullOrEmpty(washData.name)
-                    ? Animator.StringToHash(washData.name)
-                    : 0;
+                if (!washData._nameHashResolved)
+                {
+                    washData._nameHash = !string.IsNullOrEmpty(washData.name)
+                        ? Animator.StringToHash(washData.name)
+                        : 0;
+                    washData._nameHashResolved = true;
+                }
+                info.NameHash = washData._nameHash;
 
                 info.IsEnabledRaycast = curWash.IsEnabledRaycast;
                 info.RaycastDistance = raycastDistance;

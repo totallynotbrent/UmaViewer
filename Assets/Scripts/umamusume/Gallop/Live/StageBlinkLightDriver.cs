@@ -49,6 +49,13 @@ namespace Gallop.Live
         private LiveTimelineControl _ctl;
         private StageController _stage;
         private MaterialPropertyBlock _mpb;
+        // shader property ids resolved once; per-frame mpb calls take ints, not strings.
+        private static readonly int MulColor0Id = Shader.PropertyToID("_MulColor0");
+        private static readonly int MulColor1Id = Shader.PropertyToID("_MulColor1");
+        private static readonly int ColorPowerId = Shader.PropertyToID("_ColorPower");
+        private static readonly int ColorPowerMultiplyId = Shader.PropertyToID("_ColorPowerMultiply");
+        private static readonly int AppTimeId = Shader.PropertyToID("_AppTime");
+        private static readonly int BlinkLightColorId = Shader.PropertyToID("_BlinkLightColor");
         private Func<float> _liveNowGetter;
 
         private float LiveNow()
@@ -1551,23 +1558,23 @@ namespace Gallop.Live
 
             if (isUvAlphaMask)
             {
-                _mpb.SetColor("_MulColor0", currentColor);
-                _mpb.SetColor("_MulColor1", currentColor);
-                _mpb.SetFloat("_ColorPower", p);
-                _mpb.SetFloat("_ColorPowerMultiply", emissionBoost);
-                _mpb.SetFloat("_AppTime", liveNow);
+                _mpb.SetColor(MulColor0Id, currentColor);
+                _mpb.SetColor(MulColor1Id, currentColor);
+                _mpb.SetFloat(ColorPowerId, p);
+                _mpb.SetFloat(ColorPowerMultiplyId, emissionBoost);
+                _mpb.SetFloat(AppTimeId, liveNow);
             }
             else if (isLightAdd1)
             {
-                _mpb.SetColor("_MulColor0", currentColor);
-                _mpb.SetColor("_MulColor1", currentColor);
-                _mpb.SetFloat("_ColorPower", p);
-                if (hasColorPowerMultiply) _mpb.SetFloat("_ColorPowerMultiply", emissionBoost);
+                _mpb.SetColor(MulColor0Id, currentColor);
+                _mpb.SetColor(MulColor1Id, currentColor);
+                _mpb.SetFloat(ColorPowerId, p);
+                if (hasColorPowerMultiply) _mpb.SetFloat(ColorPowerMultiplyId, emissionBoost);
             }
             else if (isBlinkSimple)
             {
-                _mpb.SetColor("_BlinkLightColor", currentColor);
-                _mpb.SetFloat("_ColorPower", p * emissionBoost);
+                _mpb.SetColor(BlinkLightColorId, currentColor);
+                _mpb.SetFloat(ColorPowerId, p * emissionBoost);
                 _mpb.SetFloat("_UseNormalCorrection", blinkSimpleUseNormalCorrection);
             }
 
