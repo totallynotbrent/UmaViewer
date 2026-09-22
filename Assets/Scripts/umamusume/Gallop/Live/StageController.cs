@@ -155,6 +155,7 @@ namespace Gallop.Live
         private void Awake()
         {
             AutoAddDriver("StageBlinkLightDriver");
+            AutoAddDriver("StageLensFlareStageDriver");
             AutoAddDriver("StageWashLightDriver");
             AutoAddDriver("StageUVScrollLightDriver");
             //AutoAddDriver("StageLaserDriver");

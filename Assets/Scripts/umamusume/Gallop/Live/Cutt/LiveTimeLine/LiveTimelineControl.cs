@@ -106,6 +106,80 @@ namespace Gallop.Live.Cutt
         // authored renderer on/off track; fires per named entry with the key's state.
         public delegate void RendererUpdateInfoDelegate(ref RendererUpdateInfo updateInfo);
         public event RendererUpdateInfoDelegate OnUpdateRenderer;
+
+        // authored stage-effect tracks that drive real stage objects per frame.
+        public struct LensFlareUpdateInfo
+        {
+            public string name;
+            public bool enableFlare;
+            public float brightness;
+            public Color color;
+            public float fadeSpeed;
+            public bool isAutoBrightness;
+        }
+        public delegate void LensFlareUpdateInfoDelegate(ref LensFlareUpdateInfo updateInfo);
+        public event LensFlareUpdateInfoDelegate OnUpdateLensFlare;
+
+        public struct ProjectorUpdateInfo
+        {
+            public string name;
+            public int motionID;
+            public int materialID;
+            public float speed;
+            public Color color;
+            public float power;
+            public Vector2 size;
+        }
+        public delegate void ProjectorUpdateInfoDelegate(ref ProjectorUpdateInfo updateInfo);
+        public event ProjectorUpdateInfoDelegate OnUpdateProjector;
+
+        public struct ParticleUpdateInfo
+        {
+            public string name;
+            public float emissionRate;
+        }
+        public delegate void ParticleUpdateInfoDelegate(ref ParticleUpdateInfo updateInfo);
+        public event ParticleUpdateInfoDelegate OnUpdateParticle;
+
+        public struct ParticleGroupUpdateInfo
+        {
+            public string name;
+            public float flickerLightRate;
+            public float flickerDarkRate;
+        }
+        public delegate void ParticleGroupUpdateInfoDelegate(ref ParticleGroupUpdateInfo updateInfo);
+        public event ParticleGroupUpdateInfoDelegate OnUpdateParticleGroup;
+
+        public struct LightShaftsUpdateInfo
+        {
+            public string name;
+            public bool enabled;
+            public float scale;
+            public Vector4 angle;
+            public Vector4 alpha;
+            public Vector4 maskAlpha;
+            public float maskAnimeTime;
+        }
+        public delegate void LightShaftsUpdateInfoDelegate(ref LightShaftsUpdateInfo updateInfo);
+        public event LightShaftsUpdateInfoDelegate OnUpdateLightShafts;
+
+        public struct NodeScaleUpdateInfo
+        {
+            public int characterFlag;
+            public int targetFlag;
+            public int sizeType;
+            public float scaleRatePer;
+        }
+        public delegate void NodeScaleUpdateInfoDelegate(ref NodeScaleUpdateInfo updateInfo);
+        public event NodeScaleUpdateInfoDelegate OnUpdateNodeScale;
+
+        public struct TitleUpdateInfo
+        {
+            public int actionType;
+            public int actionFrame;
+        }
+        public delegate void TitleUpdateInfoDelegate(ref TitleUpdateInfo updateInfo);
+        public event TitleUpdateInfoDelegate OnUpdateTitle;
         public struct RendererUpdateInfo
         {
             public string name;
@@ -515,6 +589,13 @@ namespace Gallop.Live.Cutt
                 AlterUpdate_TransformControl(ws, _currentFrame);
                 AlterUpdate_ObjectControl(ws, _currentFrame);
                 AlterUpdate_Renderer(ws, _currentFrame);
+                AlterUpdate_LensFlare(ws, _currentFrame);
+                AlterUpdate_Projector(ws, _currentFrame);
+                AlterUpdate_Particle(ws, _currentFrame);
+                AlterUpdate_ParticleGroup(ws, _currentFrame);
+                AlterUpdate_LightShafts(ws, _currentFrame);
+                AlterUpdate_NodeScale(ws, _currentFrame);
+                AlterUpdate_Title(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
@@ -3180,6 +3261,242 @@ namespace Gallop.Live.Cutt
                 updateInfo.name = entry.name;
                 updateInfo.renderEnable = key.renderEnable;
                 handler(ref updateInfo);
+            }
+        }
+
+        private void AlterUpdate_LensFlare(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            LensFlareUpdateInfoDelegate handler = OnUpdateLensFlare;
+            if (handler == null || sheet == null || sheet.lensFlareList == null)
+                return;
+
+            for (int i = 0; i < sheet.lensFlareList.Count; i++)
+            {
+                var entry = sheet.lensFlareList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0)
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var nextKey, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeyLensFlareData key)
+                    continue;
+
+                LensFlareUpdateInfo updateInfo = default;
+                updateInfo.name = entry.name;
+                updateInfo.enableFlare = key.enableFlare;
+                updateInfo.brightness = key.brightness;
+                updateInfo.color = key.color;
+                updateInfo.fadeSpeed = key.fadeSpeed;
+                updateInfo.isAutoBrightness = key.IsAutoBrightness;
+
+                if (nextKey is LiveTimelineKeyLensFlareData nk && nk.IsInterpolateKey())
+                {
+                    float t = CalculateInterpolationValue(key, nk, currentFrame);
+                    updateInfo.brightness = Mathf.Lerp(key.brightness, nk.brightness, t);
+                    updateInfo.color = Color.Lerp(key.color, nk.color, t);
+                }
+
+                handler(ref updateInfo);
+            }
+        }
+
+        private void AlterUpdate_Projector(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            ProjectorUpdateInfoDelegate handler = OnUpdateProjector;
+            if (handler == null || sheet == null || sheet.projecterList == null)
+                return;
+
+            for (int i = 0; i < sheet.projecterList.Count; i++)
+            {
+                var entry = sheet.projecterList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0 ||
+                    string.IsNullOrEmpty(entry.name))
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var nextKey, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeyProjectorData key)
+                    continue;
+
+                ProjectorUpdateInfo updateInfo = default;
+                updateInfo.name = entry.name;
+                updateInfo.motionID = key.motionID;
+                updateInfo.materialID = key.materialID;
+                updateInfo.speed = key.speed;
+                updateInfo.color = key.color1;
+                updateInfo.power = key.power;
+                updateInfo.size = key.size;
+
+                if (nextKey is LiveTimelineKeyProjectorData nk && nk.IsInterpolateKey())
+                {
+                    float t = CalculateInterpolationValue(key, nk, currentFrame);
+                    updateInfo.power = Mathf.Lerp(key.power, nk.power, t);
+                    updateInfo.color = Color.Lerp(key.color1, nk.color1, t);
+                }
+
+                handler(ref updateInfo);
+            }
+        }
+
+        private void AlterUpdate_Particle(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            ParticleUpdateInfoDelegate handler = OnUpdateParticle;
+            if (handler == null || sheet == null || sheet.particleList == null)
+                return;
+
+            for (int i = 0; i < sheet.particleList.Count; i++)
+            {
+                var entry = sheet.particleList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0 ||
+                    string.IsNullOrEmpty(entry.name))
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var nextKey, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeyParticleData key)
+                    continue;
+
+                ParticleUpdateInfo updateInfo = default;
+                updateInfo.name = entry.name;
+                updateInfo.emissionRate = key.emissionRate;
+
+                if (nextKey is LiveTimelineKeyParticleData nk && nk.IsInterpolateKey())
+                {
+                    float t = CalculateInterpolationValue(key, nk, currentFrame);
+                    updateInfo.emissionRate = Mathf.Lerp(key.emissionRate, nk.emissionRate, t);
+                }
+
+                handler(ref updateInfo);
+            }
+        }
+
+        private void AlterUpdate_ParticleGroup(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            ParticleGroupUpdateInfoDelegate handler = OnUpdateParticleGroup;
+            if (handler == null || sheet == null || sheet.particleGroupList == null)
+                return;
+
+            for (int i = 0; i < sheet.particleGroupList.Count; i++)
+            {
+                var entry = sheet.particleGroupList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0 ||
+                    string.IsNullOrEmpty(entry.name))
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var nextKey, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeyParticleGroupData key)
+                    continue;
+
+                ParticleGroupUpdateInfo updateInfo = default;
+                updateInfo.name = entry.name;
+                updateInfo.flickerLightRate = key.FlickerLightRate;
+                updateInfo.flickerDarkRate = key.FlickerDarkRate;
+
+                if (nextKey is LiveTimelineKeyParticleGroupData nk && nk.IsInterpolateKey())
+                {
+                    float t = CalculateInterpolationValue(key, nk, currentFrame);
+                    updateInfo.flickerLightRate = Mathf.Lerp(key.FlickerLightRate, nk.FlickerLightRate, t);
+                    updateInfo.flickerDarkRate = Mathf.Lerp(key.FlickerDarkRate, nk.FlickerDarkRate, t);
+                }
+
+                handler(ref updateInfo);
+            }
+        }
+
+        private void AlterUpdate_LightShafts(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            LightShaftsUpdateInfoDelegate handler = OnUpdateLightShafts;
+            if (handler == null || sheet == null || sheet.lightShaftsKeysLine == null)
+                return;
+
+            for (int i = 0; i < sheet.lightShaftsKeysLine.Count; i++)
+            {
+                var entry = sheet.lightShaftsKeysLine[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0)
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var _, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeyLightShaftsData key)
+                    continue;
+
+                LightShaftsUpdateInfo updateInfo = default;
+                updateInfo.name = entry.name;
+                updateInfo.enabled = key.enabled;
+                updateInfo.scale = key.scale;
+                updateInfo.angle = key.angle;
+                updateInfo.alpha = key.alpha;
+                updateInfo.maskAlpha = key.maskAlpha;
+                updateInfo.maskAnimeTime = key.maskAnimeTime;
+                handler(ref updateInfo);
+            }
+        }
+
+        private void AlterUpdate_NodeScale(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            NodeScaleUpdateInfoDelegate handler = OnUpdateNodeScale;
+            if (handler == null || sheet == null || sheet.nodeScaleList == null)
+                return;
+
+            for (int i = 0; i < sheet.nodeScaleList.Count; i++)
+            {
+                var entry = sheet.nodeScaleList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0)
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var _, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeyNodeScaleData key)
+                    continue;
+
+                NodeScaleUpdateInfo updateInfo = default;
+                updateInfo.characterFlag = key.characterFlag;
+                updateInfo.targetFlag = key.targetFlag;
+                updateInfo.sizeType = key.sizeType;
+                updateInfo.scaleRatePer = key.scaleRatePer;
+                handler(ref updateInfo);
+            }
+        }
+
+        private void AlterUpdate_Title(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            TitleUpdateInfoDelegate handler = OnUpdateTitle;
+            if (handler == null || sheet == null || sheet.titleKeys == null ||
+                sheet.titleKeys.keys == null)
+                return;
+
+            var keys = sheet.titleKeys.keys;
+            if (keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            // title actions are one-shot triggers: fire the key crossed since last frame.
+            int lastFrame = Mathf.RoundToInt(_oldFrame);
+            for (int i = 0; i < keys.Count; i++)
+            {
+                if (keys[i] is not LiveTimelineKeyTitleData key)
+                    continue;
+                if (key.frame > lastFrame && key.frame <= currentFrame)
+                {
+                    TitleUpdateInfo updateInfo = default;
+                    updateInfo.actionType = key._actionType;
+                    updateInfo.actionFrame = key._actionFrame;
+                    handler(ref updateInfo);
+                }
             }
         }
 

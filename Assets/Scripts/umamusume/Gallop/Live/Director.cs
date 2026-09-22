@@ -1130,6 +1130,9 @@ namespace Gallop.Live
                 mirror.ForceRenderOnce();
             }
         }
+        // public accessor so stage drivers can steer the post stack the director owns.
+        public GallopImageEffect GetActivePostEffectPublic() => GetActivePostEffect();
+
         private GallopImageEffect GetActivePostEffect()
         {
             if (_mainGallopImageEffect != null)
