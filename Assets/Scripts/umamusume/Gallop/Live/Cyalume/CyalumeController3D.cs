@@ -131,6 +131,7 @@ namespace Gallop.Live.Cyalume
 
         private void Update()
         {
+        Gallop.Live.SectionProfiler.Begin("script.CyalumeController3D");
             Gallop.Live.SectionProfiler.Begin("cyalume.update");
             try
             {
@@ -140,7 +141,8 @@ namespace Gallop.Live.Cyalume
             {
             Gallop.Live.SectionProfiler.End();
             }
-        }
+
+        Gallop.Live.SectionProfiler.End();        }
 
         private void UpdateInner()
         {

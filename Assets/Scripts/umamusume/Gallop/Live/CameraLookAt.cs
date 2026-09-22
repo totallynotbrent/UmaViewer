@@ -60,11 +60,13 @@ namespace Gallop.Live
 
         private void Update()
         {
+        Gallop.Live.SectionProfiler.Begin("script.CameraLookAt");
             if (Director.instance == null || !Director.instance.isTimelineControlled)
             {
                 AlterUpdate();
             }
-        }
+
+        Gallop.Live.SectionProfiler.End();        }
 
         public void AlterUpdate()
         {

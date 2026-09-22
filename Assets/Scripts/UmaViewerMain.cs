@@ -88,9 +88,11 @@ public class UmaViewerMain : MonoBehaviour
 
     private void Update()
     {
+    Gallop.Live.SectionProfiler.Begin("script.UmaViewerMain");
         WasEscapeConsumedThisFrame = false;
         TryConsumeEscapeForFullScreen();
-    }
+
+    Gallop.Live.SectionProfiler.End();    }
 
     public static bool TryConsumeEscapeForFullScreen()
     {

@@ -37,6 +37,7 @@ namespace Gallop.Live
         
         private void Update()
         {
+        Gallop.Live.SectionProfiler.Begin("script.CySpringTuner");
             if (_hasTuned || !_autoTuneOnStart)
                 return;
             
@@ -46,7 +47,8 @@ namespace Gallop.Live
                 TuneAllPhysics();
                 _hasTuned = true;
             }
-        }
+
+        Gallop.Live.SectionProfiler.End();        }
         
         /// <summary>
         /// Find and tune all CySpring controllers in the scene

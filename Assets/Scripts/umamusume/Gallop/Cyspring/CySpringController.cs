@@ -103,6 +103,9 @@ namespace Gallop
 
         private SkirtController _skirtController;
         private volatile bool _doneUpdate;
+        // completion signal for the threaded sim; EndSimulation waits on this instead
+        // of polling, so a finished sim wakes the main thread immediately.
+        private readonly AutoResetEvent _simDone = new AutoResetEvent(false);
         private bool _isUseThread;
         private bool _initialized;
         private bool _resetFlag;
@@ -930,6 +933,7 @@ namespace Gallop
             }
 
             _doneUpdate = true;
+            _simDone.Set();
         }
 
         public void EndSimulation()
@@ -939,37 +943,30 @@ namespace Gallop
 
             if (_isUseThread)
             {
-                float startTime = Time.realtimeSinceStartup;
-
-                while (!_doneUpdate)
+                if (_simulationTimeOutError)
                 {
-                    if (_simulationTimeOutError)
-                    {
-                        _isPlaying = false;
-                        _doneUpdate = true;
-                        break;
-                    }
-
-                    // a 1ms yield frees the core instead of spinning it while the
-                    // cloth worker finishes; the wait is sub-frame so latency holds.
-                    Thread.Sleep(1);
-
-                    float elapsed = Time.realtimeSinceStartup - startTime;
-                    if (elapsed > 10.0f)
+                    _isPlaying = false;
+                    _doneUpdate = true;
+                }
+                else if (!_doneUpdate)
+                {
+                    // one blocking wait on the worker's completion signal replaces the
+                    // poll loop; the 10s timeout keeps the game's stuck-sim escape.
+                    bool finished = _simDone.WaitOne(10000);
+                    if (!finished && !_doneUpdate)
                     {
                         _simulationTimeOutError = true;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 Debug.LogError(
-                    "[CySpringController] SimulationTimeOutError elapsed=" + elapsed,
+                    "[CySpringController] SimulationTimeOutError elapsed=10",
                     this
                 );
 #endif
 
                         _isPlaying = false;
                         _doneUpdate = true;
-                        LogTimeOutError(elapsed);
-                        break;
+                        LogTimeOutError(10.0f);
                     }
                 }
             }

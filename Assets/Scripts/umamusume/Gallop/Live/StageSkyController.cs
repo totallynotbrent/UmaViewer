@@ -100,6 +100,7 @@ namespace Gallop.Live
 
         private void Update()
         {
+        Gallop.Live.SectionProfiler.Begin("script.StageSkyController");
             // 自动侦测并绑定当前 Live 的时间轴控制器
             if (_boundTimelineControl == null && Director.instance != null && Director.instance._liveTimelineControl != null)
             {
@@ -111,7 +112,8 @@ namespace Gallop.Live
             {
                 CycleNextMode();
             }
-        }
+
+        Gallop.Live.SectionProfiler.End();        }
 
         /// <summary>
         /// 绑定时间轴控制器并订阅 BgColor1 事件

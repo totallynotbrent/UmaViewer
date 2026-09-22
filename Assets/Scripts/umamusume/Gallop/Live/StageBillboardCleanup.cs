@@ -25,10 +25,12 @@ namespace Gallop.Live
 
         private void Update()
         {
+        Gallop.Live.SectionProfiler.Begin("script.StageBillboardCleanup");
             // Re-check if new objects appear
             if (!_cleanedUp && _hideWhiteBillboards)
                 CleanUpWhiteBillboards();
-        }
+
+        Gallop.Live.SectionProfiler.End();        }
 
         public void CleanUpWhiteBillboards()
         {

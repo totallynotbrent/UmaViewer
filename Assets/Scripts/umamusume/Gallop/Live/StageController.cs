@@ -277,8 +277,10 @@ namespace Gallop.Live
             ctl.OnEnvironmentMirror -= UpdateEnvironemntMirror;
             ctl.OnUpdateMirrorReflection -= UpdateMirrorReflection;
             ctl.OnUpdateLaser -= UpdateLaser;
+            ctl.OnUpdateRenderer -= UpdateRendererControl;
 
             ctl.OnUpdateTransform += UpdateTransform;
+            ctl.OnUpdateRenderer += UpdateRendererControl;
             ctl.OnUpdateObject += UpdateObject;
             ctl.OnUpdateBgColor1 += UpdateBgColor1;
             ctl.OnUpdateBgColor2 += UpdateBgColor2;
@@ -1145,6 +1147,7 @@ namespace Gallop.Live
         public void InitializeStage()
         {
             ApplyGameLiveQualityProfile();
+            _rendererTrackState.Clear();
 
             foreach (GameObject stage_part in _stageObjects)
             {
@@ -1335,6 +1338,32 @@ namespace Gallop.Live
             }
         }
 
+
+        // the game's RendererControl: the authored renderer track toggles the named
+        // stage object's renderers; the last key holds until the next one.
+        private readonly Dictionary<string, bool> _rendererTrackState = new Dictionary<string, bool>();
+
+        private void UpdateRendererControl(ref LiveTimelineControl.RendererUpdateInfo updateInfo)
+        {
+            if (string.IsNullOrEmpty(updateInfo.name))
+                return;
+
+            if (_rendererTrackState.TryGetValue(updateInfo.name, out bool last) &&
+                last == updateInfo.renderEnable)
+                return;
+
+            _rendererTrackState[updateInfo.name] = updateInfo.renderEnable;
+
+            if (StageObjectMap != null &&
+                StageObjectMap.TryGetValue(updateInfo.name, out GameObject target) &&
+                target != null)
+            {
+                foreach (var r in target.GetComponentsInChildren<Renderer>(true))
+                    r.enabled = updateInfo.renderEnable;
+
+                Director.FileLog($"[renderer] '{updateInfo.name}' renderEnable={updateInfo.renderEnable}");
+            }
+        }
         public void UpdateTransform(ref TransformUpdateInfo updateInfo)
         {
             if (updateInfo.data == null || string.IsNullOrEmpty(updateInfo.data.name))

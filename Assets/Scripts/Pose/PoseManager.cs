@@ -42,11 +42,13 @@ public class PoseManager : MonoBehaviour
 
     private void Update()
     {
+    Gallop.Live.SectionProfiler.Begin("script.PoseManager");
         if (Input.GetKeyDown(KeyCode.H))
         {
             HelpPanel.SetActive(!HelpPanel.activeSelf);
         }
-    }
+
+    Gallop.Live.SectionProfiler.End();    }
 
     public static PoseLoadOptions GetLoadOptions()
     {

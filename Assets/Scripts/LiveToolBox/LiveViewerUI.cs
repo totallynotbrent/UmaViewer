@@ -100,6 +100,7 @@ public class LiveViewerUI : MonoBehaviour
 
     private void Update()
     {
+    Gallop.Live.SectionProfiler.Begin("script.LiveViewerUI");
         if (BottonUITransform == null)
             return;
 
@@ -124,7 +125,8 @@ public class LiveViewerUI : MonoBehaviour
 
         if (insideWindow && Time.unscaledTime - _lastPointerActivityTime >= PointerIdleHideDelay)
             HideSlider();
-    }
+
+    Gallop.Live.SectionProfiler.End();    }
 
     public void OnMouse(bool isEnter)
     {

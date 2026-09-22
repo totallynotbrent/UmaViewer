@@ -177,6 +177,7 @@ public class UmaViewerUI : MonoBehaviour
 
     private void Update()
     {
+    Gallop.Live.SectionProfiler.Begin("script.UmaViewerUI");
         if (Builder.CurrentAudioSources.Count > 0 && Builder.CurrentAudioSources[0])
         {
             AudioSource MianSource = Builder.CurrentAudioSources[0];
@@ -195,7 +196,8 @@ public class UmaViewerUI : MonoBehaviour
             if (AnimationSettings.gameObject.activeInHierarchy)
                 AnimationSettings.UpdateAnimationInfo(umaContainer);
         }
-    }
+
+    Gallop.Live.SectionProfiler.End();    }
 
     /// <summary>Some settings may not be saved when set in Start()</summary>
     public IEnumerator ApplyGraphicsSettings()

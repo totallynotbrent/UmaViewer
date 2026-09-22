@@ -103,6 +103,16 @@ namespace Gallop.Live.Cutt
         public event WashLightUpdateInfoDelegate OnUpdateWashLight;
         public event AnimationUpdateInfoDelegate OnUpdateAnimation;
 
+        // authored renderer on/off track; fires per named entry with the key's state.
+        public delegate void RendererUpdateInfoDelegate(ref RendererUpdateInfo updateInfo);
+        public event RendererUpdateInfoDelegate OnUpdateRenderer;
+        public struct RendererUpdateInfo
+        {
+            public string name;
+            public bool renderEnable;
+        }
+
+
         public event LaserUpdateInfoDelegate OnUpdateLaser;
         private LaserUpdateInfo _laserUpdateInfo;
         private int _laserRuntimeIndexOffset;
@@ -504,6 +514,7 @@ namespace Gallop.Live.Cutt
                 Gallop.Live.SectionProfiler.End();
                 AlterUpdate_TransformControl(ws, _currentFrame);
                 AlterUpdate_ObjectControl(ws, _currentFrame);
+                AlterUpdate_Renderer(ws, _currentFrame);
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
@@ -3143,6 +3154,35 @@ namespace Gallop.Live.Cutt
                 handler(ref updateInfo);
             }
         }
+        private void AlterUpdate_Renderer(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            RendererUpdateInfoDelegate handler = OnUpdateRenderer;
+            if (handler == null || sheet == null || sheet.rendererList == null)
+                return;
+
+            int count = sheet.rendererList.Count;
+            for (int i = 0; i < count; i++)
+            {
+                var entry = sheet.rendererList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0 ||
+                    string.IsNullOrEmpty(entry.name))
+                    continue;
+
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var _, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeyRendererData key)
+                    continue;
+
+                RendererUpdateInfo updateInfo = default;
+                updateInfo.name = entry.name;
+                updateInfo.renderEnable = key.renderEnable;
+                handler(ref updateInfo);
+            }
+        }
+
         private void AlterUpdate_HdrBloom(LiveTimelineWorkSheet sheet, int currentFrame)
         {
             if (OnUpdateHdrBloom == null)

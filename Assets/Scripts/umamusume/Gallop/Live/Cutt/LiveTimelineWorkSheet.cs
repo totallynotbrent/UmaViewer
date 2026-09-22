@@ -475,6 +475,7 @@ namespace Gallop.Live.Cutt
 
         [SerializeField] public List<LiveTimelineTransformData> transformList;
         [SerializeField] public List<LiveTimelineObjectData> objectList;
+        [SerializeField] public List<LiveTimelineRendererData> rendererList = new List<LiveTimelineRendererData>();
         [SerializeField] public List<LiveTimelineMobCyalumeControlData> mobControlList;
         [SerializeField] public List<LiveTimelineMobCyalumeControlData> cyalumeControlList;
 

@@ -33,6 +33,7 @@ public class HandleManager : MonoBehaviour
 
     private void Update()
     {
+    Gallop.Live.SectionProfiler.Begin("script.HandleManager");
         // pose handles only exist in pose mode; an empty list skips the whole pass.
         if (AllHandles.Count == 0)
             return;
@@ -80,7 +81,8 @@ public class HandleManager : MonoBehaviour
                 handle.Popup.UpdateManual(camera);
             }
         }
-    }
+
+    Gallop.Live.SectionProfiler.End();    }
 
     public static void RegisterHandle(UIHandle handle)
     {
