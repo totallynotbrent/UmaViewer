@@ -42,7 +42,6 @@ namespace Gallop.Live.Cutt
     [Serializable]
     public class LiveTimelineLensFlareData : ILiveTimelineGroupDataWithName
     {
-        public string name;
         public LiveTimelineKeyLensFlareDataList keys;
 
         public override ILiveTimelineKeyDataList GetKeyList()
@@ -102,7 +101,6 @@ namespace Gallop.Live.Cutt
     [Serializable]
     public class LiveTimelineProjectorData : ILiveTimelineGroupDataWithName
     {
-        public string name;
         public LiveTimelineKeyProjectorDataList keys;
 
         public override ILiveTimelineKeyDataList GetKeyList()
@@ -148,7 +146,6 @@ namespace Gallop.Live.Cutt
     [Serializable]
     public class LiveTimelineParticleData : ILiveTimelineGroupDataWithName
     {
-        public string name;
         public LiveTimelineKeyParticleDataList keys;
 
         public override ILiveTimelineKeyDataList GetKeyList()
@@ -195,7 +192,6 @@ namespace Gallop.Live.Cutt
     [Serializable]
     public class LiveTimelineParticleGroupData : ILiveTimelineGroupDataWithName
     {
-        public string name;
         public LiveTimelineKeyParticleGroupDataList keys;
 
         public override ILiveTimelineKeyDataList GetKeyList()
@@ -251,7 +247,6 @@ namespace Gallop.Live.Cutt
     [Serializable]
     public class LiveTimelineLightShaftsData : ILiveTimelineGroupDataWithName
     {
-        public string name;
         public LiveTimelineKeyLightShaftsDataList keys;
 
         public override ILiveTimelineKeyDataList GetKeyList()
@@ -300,7 +295,6 @@ namespace Gallop.Live.Cutt
     [Serializable]
     public class LiveTimelineNodeScaleData : ILiveTimelineGroupDataWithName
     {
-        public string name;
         public LiveTimelineKeyNodeScaleDataList keys;
 
         public override ILiveTimelineKeyDataList GetKeyList()
