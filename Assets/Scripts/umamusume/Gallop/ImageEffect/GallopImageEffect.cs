@@ -33,6 +33,15 @@ namespace Gallop
         [SerializeField]
         private bool _bloomAndDiffusionEnabled = true;
 
+        // f8 flips between the game's FastBloom shader and the URP volume bloom.
+        [SerializeField] private bool _useGameBloom = true;
+
+        public void ToggleGameBloom()
+        {
+            _useGameBloom = !_useGameBloom;
+            Debug.Log($"[gamebloom] {(_useGameBloom ? "game FastBloom shader" : "urp volume bloom")}");
+        }
+
         public bool BloomAndDiffusionEnabled
         {
             get => _bloomAndDiffusionEnabled;
@@ -384,6 +393,23 @@ namespace Gallop
             if (!_bloomAndDiffusionEnabled)
             {
                 _bloom.active = false;
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.GameBloomEnabled = false;
+                return;
+            }
+
+            // the game bloom path drives the game's own FastBloom shader pass; URP's
+            // volume bloom switches off so the two never stack. f8 flips this live.
+            float authoredBloomIntensity = param.IsEnableBloom ? Mathf.Max(0f, param.BloomIntensity) : 0f;
+            bool useGameBloom = _useGameBloom && authoredBloomIntensity > 0f;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.GameBloomEnabled = useGameBloom;
+            if (useGameBloom)
+            {
+                _bloom.active = false;
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.Intensity = Mathf.Min(authoredBloomIntensity, 12f) * 0.5f;
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.Threshold = param.BloomThreshold;
+                float gameBlur = Mathf.Max(param.IsEnableBloom ? param.BloomBlurSize : 0f,
+                                           param.IsEnableDiffusion ? param.DiffusionBlurSize : 0f);
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BlurSize = Mathf.Clamp(gameBlur, 0.5f, 8f);
                 return;
             }
 

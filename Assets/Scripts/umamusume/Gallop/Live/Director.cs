@@ -697,6 +697,13 @@ namespace Gallop.Live
                     }
                 }
 
+                // F8 flips between the game's FastBloom shader and the URP volume bloom.
+                if (Input.GetKeyDown(KeyCode.F8))
+                {
+                    var fx = GetActivePostEffect();
+                    fx?.ToggleGameBloom();
+                }
+
                 if (_syncTime == false)
                 {
                     if(liveMusic.sourceList.Count == 0)
