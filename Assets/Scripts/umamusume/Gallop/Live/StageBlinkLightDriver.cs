@@ -224,6 +224,7 @@ namespace Gallop.Live
 
             public bool blendConfigured;
             public int blendConfiguredMode;
+            public Material[] blendMaterials;
 
             public Material[] cachedSharedMaterialsRef;
             public int cachedSharedMaterialsLen;
@@ -817,6 +818,7 @@ namespace Gallop.Live
                     e.rendererLightBlendMode = (int)LiveDefine.LightBlendMode.Addition;
                     e.blendConfigured = false;
                     e.blendConfiguredMode = int.MinValue;
+                    e.blendMaterials = null;
                 }
 
                 if (e.isWashLightProjection)
@@ -1457,8 +1459,11 @@ namespace Gallop.Live
             int modeId = (int)mode;
 
             // the game re-asserts the blend state every frame so external writers
-            // never win; keep that contract.
-            var mats = r.materials;
+            // never win; the instantiated material array is cached per renderer so the
+            // per-frame re-assert costs no allocation.
+            if (e.blendMaterials == null || e.blendMaterials.Length == 0)
+                e.blendMaterials = r.materials;
+            var mats = e.blendMaterials;
             if (mats == null || mats.Length == 0)
                 return;
 

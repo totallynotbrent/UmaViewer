@@ -1129,8 +1129,23 @@ namespace Gallop.Live
             }
         }
 
+        // the game's own live quality profile (QualitySettings "Gallop"/"Gallop_Win"):
+        // shadows off on windows live, shadow distance 15, lod bias 0.3, aniso on.
+        // the viewer defaults to the editor's heaviest level, which renders shadowed,
+        // max-lod stage geometry the game never shows in a concert.
+        private void ApplyGameLiveQualityProfile()
+        {
+            QualitySettings.shadows = ShadowQuality.Disable;
+            QualitySettings.shadowDistance = 15f;
+            QualitySettings.lodBias = 0.3f;
+            QualitySettings.anisotropicFiltering = AnisotropicFiltering.Enable;
+            Debug.Log($"[stage] quality profile: shadows=off dist=15 lodBias=0.3 aniso=on (game Gallop_Win)");
+        }
+
         public void InitializeStage()
         {
+            ApplyGameLiveQualityProfile();
+
             foreach (GameObject stage_part in _stageObjects)
             {
                 if (stage_part == null)

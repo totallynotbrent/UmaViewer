@@ -872,11 +872,6 @@ public string[] NormalBodyKeywords  = new[] { "skin", "body", "bdy", "face", "he
                     var binder = mainLive.GetComponent<CyalumeAutoBinder>() ??
                                  mainLive.AddComponent<CyalumeAutoBinder>();
 
-                    if (mainLive.GetComponent<Gallop.Live.StageBlinkLightDriver>() == null)
-                        mainLive.AddComponent<Gallop.Live.StageBlinkLightDriver>();
-
-                    if (mainLive.GetComponent<Gallop.Live.StageUVScrollLightDriver>() == null)
-                        mainLive.AddComponent<Gallop.Live.StageUVScrollLightDriver>();
 
                     if (mainLive.GetComponent<Gallop.Live.MonitorUvMovieProvider>() == null)
                         mainLive.AddComponent<Gallop.Live.MonitorUvMovieProvider>();

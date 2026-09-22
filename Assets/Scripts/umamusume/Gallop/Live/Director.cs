@@ -1572,7 +1572,8 @@ namespace Gallop.Live
                     0f,
                     updateInfo.characterPosition.z);
                 Vector3 hang = updateInfo.position;
-                target.transform.SetParent(stage.transform, false);
+                if (target.transform.parent != stage.transform)
+                    target.transform.SetParent(stage.transform, false);
                 target.transform.localPosition = new Vector3(slot.x, hang.y, slot.z);
 
                 // a real spotlight rides the fixture: beam from the hung head

@@ -18,6 +18,7 @@ namespace Gallop.Live
             new Dictionary<int, WashLightController>(256);
 
         private int _lastRebuildFrame = -1000;
+        private int _rebuildIntervalFrames = 60;
         private readonly List<WashLightController> _controllers =
             new List<WashLightController>(256);
 
@@ -128,9 +129,12 @@ namespace Gallop.Live
                 // a full stage renderer scan per miss is far too heavy for every frame,
                 // so the rebuild retries at most once a second and late-arriving
                 // controllers still get picked up.
-                if (Time.frameCount - _lastRebuildFrame >= 60)
+                if (Time.frameCount - _lastRebuildFrame >= _rebuildIntervalFrames)
                 {
                     _lastRebuildFrame = Time.frameCount;
+                    // back off exponentially so permanently missing names cost one
+                    // scan every 30s at most while late arrivals bind within seconds.
+                    _rebuildIntervalFrames = Mathf.Min(_rebuildIntervalFrames * 2, 1800);
                     RebuildCache();
                     _controllerMap.TryGetValue(updateInfo.NameHash, out controller);
                 }
