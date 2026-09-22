@@ -211,6 +211,31 @@ namespace Gallop.Live.Cutt
         }
         public delegate void SweatLocatorUpdateInfoDelegate(ref SweatLocatorUpdateInfo updateInfo);
         public event SweatLocatorUpdateInfoDelegate OnUpdateSweatLocator;
+
+        // authored light-projection track; one info per named projection entry.
+        public struct LightProjectionUpdateInfo
+        {
+            public string name;
+            public bool isEnable;
+            public int textureId;
+            public Vector3 position;
+            public Vector3 angle;
+            public Vector3 scale;
+            public Color color;
+            public float colorPower;
+            public bool orthographic;
+            public float orthographicSize;
+            public float nearClipPlane;
+            public float farClipPlane;
+            public float fieldOfView;
+            public float mirrorBallProjectionRadius;
+            public float mirrorBallFallOffPower;
+            public Vector3 mirrorBallRotateAxis;
+            public float mirrorBallLoopRotationSpeed;
+            public bool mirrorBallIsLoopRotation;
+        }
+        public delegate void LightProjectionUpdateInfoDelegate(ref LightProjectionUpdateInfo updateInfo);
+        public event LightProjectionUpdateInfoDelegate OnUpdateLightProjection;
         public struct RendererUpdateInfo
         {
             public string name;
@@ -631,6 +656,7 @@ namespace Gallop.Live.Cutt
                 AlterUpdate_FacialNoise(ws, _currentFrame);
                 AlterUpdate_CharaMotionNoise(ws, _currentFrame);
                 AlterUpdate_SweatLocator(ws, _currentFrame);
+                AlterUpdate_LightProjection(ws, _currentFrame);
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
@@ -3626,6 +3652,59 @@ namespace Gallop.Live.Cutt
                 updateInfo.owner = key.owner;
                 updateInfo.alpha = key.alpha;
                 updateInfo.randomVisibleCount = key.randomVisibleCount;
+                handler(ref updateInfo);
+            }
+        }
+
+        private void AlterUpdate_LightProjection(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            LightProjectionUpdateInfoDelegate handler = OnUpdateLightProjection;
+            if (handler == null || sheet == null || sheet.lightProjectionList == null)
+                return;
+
+            for (int i = 0; i < sheet.lightProjectionList.Count; i++)
+            {
+                var entry = sheet.lightProjectionList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0 ||
+                    string.IsNullOrEmpty(entry.name))
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var nextKey, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeyLightProjectionData key)
+                    continue;
+
+                LightProjectionUpdateInfo updateInfo = default;
+                updateInfo.name = entry.name;
+                updateInfo.isEnable = key.IsEnable;
+                updateInfo.textureId = key.TextureId;
+                updateInfo.position = key.Position;
+                updateInfo.angle = key.Angle;
+                updateInfo.scale = key.Scale;
+                updateInfo.color = key.Color;
+                updateInfo.colorPower = key.ColorPower;
+                updateInfo.orthographic = key.Orthographic;
+                updateInfo.orthographicSize = key.OrthographicSize;
+                updateInfo.nearClipPlane = key.NearClipPlane;
+                updateInfo.farClipPlane = key.FarClipPlane;
+                updateInfo.fieldOfView = key.FieldOfView;
+                updateInfo.mirrorBallProjectionRadius = key.MirrorBallProjectionRadius;
+                updateInfo.mirrorBallFallOffPower = key.MirrorBallFallOffPower;
+                updateInfo.mirrorBallRotateAxis = key.MirrorBallRotateAxis;
+                updateInfo.mirrorBallLoopRotationSpeed = key.MirrorBallLoopRotationSpeed;
+                updateInfo.mirrorBallIsLoopRotation = key.MirrorBallIsLoopRotation;
+
+                if (nextKey is LiveTimelineKeyLightProjectionData nk && nk.IsInterpolateKey())
+                {
+                    float t = CalculateInterpolationValue(key, nk, currentFrame);
+                    updateInfo.color = Color.Lerp(key.Color, nk.Color, t);
+                    updateInfo.colorPower = Mathf.Lerp(key.ColorPower, nk.ColorPower, t);
+                    updateInfo.position = Vector3.Lerp(key.Position, nk.Position, t);
+                    updateInfo.angle = Vector3.Lerp(key.Angle, nk.Angle, t);
+                }
+
                 handler(ref updateInfo);
             }
         }

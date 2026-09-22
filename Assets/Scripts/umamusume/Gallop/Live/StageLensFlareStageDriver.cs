@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using Gallop.Live.Cutt;
 
@@ -50,6 +51,7 @@ namespace Gallop.Live
             _ctl.OnUpdateFacialNoise += OnFacialNoise;
             _ctl.OnUpdateCharaMotionNoise += OnCharaMotionNoise;
             _ctl.OnUpdateSweatLocator += OnSweatLocator;
+            _ctl.OnUpdateLightProjection += OnLightProjection;
             _bound = true;
         }
 
@@ -67,6 +69,7 @@ namespace Gallop.Live
                 _ctl.OnUpdateFacialNoise -= OnFacialNoise;
                 _ctl.OnUpdateCharaMotionNoise -= OnCharaMotionNoise;
                 _ctl.OnUpdateSweatLocator -= OnSweatLocator;
+                _ctl.OnUpdateLightProjection -= OnLightProjection;
             }
             _bound = false;
             _flareRenderers.Clear();
@@ -303,7 +306,98 @@ namespace Gallop.Live
         private float _titleFadeDuration = 1f;
         private float _titleFadeClock = 999f;
 
-        // the noise + sweat tracks are alive but their solvers need the game's per-
+        // authored light projections become real Unity projectors: one per named entry,
+        // positioned and tinted per frame, cookie from the cmn projector texture pool.
+        private readonly Dictionary<string, Projector> _lightProjections = new Dictionary<string, Projector>();
+        private readonly Dictionary<string, Texture> _projectionCookies = new Dictionary<string, Texture>();
+        private Material _projectionMaterial;
+        private bool _projectionLogged;
+
+        private void OnLightProjection(ref LiveTimelineControl.LightProjectionUpdateInfo updateInfo)
+        {
+            if (!_lightProjections.TryGetValue(updateInfo.name, out var projector))
+            {
+                if (!updateInfo.isEnable)
+                    return;
+
+                var go = new GameObject($"LightProjection_{updateInfo.name}");
+                projector = go.AddComponent<Projector>();
+                _projectionMaterial ??= new Material(Shader.Find("Projector/Light"))
+                {
+                    hideFlags = HideFlags.DontSave
+                };
+                projector.material = new Material(_projectionMaterial);
+                projector.orthographic = updateInfo.orthographic;
+                projector.nearClipPlane = Mathf.Max(0.01f, updateInfo.nearClipPlane);
+                projector.farClipPlane = Mathf.Max(1f, updateInfo.farClipPlane);
+                projector.fieldOfView = Mathf.Clamp(updateInfo.fieldOfView > 0f ? updateInfo.fieldOfView : 30f, 1f, 160f);
+                projector.ignoreLayers = ~(1 << LayerMask.NameToLayer("Character"));
+                _lightProjections[updateInfo.name] = projector;
+
+                if (!_projectionLogged)
+                {
+                    _projectionLogged = true;
+                    Director.FileLog($"[lightprojection] '{updateInfo.name}' spawned (textureId={updateInfo.textureId})");
+                }
+            }
+
+            projector.enabled = updateInfo.isEnable;
+            if (!updateInfo.isEnable)
+                return;
+
+            var t = projector.transform;
+            t.position = updateInfo.position;
+            t.rotation = Quaternion.Euler(updateInfo.angle);
+            var scale = updateInfo.scale;
+            if (scale.sqrMagnitude < 0.0001f) scale = Vector3.one;
+            t.localScale = scale;
+
+            if (updateInfo.orthographic)
+                projector.orthographicSize = Mathf.Max(0.1f, updateInfo.orthographicSize);
+
+            var mat = projector.material;
+            if (mat != null)
+            {
+                mat.color = updateInfo.color * Mathf.Max(0f, updateInfo.colorPower);
+                if (updateInfo.textureId > 0 &&
+                    TryGetProjectionCookie(updateInfo.textureId, out var cookie))
+                    mat.mainTexture = cookie;
+            }
+
+            // a looping mirror-ball rotation spins the projection's local roll so the
+            // pattern sweeps the stage like the game's disco rig.
+            if (updateInfo.mirrorBallIsLoopRotation && updateInfo.mirrorBallLoopRotationSpeed != 0f)
+                t.Rotate(updateInfo.mirrorBallRotateAxis, updateInfo.mirrorBallLoopRotationSpeed * Time.deltaTime, Space.Self);
+        }
+
+        // the cmn projector cookie pool loads on first use per texture id.
+        private bool TryGetProjectionCookie(int textureId, out Texture cookie)
+        {
+            cookie = null;
+            if (_projectionCookies.TryGetValue("tex" + textureId, out cookie))
+                return cookie != null;
+
+            var main = UmaViewerMain.Instance;
+            string key = $"3d/env/live/common/tex_env_live_cmn_projector{textureId:000}";
+            if (main == null || !main.AbList.TryGetValue(key, out var entry))
+            {
+                _projectionCookies["tex" + textureId] = null;
+                return false;
+            }
+
+            var bundle = UmaAssetManager.LoadAssetBundle(entry);
+            if (bundle == null)
+            {
+                _projectionCookies["tex" + textureId] = null;
+                return false;
+            }
+
+            cookie = bundle.LoadAsset<Texture>(Path.GetFileName(key).Split('.')[0]);
+            _projectionCookies["tex" + textureId] = cookie;
+            return cookie != null;
+        }
+
+        // the noise + sweat tracks are alive but their solvers need the game's per-        // the noise + sweat tracks are alive but their solvers need the game's per-
         // character noise profiles (missing-script components), so their authored state
         // logs once per change until those land.
         private int _lastFacialNoiseFlag = -1;

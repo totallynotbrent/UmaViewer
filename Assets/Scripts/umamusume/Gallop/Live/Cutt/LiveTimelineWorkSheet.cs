@@ -480,6 +480,7 @@ namespace Gallop.Live.Cutt
         [SerializeField] public LiveTimelineFacialNoiseData facialNoiseKeys;
         [SerializeField] public LiveTimelineCharaMotionNoiseData charaMotionNoiseKeys;
         [SerializeField] public List<LiveTimelineSweatLocatorData> sweatLocatorList = new List<LiveTimelineSweatLocatorData>();
+        [SerializeField] public List<LiveTimelineLightProjectionData> lightProjectionList = new List<LiveTimelineLightProjectionData>();
         [SerializeField] public List<LiveTimelineLensFlareData> lensFlareList = new List<LiveTimelineLensFlareData>();
         [SerializeField] public List<LiveTimelineProjectorData> projecterList = new List<LiveTimelineProjectorData>();
         [SerializeField] public List<LiveTimelineParticleData> particleList = new List<LiveTimelineParticleData>();
