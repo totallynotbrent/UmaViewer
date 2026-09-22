@@ -180,6 +180,37 @@ namespace Gallop.Live.Cutt
         }
         public delegate void TitleUpdateInfoDelegate(ref TitleUpdateInfo updateInfo);
         public event TitleUpdateInfoDelegate OnUpdateTitle;
+
+        // authored noise + sweat tracks; camera layer writes the framing offset directly.
+        public struct FacialNoiseUpdateInfo
+        {
+            public int enableCharacterBitFlag;
+        }
+        public delegate void FacialNoiseUpdateInfoDelegate(ref FacialNoiseUpdateInfo updateInfo);
+        public event FacialNoiseUpdateInfoDelegate OnUpdateFacialNoise;
+
+        public struct CharaMotionNoiseUpdateInfo
+        {
+            public float sideBaseBias;
+            public float sideRange;
+            public float sideFrequency;
+            public float backBaseBias;
+            public float backRange;
+            public float backFrequency;
+            public bool isNegativeCheck;
+        }
+        public delegate void CharaMotionNoiseUpdateInfoDelegate(ref CharaMotionNoiseUpdateInfo updateInfo);
+        public event CharaMotionNoiseUpdateInfoDelegate OnUpdateCharaMotionNoise;
+
+        public struct SweatLocatorUpdateInfo
+        {
+            public string name;
+            public int owner;
+            public float alpha;
+            public int randomVisibleCount;
+        }
+        public delegate void SweatLocatorUpdateInfoDelegate(ref SweatLocatorUpdateInfo updateInfo);
+        public event SweatLocatorUpdateInfoDelegate OnUpdateSweatLocator;
         public struct RendererUpdateInfo
         {
             public string name;
@@ -596,6 +627,10 @@ namespace Gallop.Live.Cutt
                 AlterUpdate_LightShafts(ws, _currentFrame);
                 AlterUpdate_NodeScale(ws, _currentFrame);
                 AlterUpdate_Title(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_CameraLayer(ws, _currentFrame);
+                AlterUpdate_FacialNoise(ws, _currentFrame);
+                AlterUpdate_CharaMotionNoise(ws, _currentFrame);
+                AlterUpdate_SweatLocator(ws, _currentFrame);
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
@@ -3497,6 +3532,101 @@ namespace Gallop.Live.Cutt
                     updateInfo.actionFrame = key._actionFrame;
                     handler(ref updateInfo);
                 }
+            }
+        }
+
+        private void AlterUpdate_CameraLayer(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            if (sheet == null || sheet.cameraLayerKeys == null || sheet.cameraLayerKeys.keys == null)
+                return;
+            var keys = sheet.cameraLayerKeys.keys;
+            if (keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var _, keys, currentFrame);
+            if (curKey is not LiveTimelineKeyCameraLayerData key)
+                return;
+
+            // the authored band recenters the chara-relative camera framing; the game
+            // applies the key's band through the same offset the position math reads.
+            _cameraLayerOffset = (key.offsetMinPosition + key.offsetMaxPosition) * 0.5f;
+        }
+
+        private void AlterUpdate_FacialNoise(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            FacialNoiseUpdateInfoDelegate handler = OnUpdateFacialNoise;
+            if (handler == null || sheet == null || sheet.facialNoiseKeys == null ||
+                sheet.facialNoiseKeys.keys == null)
+                return;
+            var keys = sheet.facialNoiseKeys.keys;
+            if (keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var _, keys, currentFrame);
+            if (curKey is not LiveTimelineKeyFacialNoiseData key)
+                return;
+
+            FacialNoiseUpdateInfo updateInfo = default;
+            updateInfo.enableCharacterBitFlag = key.EnableCharacterBitFlag;
+            handler(ref updateInfo);
+        }
+
+        private void AlterUpdate_CharaMotionNoise(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            CharaMotionNoiseUpdateInfoDelegate handler = OnUpdateCharaMotionNoise;
+            if (handler == null || sheet == null || sheet.charaMotionNoiseKeys == null ||
+                sheet.charaMotionNoiseKeys.keys == null)
+                return;
+            var keys = sheet.charaMotionNoiseKeys.keys;
+            if (keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var _, keys, currentFrame);
+            if (curKey is not LiveTimelineKeyCharaMotionNoiseData key)
+                return;
+
+            CharaMotionNoiseUpdateInfo updateInfo = default;
+            updateInfo.sideBaseBias = key.sideChrMotNoiseBaseBias;
+            updateInfo.sideRange = key.sideChrMotNoiseRange;
+            updateInfo.sideFrequency = key.sideChrMotNoiseFrequency;
+            updateInfo.backBaseBias = key.backChrMotNoiseBaseBias;
+            updateInfo.backRange = key.backChrMotNoiseRange;
+            updateInfo.backFrequency = key.backChrMotNoiseFrequency;
+            updateInfo.isNegativeCheck = key.isNegativeCheck;
+            handler(ref updateInfo);
+        }
+
+        private void AlterUpdate_SweatLocator(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            SweatLocatorUpdateInfoDelegate handler = OnUpdateSweatLocator;
+            if (handler == null || sheet == null || sheet.sweatLocatorList == null)
+                return;
+
+            for (int i = 0; i < sheet.sweatLocatorList.Count; i++)
+            {
+                var entry = sheet.sweatLocatorList[i];
+                if (entry == null || entry.keys == null || entry.keys.Count <= 0)
+                    continue;
+                if (entry.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !entry.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var _, entry.keys, currentFrame);
+                if (curKey is not LiveTimelineKeySweatLocatorData key)
+                    continue;
+
+                SweatLocatorUpdateInfo updateInfo = default;
+                updateInfo.name = entry.name;
+                updateInfo.owner = key.owner;
+                updateInfo.alpha = key.alpha;
+                updateInfo.randomVisibleCount = key.randomVisibleCount;
+                handler(ref updateInfo);
             }
         }
 

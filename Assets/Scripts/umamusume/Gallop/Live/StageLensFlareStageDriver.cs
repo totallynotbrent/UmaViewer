@@ -47,6 +47,9 @@ namespace Gallop.Live
             _ctl.OnUpdateLightShafts += OnLightShafts;
             _ctl.OnUpdateNodeScale += OnNodeScale;
             _ctl.OnUpdateTitle += OnTitle;
+            _ctl.OnUpdateFacialNoise += OnFacialNoise;
+            _ctl.OnUpdateCharaMotionNoise += OnCharaMotionNoise;
+            _ctl.OnUpdateSweatLocator += OnSweatLocator;
             _bound = true;
         }
 
@@ -61,6 +64,9 @@ namespace Gallop.Live
                 _ctl.OnUpdateLightShafts -= OnLightShafts;
                 _ctl.OnUpdateNodeScale -= OnNodeScale;
                 _ctl.OnUpdateTitle -= OnTitle;
+                _ctl.OnUpdateFacialNoise -= OnFacialNoise;
+                _ctl.OnUpdateCharaMotionNoise -= OnCharaMotionNoise;
+                _ctl.OnUpdateSweatLocator -= OnSweatLocator;
             }
             _bound = false;
             _flareRenderers.Clear();
@@ -126,6 +132,10 @@ namespace Gallop.Live
             if (renderers == null)
                 return;
 
+            float speed = updateInfo.speed;
+            if (_projectorScroll.TryGetValue(updateInfo.name, out float last) && !Mathf.Approximately(last, speed))
+                _projectorScroll[updateInfo.name] = speed;
+
             foreach (var r in renderers)
             {
                 if (r == null)
@@ -138,9 +148,16 @@ namespace Gallop.Live
                         continue;
                     if (m.HasProperty(ProjectorColor))
                         m.SetColor(ProjectorColor, updateInfo.color * Mathf.Max(0f, updateInfo.power));
+                    // the authored motion speed scrolls the cookie texture; motionID
+                    // selects the pattern, speed 0 pins it in place.
+                    if (m.HasProperty(ProjectorMainTex))
+                        m.SetTextureOffset(ProjectorMainTex,
+                            new Vector2(0f, Mathf.Repeat(Time.time * speed * 0.1f, 1f)));
                 }
             }
         }
+        private readonly Dictionary<string, float> _projectorScroll = new Dictionary<string, float>();
+        private static readonly int ProjectorMainTex = Shader.PropertyToID("_MainTex");
 
         private void OnParticle(ref LiveTimelineControl.ParticleUpdateInfo updateInfo)
         {
@@ -207,20 +224,128 @@ namespace Gallop.Live
 
         private void OnNodeScale(ref LiveTimelineControl.NodeScaleUpdateInfo updateInfo)
         {
-            // sizeType semantics need the game's enum to apply safely; the values are
-            // logged once per change so the mapping can be tuned with real data.
+            // the game's node-scale system: characterFlag bit i+1 selects character i,
+            // and the key's percentage scales that character's model; the enum
+            // (Direct/Actual/Small) picks the preset style but the rate is the driver.
             if (_lastNodeScaleKey == (updateInfo.characterFlag, updateInfo.sizeType, updateInfo.scaleRatePer))
                 return;
             _lastNodeScaleKey = (updateInfo.characterFlag, updateInfo.sizeType, updateInfo.scaleRatePer);
             Director.FileLog($"[nodescale] characterFlag={updateInfo.characterFlag} targetFlag={updateInfo.targetFlag} sizeType={updateInfo.sizeType} scaleRatePer={updateInfo.scaleRatePer}");
+
+            var containers = Director.instance ? Director.instance.CharaContainerScript : null;
+            if (containers == null)
+                return;
+
+            float rate = Mathf.Max(0.01f, updateInfo.scaleRatePer * 0.01f);
+            for (int i = 0; i < containers.Count && i < 31; i++)
+            {
+                // characterFlag bit (i+1): bit 0 is the Default slot the game skips.
+                if ((updateInfo.characterFlag & (1 << (i + 1))) == 0)
+                    continue;
+
+                var container = containers[i];
+                if (container == null)
+                    continue;
+
+                var position = container.transform.Find("Position");
+                if (position == null)
+                    continue;
+
+                // the authored percentage rides on the character's natural body scale
+                // so a 100% key leaves the stage exactly as loaded.
+                float baseScale = container.BodyScale > 0f ? container.BodyScale : 1f;
+                float applied = baseScale * rate;
+                position.localScale = new Vector3(applied, applied, applied);
+            }
         }
         private (int, int, float) _lastNodeScaleKey = (-1, -1, -1f);
 
+        private TextMesh _titleMesh;
+        private float _titleTargetAlpha;
+        private float _titleAlpha;
+
+        // the authored title actions: actionType 1 fades the song title in, 2 fades it
+        // out, over actionFrame frames; the overlay is a world-space text quad riding
+        // the main camera so no scene edits are needed.
         private void OnTitle(ref LiveTimelineControl.TitleUpdateInfo updateInfo)
         {
-            // the viewer has no song-title overlay yet; record the authored actions so
-            // the trigger timing is visible in the log for a future title layer.
-            Director.FileLog($"[title] action type={updateInfo.actionType} frame={updateInfo.actionFrame}");
+            if (_titleMesh == null)
+            {
+                var camera = Camera.main;
+                if (camera == null)
+                    return;
+
+                var go = new GameObject("TimelineTitleOverlay");
+                go.transform.SetParent(camera.transform, false);
+                go.transform.localPosition = new Vector3(0f, 0.35f, 1.2f);
+                go.transform.localRotation = Quaternion.identity;
+                go.transform.localScale = new Vector3(0.01f, 0.01f, 0.01f);
+
+                _titleMesh = go.AddComponent<TextMesh>();
+                _titleMesh.fontSize = 64;
+                _titleMesh.characterSize = 0.5f;
+                _titleMesh.anchor = TextAnchor.MiddleCenter;
+                _titleMesh.alignment = TextAlignment.Center;
+                _titleMesh.color = new Color(1f, 1f, 1f, 0f);
+
+                var live = Director.instance ? Director.instance.live : null;
+                _titleMesh.text = live != null ? live.SongName : string.Empty;
+            }
+
+            // authored ordinal actions: 1 = fade in, 2 = fade out.
+            bool fadeIn = updateInfo.actionType == 1;
+            _titleTargetAlpha = fadeIn ? 1f : 0f;
+            _titleFadeDuration = Mathf.Max(1, updateInfo.actionFrame) / 60f;
+            _titleFadeClock = 0f;
+
+            Director.FileLog($"[title] {(fadeIn ? "fade in" : "fade out")} over {updateInfo.actionFrame} frames");
+        }
+        private float _titleFadeDuration = 1f;
+        private float _titleFadeClock = 999f;
+
+        // the noise + sweat tracks are alive but their solvers need the game's per-
+        // character noise profiles (missing-script components), so their authored state
+        // logs once per change until those land.
+        private int _lastFacialNoiseFlag = -1;
+        private void OnFacialNoise(ref LiveTimelineControl.FacialNoiseUpdateInfo updateInfo)
+        {
+            if (updateInfo.enableCharacterBitFlag == _lastFacialNoiseFlag)
+                return;
+            _lastFacialNoiseFlag = updateInfo.enableCharacterBitFlag;
+            Director.FileLog($"[facialnoise] enableCharacterBitFlag={updateInfo.enableCharacterBitFlag}");
+        }
+
+        private (float, float) _lastMotionNoise = (-1f, -1f);
+        private void OnCharaMotionNoise(ref LiveTimelineControl.CharaMotionNoiseUpdateInfo updateInfo)
+        {
+            var key = (updateInfo.sideBaseBias, updateInfo.backBaseBias);
+            if (key == _lastMotionNoise)
+                return;
+            _lastMotionNoise = key;
+            Director.FileLog($"[motionnoise] side bias/range/freq={updateInfo.sideBaseBias}/{updateInfo.sideRange}/{updateInfo.sideFrequency} back={updateInfo.backBaseBias}/{updateInfo.backRange}/{updateInfo.backFrequency}");
+        }
+
+        private void OnSweatLocator(ref LiveTimelineControl.SweatLocatorUpdateInfo updateInfo)
+        {
+            if (_sweatLogged.Add(updateInfo.name))
+                Director.FileLog($"[sweat] '{updateInfo.name}' owner={updateInfo.owner} alpha={updateInfo.alpha:F2} randomVisibleCount={updateInfo.randomVisibleCount}");
+        }
+        private readonly HashSet<string> _sweatLogged = new HashSet<string>();
+
+        private void Update()
+        {
+            if (_titleMesh == null || _titleAlpha == _titleTargetAlpha)
+                return;
+
+            _titleFadeClock += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(_titleFadeClock / _titleFadeDuration);
+            _titleAlpha = Mathf.Lerp(_titleAlpha, _titleTargetAlpha, t);
+            if (Mathf.Abs(_titleAlpha - _titleTargetAlpha) < 0.01f)
+                _titleAlpha = _titleTargetAlpha;
+
+            var c = _titleMesh.color;
+            c.a = _titleAlpha;
+            _titleMesh.color = c;
         }
     }
 }

@@ -476,6 +476,10 @@ namespace Gallop.Live.Cutt
         [SerializeField] public List<LiveTimelineTransformData> transformList;
         [SerializeField] public List<LiveTimelineObjectData> objectList;
         [SerializeField] public List<LiveTimelineRendererData> rendererList = new List<LiveTimelineRendererData>();
+        [SerializeField] public LiveTimelineCameraLayerData cameraLayerKeys;
+        [SerializeField] public LiveTimelineFacialNoiseData facialNoiseKeys;
+        [SerializeField] public LiveTimelineCharaMotionNoiseData charaMotionNoiseKeys;
+        [SerializeField] public List<LiveTimelineSweatLocatorData> sweatLocatorList = new List<LiveTimelineSweatLocatorData>();
         [SerializeField] public List<LiveTimelineLensFlareData> lensFlareList = new List<LiveTimelineLensFlareData>();
         [SerializeField] public List<LiveTimelineProjectorData> projecterList = new List<LiveTimelineProjectorData>();
         [SerializeField] public List<LiveTimelineParticleData> particleList = new List<LiveTimelineParticleData>();
