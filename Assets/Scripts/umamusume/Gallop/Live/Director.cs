@@ -1353,10 +1353,29 @@ namespace Gallop.Live
         // authored global fog mapped onto the engine fog; the game applies its fog as a
         // camera effect but the authored values (mode/color/density/range) are honored
         // as-is, and the first application logs so a washed-out frame is traceable.
+        // the game's stage shaders read a dedicated global fog block (the shader
+        // property table's first entries), so the authored fog drives both the
+        // built-in fog and the _Global_ constants its own materials expect.
+        private static readonly int GlobalFogColorId = Shader.PropertyToID("_Global_FogColor");
+        private static readonly int GlobalFogMinDistanceId = Shader.PropertyToID("_Global_FogMinDistance");
+        private static readonly int GlobalFogLengthId = Shader.PropertyToID("_Global_FogLength");
+        private static readonly int GlobalMaxDensityId = Shader.PropertyToID("_Global_MaxDensity");
+        private static readonly int GlobalMaxHeightId = Shader.PropertyToID("_Global_MaxHeight");
+        private static readonly int GlobalFogWorldOriginId = Shader.PropertyToID("_Global_FogWorld_Origin");
+
         private void OnUpdateGlobalFog(ref GlobalFogUpdateInfo info)
         {
             bool on = info.isDistance || info.isHeight;
             RenderSettings.fog = on;
+
+            Color fogColor = on ? info.color : Color.clear;
+            Shader.SetGlobalColor(GlobalFogColorId, fogColor);
+            Shader.SetGlobalFloat(GlobalFogMinDistanceId, on ? info.start : 100000f);
+            Shader.SetGlobalFloat(GlobalFogLengthId, on ? Mathf.Max(0.01f, info.end - info.start) : 0f);
+            Shader.SetGlobalFloat(GlobalMaxDensityId, on ? Mathf.Max(0.0001f, info.expDensity) : 0f);
+            Shader.SetGlobalFloat(GlobalMaxHeightId, on ? 1000f : 0f);
+            Shader.SetGlobalVector(GlobalFogWorldOriginId, on ? Vector3.zero : Vector3.zero);
+
             if (!on)
                 return;
 
