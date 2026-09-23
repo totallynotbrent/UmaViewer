@@ -407,7 +407,7 @@ namespace Gallop
             {
                 _gameBloomStateLogged = true;
                 _gameBloomStateLoggedValue = useGameBloom;
-                Director.FileLog($"[gamebloom] state useGameBloom={useGameBloom} authoredIntensity={authoredBloomIntensity:F2} enableBloom={param.IsEnableBloom} blend={param.BloomBlendMode}");
+                Director.FileLog($"[gamebloom] state useGameBloom={useGameBloom} authoredIntensity={authoredBloomIntensity:F2} enableBloom={param.IsEnableBloom} blend={param.BloomBlendMode} dofWeight={param.BloomDofWeight:F2}");
             }
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.GameBloomEnabled = useGameBloom;
             if (useGameBloom)
@@ -418,7 +418,7 @@ namespace Gallop
                 float gameBlur = Mathf.Max(param.IsEnableBloom ? param.BloomBlurSize : 0f,
                                            param.IsEnableDiffusion ? param.DiffusionBlurSize : 0f);
                 Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BlurSize = Mathf.Clamp(gameBlur, 0.5f, 8f);
-                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BloomDofWeight = 1f;
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BloomDofWeight = param.BloomDofWeight;
                 Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BloomIsScreenBlend =
                     param.BloomBlendMode == DofDiffusionBloomOverlayParam.BloomScreenBlendMode.Screen ? 1f : 0f;
                 return;

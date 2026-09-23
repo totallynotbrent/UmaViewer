@@ -56,6 +56,10 @@ namespace Gallop.RenderPipeline
             private RTHandle _bloomB;
             private RTHandle _bloomC;
             private RTHandle _composite;
+            private int _lastBloomW = -1;
+            private int _lastBloomH = -1;
+            private int _lastLoggedW = -1;
+            private int _lastLoggedH = -1;
 
             private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
             private static readonly int PostFilmPowerId = Shader.PropertyToID("_PostFilmPower");
@@ -81,17 +85,6 @@ namespace Gallop.RenderPipeline
                 // texture the shader samples as the global _Bloom (a read-while-write
                 // hazard renders black on most drivers).
                 RenderingUtils.ReAllocateIfNeeded(ref _composite, desc, FilterMode.Bilinear, name: "_GameBloomComposite");
-
-                // the game's bloom pyramid runs at half resolution and below.
-                desc.width /= 2;
-                desc.height /= 2;
-                RenderingUtils.ReAllocateIfNeeded(ref _bloomA, desc, FilterMode.Bilinear, name: "_GameBloomA");
-                desc.width /= 2;
-                desc.height /= 2;
-                RenderingUtils.ReAllocateIfNeeded(ref _bloomB, desc, FilterMode.Bilinear, name: "_GameBloomB");
-                desc.width /= 2;
-                desc.height /= 2;
-                RenderingUtils.ReAllocateIfNeeded(ref _bloomC, desc, FilterMode.Bilinear, name: "_GameBloomC");
 
                 if (_fastBloomMaterial == null)
                 {
@@ -121,34 +114,54 @@ namespace Gallop.RenderPipeline
                 var cmd = CommandBufferPool.Get("GameFastBloom");
                 var source = renderingData.cameraData.renderer.cameraColorTargetHandle;
 
-                int halfW = renderingData.cameraData.cameraTargetDescriptor.width / 2;
-                int halfH = renderingData.cameraData.cameraTargetDescriptor.height / 2;
+                int srcW = renderingData.cameraData.cameraTargetDescriptor.width;
+                int srcH = renderingData.cameraData.cameraTargetDescriptor.height;
 
-                // the game publishes the blur offsets and the authored threshold and
-                // intensity together as the global _Parameter vector, mirroring its
-                // CreateBloomTexture: x/y are blur texel offsets, z/w the auth values.
+                // the game's CreateBloomTexture runs the whole pyramid at ONE reduced
+                // resolution (source/4 normally, source/2 on its high quality path) with
+                // three same-res blits through passes 1, 2 and 3.
+                int bloomW = Mathf.Max(1, srcW / 4);
+                int bloomH = Mathf.Max(1, srcH / 4);
+                if (bloomW != _lastBloomW || bloomH != _lastBloomH)
+                {
+                    _lastBloomW = bloomW;
+                    _lastBloomH = bloomH;
+                    var bloomDesc = renderingData.cameraData.cameraTargetDescriptor;
+                    bloomDesc.depthBufferBits = 0;
+                    bloomDesc.msaaSamples = 1;
+                    bloomDesc.width = bloomW;
+                    bloomDesc.height = bloomH;
+                    RenderingUtils.ReAllocateIfNeeded(ref _bloomA, bloomDesc, FilterMode.Bilinear, name: "_GameBloomA");
+                    RenderingUtils.ReAllocateIfNeeded(ref _bloomB, bloomDesc, FilterMode.Bilinear, name: "_GameBloomB");
+                    RenderingUtils.ReAllocateIfNeeded(ref _bloomC, bloomDesc, FilterMode.Bilinear, name: "_GameBloomC");
+                }
+
+                // the parameter vector mirrors the game exactly: x/y are the blur texel
+                // scale (aspect-corrected, 1/512 units), z/w the authored threshold and
+                // intensity straight from the param object.
                 float blur = Mathf.Max(0.5f, BlurSize);
+                float aspect = (float)srcW / Mathf.Max(1, srcH);
                 Vector4 parameter = new Vector4(
-                    (4f / halfW) * blur,
-                    (4f / halfH) * blur,
+                    blur / aspect * 0.00195312f,
+                    blur * 0.00195312f,
                     Threshold,
                     Intensity);
                 cmd.SetGlobalVector(ParameterId, parameter);
+                if (_lastLoggedW != bloomW || _lastLoggedH != bloomH)
+                {
+                    _lastLoggedW = bloomW;
+                    _lastLoggedH = bloomH;
+                    Gallop.Live.Director.FileLog($"[gamebloom] pyramid res={bloomW}x{bloomH} param=({parameter.x:F5},{parameter.y:F5},{parameter.z:F3},{parameter.w:F2})");
+                }
 
                 // the game shaders sample _MainTex, so every blit binds it explicitly;
                 // the urp blitter owns _BlitTexture and does not set _MainTex itself.
-                // pass 1: threshold downsample at half res (the game's first pyramid blit).
                 _fastBloomMaterial.SetTexture(MainTexId, source);
                 Blitter.BlitCameraTexture(cmd, source, _bloomA, _fastBloomMaterial, 1);
-
-                // passes 1, 2, 3: the descending blur ladder the game's
-                // CreateBloomTexture walks through its temporary textures.
                 _fastBloomMaterial.SetTexture(MainTexId, _bloomA);
-                Blitter.BlitCameraTexture(cmd, _bloomA, _bloomB, _fastBloomMaterial, 1);
+                Blitter.BlitCameraTexture(cmd, _bloomA, _bloomB, _fastBloomMaterial, 2);
                 _fastBloomMaterial.SetTexture(MainTexId, _bloomB);
-                Blitter.BlitCameraTexture(cmd, _bloomB, _bloomC, _fastBloomMaterial, 2);
-                _fastBloomMaterial.SetTexture(MainTexId, _bloomC);
-                Blitter.BlitCameraTexture(cmd, _bloomC, _bloomA, _fastBloomMaterial, 3);
+                Blitter.BlitCameraTexture(cmd, _bloomB, _bloomC, _fastBloomMaterial, 3);
 
                 // the composite is a different shader in the game: PostBloom_Rich pass 0
                 // (the pass class keeps two materials, _fastBloomMaterial at +0x130 for
