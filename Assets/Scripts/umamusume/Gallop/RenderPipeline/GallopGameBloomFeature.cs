@@ -5,9 +5,10 @@ using UnityEngine.Rendering.Universal;
 namespace Gallop.RenderPipeline
 {
     /// <summary>
-    /// renders the authored bloom + diffusion with the game's own FastBloom shader
-    /// from shader.a instead of the URP volume approximation; the game's post look
-    /// is defined by these passes.
+    /// renders the authored bloom with the game's own FastBloom shader exactly the
+    /// way the game drives it: a half-res pyramid built with passes 1,1,2,3 into a
+    /// texture published as the global _Bloom, then a pass-0 composite that reads
+    /// the globals _Bloom, _BloomIsScreenBlend and _bloomDofWeight.
     /// </summary>
     public class GallopGameBloomFeature : ScriptableRendererFeature
     {
@@ -35,18 +36,18 @@ namespace Gallop.RenderPipeline
             public static float Intensity = 1f;
             public static float Threshold = 0.8f;
             public static float BlurSize = 3f;
-            public static Color BloomTint = Color.white;
+            public static float BloomDofWeight = 1f;
+            public static float BloomIsScreenBlend = 1f;
 
             private Material _fastBloomMaterial;
-            private RTHandle _tempA;
-            private RTHandle _tempB;
+            private RTHandle _bloomA;
+            private RTHandle _bloomB;
+            private RTHandle _bloomC;
 
-            private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
-            private static readonly int BloomTexId = Shader.PropertyToID("_BloomTex");
-            private static readonly int ThresholdId = Shader.PropertyToID("_Threshold");
-            private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
-            private static readonly int BlurSizeId = Shader.PropertyToID("_BlurSize");
-            private static readonly int TintColorId = Shader.PropertyToID("_BloomTintColor");
+            private static readonly int ParameterId = Shader.PropertyToID("_Parameter");
+            private static readonly int BloomId = Shader.PropertyToID("_Bloom");
+            private static readonly int BloomIsScreenBlendId = Shader.PropertyToID("_BloomIsScreenBlend");
+            private static readonly int BloomDofWeightId = Shader.PropertyToID("_bloomDofWeight");
 
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
@@ -54,8 +55,16 @@ namespace Gallop.RenderPipeline
                 desc.depthBufferBits = 0;
                 desc.msaaSamples = 1;
 
-                RenderingUtils.ReAllocateIfNeeded(ref _tempA, desc, FilterMode.Bilinear, name: "_GameBloomA");
-                RenderingUtils.ReAllocateIfNeeded(ref _tempB, desc, FilterMode.Bilinear, name: "_GameBloomB");
+                // the game's bloom pyramid runs at half resolution and below.
+                desc.width /= 2;
+                desc.height /= 2;
+                RenderingUtils.ReAllocateIfNeeded(ref _bloomA, desc, FilterMode.Bilinear, name: "_GameBloomA");
+                desc.width /= 2;
+                desc.height /= 2;
+                RenderingUtils.ReAllocateIfNeeded(ref _bloomB, desc, FilterMode.Bilinear, name: "_GameBloomB");
+                desc.width /= 2;
+                desc.height /= 2;
+                RenderingUtils.ReAllocateIfNeeded(ref _bloomC, desc, FilterMode.Bilinear, name: "_GameBloomC");
 
                 if (_fastBloomMaterial == null)
                 {
@@ -81,21 +90,37 @@ namespace Gallop.RenderPipeline
                 var cmd = CommandBufferPool.Get("GameFastBloom");
                 var source = renderingData.cameraData.renderer.cameraColorTargetHandle;
 
-                _fastBloomMaterial.SetFloat(ThresholdId, Threshold);
-                _fastBloomMaterial.SetFloat(IntensityId, Intensity);
-                _fastBloomMaterial.SetFloat(BlurSizeId, BlurSize);
-                _fastBloomMaterial.SetColor(TintColorId, BloomTint);
+                int halfW = renderingData.cameraData.cameraTargetDescriptor.width / 2;
+                int halfH = renderingData.cameraData.cameraTargetDescriptor.height / 2;
 
-                // classic FastBloom layout: 0 = threshold downsample, 1 = vertical blur,
-                // 2 = horizontal blur, 3 = composite; pass names logged on first load so a
-                // different layout is visible in the log.
-                Blit(cmd, source, _tempA, _fastBloomMaterial, 0);
-                Blit(cmd, _tempA, _tempB, _fastBloomMaterial, 1);
-                Blit(cmd, _tempB, _tempA, _fastBloomMaterial, 2);
+                // the game publishes the blur offsets and the authored threshold and
+                // intensity together as the global _Parameter vector, mirroring its
+                // CreateBloomTexture: x/y are blur texel offsets, z/w the auth values.
+                float blur = Mathf.Max(0.5f, BlurSize);
+                Vector4 parameter = new Vector4(
+                    (4f / halfW) * blur,
+                    (4f / halfH) * blur,
+                    Threshold,
+                    Intensity);
+                cmd.SetGlobalVector(ParameterId, parameter);
 
-                _fastBloomMaterial.SetTexture(BloomTexId, _tempA);
-                Blit(cmd, source, _tempB, _fastBloomMaterial, 3);
-                Blit(cmd, _tempB, source);
+                // pass 1: threshold downsample at half res (the game's first pyramid blit).
+                Blit(cmd, source, _bloomA, _fastBloomMaterial, 1);
+
+                // passes 1, 2, 3: the descending blur ladder the game's
+                // CreateBloomTexture walks through its temporary textures.
+                Blit(cmd, _bloomA, _bloomB, _fastBloomMaterial, 1);
+                Blit(cmd, _bloomB, _bloomC, _fastBloomMaterial, 2);
+                Blit(cmd, _bloomC, _bloomA, _fastBloomMaterial, 3);
+
+                // pass 0 is the composite: it reads the globals _Bloom, _BloomIsScreenBlend
+                // and _bloomDofWeight, exactly like the game's OnRenderImageFastBloom.
+                cmd.SetGlobalTexture(BloomId, _bloomA);
+                cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
+                cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
+                Blit(cmd, source, _bloomA, _fastBloomMaterial, 0);
+                // the composite wrote into a temp; copy back to the camera target.
+                Blit(cmd, _bloomA, source);
 
                 context.ExecuteCommandBuffer(cmd);
                 CommandBufferPool.Release(cmd);
@@ -103,8 +128,9 @@ namespace Gallop.RenderPipeline
 
             public void Cleanup()
             {
-                _tempA?.Release();
-                _tempB?.Release();
+                _bloomA?.Release();
+                _bloomB?.Release();
+                _bloomC?.Release();
             }
 
             public override void OnCameraCleanup(CommandBuffer cmd)

@@ -405,11 +405,14 @@ namespace Gallop
             if (useGameBloom)
             {
                 _bloom.active = false;
-                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.Intensity = Mathf.Min(authoredBloomIntensity, 12f) * 0.5f;
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.Intensity = Mathf.Min(authoredBloomIntensity, 12f);
                 Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.Threshold = param.BloomThreshold;
                 float gameBlur = Mathf.Max(param.IsEnableBloom ? param.BloomBlurSize : 0f,
                                            param.IsEnableDiffusion ? param.DiffusionBlurSize : 0f);
                 Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BlurSize = Mathf.Clamp(gameBlur, 0.5f, 8f);
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BloomDofWeight = 1f;
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BloomIsScreenBlend =
+                    param.BloomBlendMode == DofDiffusionBloomOverlayParam.BloomScreenBlendMode.Screen ? 1f : 0f;
                 return;
             }
 
