@@ -3670,7 +3670,7 @@ namespace Gallop.Live.Cutt
 
         private void AlterUpdate_CameraLayer(LiveTimelineWorkSheet sheet, float currentFrame)
         {
-            if (sheet == null || sheet.cameraLayerKeys == null || sheet.cameraLayerKeys == null)
+            if (sheet == null || sheet.cameraLayerKeys == null)
                 return;
             var keys = sheet.cameraLayerKeys;
             if (keys.Count <= 0 ||
