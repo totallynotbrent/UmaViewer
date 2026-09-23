@@ -46,6 +46,7 @@ namespace Gallop.RenderPipeline
             private RTHandle _bloomC;
             private RTHandle _composite;
 
+            private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
             private static readonly int ParameterId = Shader.PropertyToID("_Parameter");
             private static readonly int BloomId = Shader.PropertyToID("_Bloom");
             private static readonly int BloomIsScreenBlendId = Shader.PropertyToID("_BloomIsScreenBlend");
@@ -115,14 +116,20 @@ namespace Gallop.RenderPipeline
                     Intensity);
                 cmd.SetGlobalVector(ParameterId, parameter);
 
+                // the game shaders sample _MainTex, so every blit binds it explicitly;
+                // the urp blitter owns _BlitTexture and does not set _MainTex itself.
                 // pass 1: threshold downsample at half res (the game's first pyramid blit).
-                Blit(cmd, source, _bloomA, _fastBloomMaterial, 1);
+                _fastBloomMaterial.SetTexture(MainTexId, source);
+                Blitter.BlitCameraTexture(cmd, source, _bloomA, _fastBloomMaterial, 1);
 
                 // passes 1, 2, 3: the descending blur ladder the game's
                 // CreateBloomTexture walks through its temporary textures.
-                Blit(cmd, _bloomA, _bloomB, _fastBloomMaterial, 1);
-                Blit(cmd, _bloomB, _bloomC, _fastBloomMaterial, 2);
-                Blit(cmd, _bloomC, _bloomA, _fastBloomMaterial, 3);
+                _fastBloomMaterial.SetTexture(MainTexId, _bloomA);
+                Blitter.BlitCameraTexture(cmd, _bloomA, _bloomB, _fastBloomMaterial, 1);
+                _fastBloomMaterial.SetTexture(MainTexId, _bloomB);
+                Blitter.BlitCameraTexture(cmd, _bloomB, _bloomC, _fastBloomMaterial, 2);
+                _fastBloomMaterial.SetTexture(MainTexId, _bloomC);
+                Blitter.BlitCameraTexture(cmd, _bloomC, _bloomA, _fastBloomMaterial, 3);
 
                 // the composite is a different shader in the game: PostBloom_Rich pass 0
                 // (the pass class keeps two materials, _fastBloomMaterial at +0x130 for
@@ -133,8 +140,9 @@ namespace Gallop.RenderPipeline
                 cmd.SetGlobalTexture(BloomId, _bloomA);
                 cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
                 cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
-                Blit(cmd, source, _composite, _postBloomMaterial, 0);
-                Blit(cmd, _composite, source);
+                _postBloomMaterial.SetTexture(MainTexId, source);
+                Blitter.BlitCameraTexture(cmd, source, _composite, _postBloomMaterial, 0);
+                Blitter.BlitCameraTexture(cmd, _composite, source);
 
                 context.ExecuteCommandBuffer(cmd);
                 CommandBufferPool.Release(cmd);

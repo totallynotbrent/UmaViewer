@@ -35,6 +35,8 @@ namespace Gallop
 
         // f8 flips between the game's FastBloom shader and the URP volume bloom.
         [SerializeField] private bool _useGameBloom = true;
+        private bool _gameBloomStateLogged;
+        private bool _gameBloomStateLoggedValue;
 
         public void ToggleGameBloom()
         {
@@ -401,6 +403,12 @@ namespace Gallop
             // volume bloom switches off so the two never stack. f8 flips this live.
             float authoredBloomIntensity = param.IsEnableBloom ? Mathf.Max(0f, param.BloomIntensity) : 0f;
             bool useGameBloom = _useGameBloom && authoredBloomIntensity > 0f;
+            if (!_gameBloomStateLogged || _gameBloomStateLoggedValue != useGameBloom)
+            {
+                _gameBloomStateLogged = true;
+                _gameBloomStateLoggedValue = useGameBloom;
+                Director.FileLog($"[gamebloom] state useGameBloom={useGameBloom} authoredIntensity={authoredBloomIntensity:F2} enableBloom={param.IsEnableBloom} blend={param.BloomBlendMode}");
+            }
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.GameBloomEnabled = useGameBloom;
             if (useGameBloom)
             {
