@@ -58,9 +58,6 @@ namespace Gallop.Live
         private static readonly int PropFadeoutHeightEnd = Shader.PropertyToID("_FadeoutHeightEnd");
         private static readonly int PropFadeoutHeightLength = Shader.PropertyToID("_FadeoutHeightLength");
         private static readonly int PropProjectorColorPower = Shader.PropertyToID("_ProjectorColorPower");
-        private static readonly int PropReflectionOffsetScaleUV = Shader.PropertyToID("_ReflectionOffsetScaleUV");
-        private static readonly int PropSpeed = Shader.PropertyToID("_Speed");
-        private static readonly int PropDistortion = Shader.PropertyToID("_Distortion");
 
         [SerializeField] private float _distance;
 
@@ -450,23 +447,6 @@ namespace Gallop.Live
 
             _cameraProjectionSide = updateInfo.CameraProjectionSide;
             _cameraProjectionColorPower = updateInfo.CameraProjectionColorPower;
-
-            // the game's AlterLateUpdate asserts the reflection-wobble trio on the
-            // wash material every frame: distortion is a clamp of the material's own
-            // offset-scale minus its scroll speed, never an authored value.
-            if (_washLightMaterial != null)
-            {
-                if (_washLightMaterial.HasProperty(PropReflectionOffsetScaleUV))
-                {
-                    float offsetScale = _washLightMaterial.GetFloat(PropReflectionOffsetScaleUV);
-                    if (_washLightMaterial.HasProperty(PropSpeed))
-                    {
-                        float speed = _washLightMaterial.GetFloat(PropSpeed);
-                        if (_washLightMaterial.HasProperty(PropDistortion))
-                            _washLightMaterial.SetFloat(PropDistortion, Mathf.Max(offsetScale - speed, 0.001f));
-                    }
-                }
-            }
 
             SetupCameraProjectionVertexOffsetArray();
         }

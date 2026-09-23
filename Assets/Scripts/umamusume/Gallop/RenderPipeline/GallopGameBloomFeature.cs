@@ -43,6 +43,7 @@ namespace Gallop.RenderPipeline
             private RTHandle _bloomA;
             private RTHandle _bloomB;
             private RTHandle _bloomC;
+            private RTHandle _composite;
 
             private static readonly int ParameterId = Shader.PropertyToID("_Parameter");
             private static readonly int BloomId = Shader.PropertyToID("_Bloom");
@@ -54,6 +55,11 @@ namespace Gallop.RenderPipeline
                 var desc = renderingData.cameraData.cameraTargetDescriptor;
                 desc.depthBufferBits = 0;
                 desc.msaaSamples = 1;
+
+                // the composite needs a full-res target that is never the same
+                // texture the shader samples as the global _Bloom (a read-while-write
+                // hazard renders black on most drivers).
+                RenderingUtils.ReAllocateIfNeeded(ref _composite, desc, FilterMode.Bilinear, name: "_GameBloomComposite");
 
                 // the game's bloom pyramid runs at half resolution and below.
                 desc.width /= 2;
@@ -115,12 +121,13 @@ namespace Gallop.RenderPipeline
 
                 // pass 0 is the composite: it reads the globals _Bloom, _BloomIsScreenBlend
                 // and _bloomDofWeight, exactly like the game's OnRenderImageFastBloom.
+                // it must write to a texture other than _Bloom itself or the
+                // sampled texel and the written texel are the same memory.
                 cmd.SetGlobalTexture(BloomId, _bloomA);
                 cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
                 cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
-                Blit(cmd, source, _bloomA, _fastBloomMaterial, 0);
-                // the composite wrote into a temp; copy back to the camera target.
-                Blit(cmd, _bloomA, source);
+                Blit(cmd, source, _composite, _fastBloomMaterial, 0);
+                Blit(cmd, _composite, source);
 
                 context.ExecuteCommandBuffer(cmd);
                 CommandBufferPool.Release(cmd);
@@ -131,6 +138,7 @@ namespace Gallop.RenderPipeline
                 _bloomA?.Release();
                 _bloomB?.Release();
                 _bloomC?.Release();
+                _composite?.Release();
             }
 
             public override void OnCameraCleanup(CommandBuffer cmd)
