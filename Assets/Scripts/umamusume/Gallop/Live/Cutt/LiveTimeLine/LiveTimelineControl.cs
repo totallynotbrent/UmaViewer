@@ -617,6 +617,34 @@ namespace Gallop.Live.Cutt
 
             AlterLateUpdate_FormationOffset(currentLiveTime);
             AlterLateUpdate_CameraMotion(camSheet, _currentFrame);
+
+            int wsCount = data.worksheetList.Count;
+            // update-phase tracks read the timescale-mapped frame so authored slow
+            // motion slows their content the way the game's master update does.
+            float mappedFrame = TimescaledFrame(_currentFrame);
+            int mappedFrameInt = Mathf.RoundToInt(mappedFrame);
+
+            // the game runs the stage light tracks in the update phase before the
+            // camera switches, so light state matches this frame's camera transform.
+            for (int w = 0; w < wsCount; w++)
+            {
+                var ws = data.worksheetList[w];
+                if (ws == null) continue;
+
+                Gallop.Live.SectionProfiler.Begin("light.blink");
+                AlterUpdate_BlinkLight(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("light.wash");
+                AlterUpdate_WashLight(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("light.laser");
+                AlterUpdate_Laser(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("light.uvscroll");
+                AlterUpdate_UVScrollLight(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
+            }
+
             AlterUpdate_CameraSwitcher(camSheet, _currentFrame);
             AlterUpdate_CameraPos(camSheet, _currentFrame);
             AlterUpdate_CameraLookAt(camSheet, _currentFrame, ref outLookAt);
@@ -642,48 +670,35 @@ namespace Gallop.Live.Cutt
 
             AlterUpdate_BgColor1(camSheet, _currentFrame);
             _laserRuntimeIndexOffset = 0;
-            int wsCount = data.worksheetList.Count;
             for (int w = 0; w < wsCount; w++)
             {
                 var ws = data.worksheetList[w];
                 if (ws == null) continue;
 
-                Gallop.Live.SectionProfiler.Begin("light.blink");
-                AlterUpdate_BlinkLight(ws, _currentFrame);
-                Gallop.Live.SectionProfiler.End();
-                Gallop.Live.SectionProfiler.Begin("light.wash");
-                AlterUpdate_WashLight(ws, _currentFrame);
-                Gallop.Live.SectionProfiler.End();
-                Gallop.Live.SectionProfiler.Begin("light.laser");
-                AlterUpdate_Laser(ws, _currentFrame);
-                Gallop.Live.SectionProfiler.End();
-                Gallop.Live.SectionProfiler.Begin("light.uvscroll");
-                AlterUpdate_UVScrollLight(ws, _currentFrame);
-                Gallop.Live.SectionProfiler.End();
-                AlterUpdate_TransformControl(ws, _currentFrame);
-                AlterUpdate_ObjectControl(ws, _currentFrame);
+                AlterUpdate_TransformControl(ws, mappedFrame);
+                AlterUpdate_ObjectControl(ws, mappedFrame);
                 AlterUpdate_Renderer(ws, _currentFrame);
                 AlterUpdate_LensFlare(ws, _currentFrame);
                 AlterUpdate_Projector(ws, _currentFrame);
-                AlterUpdate_Particle(ws, _currentFrame);
-                AlterUpdate_ParticleGroup(ws, _currentFrame);
+                AlterUpdate_Particle(ws, mappedFrame);
+                AlterUpdate_ParticleGroup(ws, mappedFrame);
                 AlterUpdate_LightShafts(ws, _currentFrame);
                 AlterUpdate_NodeScale(ws, _currentFrame);
                 AlterUpdate_Title(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_CameraLayer(ws, _currentFrame);
-                AlterUpdate_FacialNoise(ws, _currentFrame);
-                AlterUpdate_CharaMotionNoise(ws, _currentFrame);
+                AlterUpdate_FacialNoise(ws, mappedFrame);
+                AlterUpdate_CharaMotionNoise(ws, mappedFrame);
                 AlterUpdate_SweatLocator(ws, _currentFrame);
                 AlterUpdate_LightProjection(ws, _currentFrame);
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
-                AlterUpdate_Voice(ws, Mathf.RoundToInt(_currentFrame));
-                AlterUpdate_CharaParts(ws, Mathf.RoundToInt(_currentFrame));
-                AlterUpdate_CharaFootLight(ws, Mathf.RoundToInt(_currentFrame));
-                AlterUpdate_FacialToon(ws, Mathf.RoundToInt(_currentFrame));
-                AlterUpdate_CharaWind(ws, Mathf.RoundToInt(_currentFrame));
-                AlterUpdate_FlashPlayer(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_Voice(ws, mappedFrameInt);
+                AlterUpdate_CharaParts(ws, mappedFrameInt);
+                AlterUpdate_CharaFootLight(ws, mappedFrameInt);
+                AlterUpdate_FacialToon(ws, mappedFrameInt);
+                AlterUpdate_CharaWind(ws, mappedFrameInt);
+                AlterUpdate_FlashPlayer(ws, mappedFrameInt);
                 AlterUpdate_AdditionalLight(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_CharaNode(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_TransparentCamera(ws, Mathf.RoundToInt(_currentFrame));
@@ -3688,10 +3703,22 @@ namespace Gallop.Live.Cutt
             if (curKey is not LiveTimelineKeyFacialNoiseData key)
                 return;
 
+            // the game keeps a separate facial noise clock that survives timescale
+            // changes; reset it when a new noise key takes over.
+            if (curKey != _lastFacialNoiseKey)
+            {
+                _lastFacialNoiseKey = curKey;
+                _facialNoiseTime = 0f;
+            }
+            _facialNoiseTime += Time.deltaTime;
+
             FacialNoiseUpdateInfo updateInfo = default;
             updateInfo.enableCharacterBitFlag = key.EnableCharacterBitFlag;
             handler(ref updateInfo);
         }
+
+        private LiveTimelineKey _lastFacialNoiseKey;
+        private float _facialNoiseTime;
 
         private void AlterUpdate_CharaMotionNoise(LiveTimelineWorkSheet sheet, float currentFrame)
         {
@@ -3718,6 +3745,34 @@ namespace Gallop.Live.Cutt
             updateInfo.backFrequency = key.backChrMotNoiseFrequency;
             updateInfo.isNegativeCheck = key.isNegativeCheck;
             handler(ref updateInfo);
+        }
+
+        // the game maps wall frames through the timescale keys before the update-phase
+        // tracks read them; mirror that mapping for every per-sheet consumer.
+        public float TimescaledFrame(float wallFrame)
+        {
+            var keys = GetCharaMotSeqTimescaleKeys();
+            if (keys == null || keys.Count == 0)
+                return wallFrame;
+
+            float mapped = wallFrame;
+            for (int i = keys.Count - 1; i >= 0; i--)
+            {
+                if (keys[i] is not LiveTimelineKeyTimescaleData k)
+                    continue;
+                if (wallFrame >= k.frame)
+                {
+                    // frames before this key pass through unchanged; frames after run
+                    // at the key's scale relative to the previous key boundary.
+                    float boundary = k.frame;
+                    float prev = i > 0 && keys[i - 1] is LiveTimelineKeyTimescaleData prevKey ? prevKey.frame : 0f;
+                    float baseSpan = boundary - prev;
+                    float scaledSpan = baseSpan * (i > 0 && keys[i - 1] is LiveTimelineKeyTimescaleData prevKey2 ? prevKey2.Timescale : 1f);
+                    mapped = prev + scaledSpan + (wallFrame - boundary) * k.Timescale;
+                    return mapped;
+                }
+            }
+            return mapped;
         }
 
         // plain keys carry no interpolation data; use the frame fraction between the
