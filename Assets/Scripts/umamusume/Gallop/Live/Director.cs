@@ -704,6 +704,11 @@ namespace Gallop.Live
                     fx?.ToggleGameBloom();
                 }
 
+                if (Input.GetKeyDown(KeyCode.F9))
+                {
+                    ToggleGallopWinParity();
+                }
+
                 if (_syncTime == false)
                 {
                     if(liveMusic.sourceList.Count == 0)
@@ -1435,6 +1440,33 @@ namespace Gallop.Live
         }
 
         private float _filmBestPower = -1f;
+
+        // the game's gallop_win quality level runs shadows off with 8x msaa; this
+        // a-b flips the live pipeline asset between the viewer defaults and that
+        // parity preset, plus turning every scene light's shadows off.
+        private bool _gallopWinParity;
+
+        private void ToggleGallopWinParity()
+        {
+            _gallopWinParity = !_gallopWinParity;
+            var asset = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            if (asset == null)
+                return;
+
+            asset.msaaSampleCount = _gallopWinParity ? 8 : 0;
+            asset.shadowDistance = _gallopWinParity ? 15f : 25f;
+            var lightShadows = _gallopWinParity ? LightShadows.None : LightShadows.Soft;
+            var sun = UnityEngine.RenderSettings.sun;
+            if (sun != null)
+                sun.shadows = lightShadows;
+            foreach (var light in FindObjectsOfType<Light>())
+            {
+                if (light != sun)
+                    light.shadows = lightShadows;
+            }
+
+            FileLog($"[parity] gallop_win preset {(_gallopWinParity ? "on (shadows off, msaa 8x, shadowdist 15)" : "off (viewer defaults)")}");
+        }
 
         private void OnUpdateHandShakeCamera(HandShakeCameraUpdateInfo updateInfo)
         {

@@ -8,6 +8,7 @@ namespace Gallop.Live.Cutt
     {
         public string TimelineName;
         public int TimelineNameHash;
+        public int layerIndex;
 
         public PostFilmMode filmMode;
         public PostColorType colorType;

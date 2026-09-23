@@ -48,8 +48,8 @@ namespace Gallop.Live.Cutt
 
     public struct MobCyalumeUpdateInfo
     {
-        public LiveTimelineMobCyalumeControlData data;
-        public int unk0;
+        public string trackName;
+        public int groupIndex;
         public Vector3 position;
         public Quaternion rotation;
         public Vector3 scale;

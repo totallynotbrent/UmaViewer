@@ -1970,6 +1970,8 @@ namespace Gallop.Live.Cutt
             }
         }
 
+        // the environment track carries the game's real stage-environment keys
+        // (water, shadow, mirror flags), separate from the mirror reflection track.
         private void AlterUpdate_EnvironmentMirror(LiveTimelineWorkSheet sheet, float currentFrame)
         {
             if (OnEnvironmentMirror == null) return;
@@ -1985,31 +1987,29 @@ namespace Gallop.Live.Cutt
                 if (keys.Count <= 0) continue;
                 if (keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable)) continue;
                 if (!keys.EnablePlayModeTimeline(_playMode)) continue;
-                if (!string.IsNullOrEmpty(envData.name) && !string.Equals(envData.name, "Environment", StringComparison.OrdinalIgnoreCase))
-                    continue;
 
                 FindTimelineKey(out var curKey, out var nextKey, keys, currentFrame);
-                var cur = curKey as LiveTimelineKeyMirrorReflectionData;
-                var next = nextKey as LiveTimelineKeyMirrorReflectionData;
+                var cur = curKey as LiveTimelineKeyStageEnvironmentData;
+                var next = nextKey as LiveTimelineKeyStageEnvironmentData;
                 if (cur == null) continue;
 
                 EnvironmentMirrorUpdateInfo info = default;
-                info.isValid = cur.GetIsValidMirror();
-                info.mirror = cur.GetMirrorEnabled();
-                info.bgMirror = cur.GetBgMirrorEnabled();
-                info.IsMirrorBg3d = cur.GetBg3dMirrorEnabled();
-                info.mirrorReflectionRate = cur.GetMirrorReflectionRate();
-                info.charaPositionFlag = cur.GetCharacterMirrorFlag();
-                info.VisibleHeadFlag = cur.GetCharacterMirrorHeadFlag();
+                info.isValid = cur.isValidMirror;
+                info.mirror = cur.isMirror;
+                info.bgMirror = cur.isBgMirror;
+                info.IsMirrorBg3d = cur.IsMirrorBg3d;
+                info.mirrorReflectionRate = cur.mirrorReflectionRate;
+                info.charaPositionFlag = cur.characterMirror;
+                info.VisibleHeadFlag = cur.CharacterMirrorHead;
                 info.IsToonMirror = cur.IsToonMirror;
-                info.IsEnabledCharacterMirrorHead = cur.GetEnableCharacterMirrorHead();
+                info.IsEnabledCharacterMirrorHead = (cur.CharacterMirrorHead & LiveCharaPositionFlag.Center) != 0;
                 info.EnableCharacterMirrorExpandFaceBounds = cur.EnableCharacterMirrorExpandFaceBounds;
                 info.CharacterMirrorExpandFaceBounds = cur.CharacterMirrorExpandFaceBounds;
 
-                if (next != null && next.interpolateType != 0)
+                if (next != null && next.interpolateType != LiveCameraInterpolateType.None)
                 {
                     float t = CalculateInterpolationValue(cur, next, currentFrame);
-                    info.mirrorReflectionRate = LerpWithoutClamp(cur.GetMirrorReflectionRate(), next.GetMirrorReflectionRate(), t);
+                    info.mirrorReflectionRate = LerpWithoutClamp(cur.mirrorReflectionRate, next.mirrorReflectionRate, t);
                 }
 
                 OnEnvironmentMirror.Invoke(ref info);
@@ -2036,20 +2036,20 @@ namespace Gallop.Live.Cutt
             }
         }
 
+        // mirror reflections are their own authored track with per-track base camera
+        // settings, no longer folded into the environment container.
         private void AlterUpdate_MirrorReflection(LiveTimelineWorkSheet sheet, float currentFrame)
         {
             if (OnUpdateMirrorReflection == null) return;
-            if (sheet == null || sheet.environmentDataLists == null) return;
+            if (sheet == null || sheet.MirrorReflectionDataList == null) return;
 
-            int count = sheet.environmentDataLists.Count;
+            int count = sheet.MirrorReflectionDataList.Count;
             for (int i = 0; i < count; i++)
             {
-                var envData = sheet.environmentDataLists[i];
-                if (envData == null || envData.keys == null) continue;
-                if (string.IsNullOrEmpty(envData.name) || string.Equals(envData.name, "Environment", StringComparison.OrdinalIgnoreCase))
-                    continue;
+                var mirrorData = sheet.MirrorReflectionDataList[i];
+                if (mirrorData == null || mirrorData.keys == null) continue;
 
-                var keys = envData.keys;
+                var keys = mirrorData.keys;
                 if (keys.Count <= 0) continue;
                 if (keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable)) continue;
                 if (!keys.EnablePlayModeTimeline(_playMode)) continue;
@@ -2060,9 +2060,9 @@ namespace Gallop.Live.Cutt
                 if (cur == null) continue;
 
                 MirrorReflectionUpdateInfo info = default;
-                info.TimelineNameHash = GenerateMirrorTimelineHash(envData.name);
-                info.BaseCameraType = LiveTimelineDefine.MirrorReflectionBaseCameraType.MainCamera;
-                info.BaseCameraIndex = 0;
+                info.TimelineNameHash = GenerateMirrorTimelineHash(mirrorData.name);
+                info.BaseCameraType = mirrorData._baseCameraType;
+                info.BaseCameraIndex = mirrorData._baseCameraIndex;
                 info.EnableMirror = cur.GetMirrorEnabled();
                 info.EnableBgLayer = cur.GetBgMirrorEnabled();
                 info.Enable3dLayer = cur.GetBg3dMirrorEnabled();
@@ -2072,7 +2072,7 @@ namespace Gallop.Live.Cutt
                 info.EnableCharaHead = cur.GetEnableCharacterMirrorHead();
                 info.TargetCharaHead = cur.GetCharacterMirrorHeadFlag();
 
-                if (next != null && next.interpolateType != 0)
+                if (next != null && next.interpolateType != LiveCameraInterpolateType.None)
                 {
                     float t = CalculateInterpolationValue(cur, next, currentFrame);
                     info.MirrorReflectionRate = LerpWithoutClamp(cur.GetMirrorReflectionRate(), next.GetMirrorReflectionRate(), t);
@@ -2612,10 +2612,16 @@ namespace Gallop.Live.Cutt
 
         private void AlterUpdate_PostFilm(LiveTimelineWorkSheet sheet, float currentFrame)
         {
-            if (OnUpdatePostFilm == null) return;
-            if (sheet == null || sheet.postFilmKeys == null) return;
+            AlterUpdate_PostFilmLayer(sheet.postFilmKeys, currentFrame, 0);
+            AlterUpdate_PostFilmLayer(sheet != null ? sheet.postFilm2Keys : null, currentFrame, 1);
+            AlterUpdate_PostFilmLayer(sheet != null ? sheet.postFilm3Keys : null, currentFrame, 2);
+        }
 
-            var keyList = sheet.postFilmKeys;
+        private void AlterUpdate_PostFilmLayer(LiveTimelineKeyPostFilmDataList keyList, float currentFrame, int layerIndex)
+        {
+            if (OnUpdatePostFilm == null) return;
+            if (keyList == null) return;
+
             if (keyList.Count == 0) return;
             if (keyList.HasAttribute(LiveTimelineKeyDataListAttr.Disable)) return;
             if (!keyList.EnablePlayModeTimeline(_playMode)) return;
@@ -2626,6 +2632,7 @@ namespace Gallop.Live.Cutt
             if (cur == null) return;
 
             PostFilmUpdateInfo updateInfo = default;
+            updateInfo.layerIndex = layerIndex;
             updateInfo.TimelineName = keyList.Description;
             updateInfo.TimelineNameHash = !string.IsNullOrEmpty(keyList.Description)
                 ? Animator.StringToHash(keyList.Description)
@@ -2674,74 +2681,126 @@ namespace Gallop.Live.Cutt
             OnUpdatePostFilm(cur, ref updateInfo, currentFrame);
         }
 
+        // the game authors per-group crowd and penlight tracks keyed by GroupIndex;
+        // both container shapes are identical so one core serves mob and cyalume.
+        private void AlterUpdate_MobCyalumeControlCore(
+            string trackName,
+            int groupIndex,
+            ILiveTimelineKeyDataList keys,
+            float currentFrame,
+            MobCyalumeUpdateInfoDelegate callback,
+            Func<LiveTimelineKey, Vector3> positionOf,
+            Func<LiveTimelineKey, Vector3> scaleOf,
+            Func<LiveTimelineKey, Quaternion> rotationOf,
+            Func<LiveTimelineKey, LiveTimelineKey> interpolateOf)
+        {
+            if (callback == null || keys == null)
+                return;
+
+            if (keys.Count <= 0)
+                return;
+            if (keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable))
+                return;
+            if (!keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var nextKey, keys, currentFrame);
+            if (curKey == null)
+                return;
+
+            MobCyalumeUpdateInfo info = default;
+            info.trackName = trackName;
+            info.groupIndex = groupIndex;
+            info.currentFrame = currentFrame;
+            info.currentLiveTime = currentLiveTime;
+
+            var next = nextKey as LiveTimelineKeyWithInterpolate;
+            if (next != null && next.interpolateType != LiveCameraInterpolateType.None)
+            {
+                float t = CalculateInterpolationValue(curKey as LiveTimelineKeyWithInterpolate, next, currentFrame);
+                info.position = Vector3.Lerp(positionOf(curKey), positionOf(nextKey), t);
+                info.rotation = Quaternion.Lerp(rotationOf(curKey), rotationOf(nextKey), t);
+                info.scale = Vector3.Lerp(scaleOf(curKey), scaleOf(nextKey), t);
+            }
+            else
+            {
+                info.position = positionOf(curKey);
+                info.rotation = rotationOf(curKey);
+                info.scale = scaleOf(curKey);
+            }
+
+            callback.Invoke(ref info);
+        }
+
+        private static Vector3 MobControlPosition(LiveTimelineKey key)
+        {
+            return (key as LiveTimelineKeyMobControlData)?.Position ?? Vector3.zero;
+        }
+
+        private static Vector3 MobControlScale(LiveTimelineKey key)
+        {
+            return (key as LiveTimelineKeyMobControlData)?.Scale ?? Vector3.one;
+        }
+
+        private static Quaternion MobControlRotation(LiveTimelineKey key)
+        {
+            var k = key as LiveTimelineKeyMobControlData;
+            if (k == null)
+                return Quaternion.identity;
+            return k.Rotation == default ? Quaternion.Euler(k.Angle) : k.Rotation;
+        }
+
+        private static LiveTimelineKey InterpolateKeyOf(LiveTimelineKey key)
+        {
+            return key;
+        }
+
         private void AlterUpdate_MobControl(LiveTimelineWorkSheet sheet, float currentFrame)
         {
-            AlterUpdate_MobCyalumeControl(
-                sheet != null ? sheet.mobControlList : null,
-                currentFrame,
-                OnUpdateMobControl);
+            if (sheet == null || sheet.MobControlKeys == null)
+                return;
+            for (int i = 0; i < sheet.MobControlKeys.Count; i++)
+            {
+                var group = sheet.MobControlKeys[i];
+                if (group == null || group.Keys == null)
+                    continue;
+                AlterUpdate_MobCyalumeControlCore(group.name, group.GroupIndex, group.Keys,
+                    currentFrame, OnUpdateMobControl, MobControlPosition, MobControlScale,
+                    MobControlRotation, InterpolateKeyOf);
+            }
         }
 
         private void AlterUpdate_CyalumeControl(LiveTimelineWorkSheet sheet, float currentFrame)
         {
-            AlterUpdate_MobCyalumeControl(
-                sheet != null ? sheet.cyalumeControlList : null,
-                currentFrame,
-                OnUpdateCyalumeControl);
+            if (sheet == null || sheet.CyalumeControlKeys == null)
+                return;
+            for (int i = 0; i < sheet.CyalumeControlKeys.Count; i++)
+            {
+                var group = sheet.CyalumeControlKeys[i];
+                if (group == null || group.Keys == null)
+                    continue;
+                AlterUpdate_MobCyalumeControlCore(group.name, group.GroupIndex, group.Keys,
+                    currentFrame, OnUpdateCyalumeControl, CyalumeControlPosition, CyalumeControlScale,
+                    CyalumeControlRotation, InterpolateKeyOf);
+            }
         }
 
-        private void AlterUpdate_MobCyalumeControl(
-            List<LiveTimelineMobCyalumeControlData> dataList,
-            float currentFrame,
-            MobCyalumeUpdateInfoDelegate callback)
+        private static Vector3 CyalumeControlPosition(LiveTimelineKey key)
         {
-            if (callback == null || dataList == null)
-                return;
+            return (key as LiveTimelineKeyCyalumeControlData)?.Position ?? Vector3.zero;
+        }
 
-            int count = dataList.Count;
-            for (int i = 0; i < count; i++)
-            {
-                var controlData = dataList[i];
-                if (controlData == null || controlData.keys == null)
-                    continue;
+        private static Vector3 CyalumeControlScale(LiveTimelineKey key)
+        {
+            return (key as LiveTimelineKeyCyalumeControlData)?.Scale ?? Vector3.one;
+        }
 
-                var keys = controlData.keys;
-                if (keys.Count <= 0)
-                    continue;
-                if (keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable))
-                    continue;
-                if (!keys.EnablePlayModeTimeline(_playMode))
-                    continue;
-
-                FindTimelineKey(out var curKey, out var nextKey, keys, currentFrame);
-
-                var current = curKey as LiveTimelineKeyMobCyalumeControlData;
-                var next = nextKey as LiveTimelineKeyMobCyalumeControlData;
-                if (current == null)
-                    continue;
-
-                MobCyalumeUpdateInfo info = default;
-                info.data = controlData;
-                info.unk0 = (uint)keys.unk48 < 11u ? keys.unk48 : i;
-                info.currentFrame = currentFrame;
-                info.currentLiveTime = currentLiveTime;
-
-                if (next != null && next.interpolateType != 0)
-                {
-                    float t = CalculateInterpolationValue(current, next, currentFrame);
-                    info.position = Vector3.Lerp(current.position, next.position, t);
-                    info.rotation = Quaternion.Lerp(current.GetRotation(), next.GetRotation(), t);
-                    info.scale = Vector3.Lerp(current.scale, next.scale, t);
-                }
-                else
-                {
-                    info.position = current.position;
-                    info.rotation = current.GetRotation();
-                    info.scale = current.scale;
-                }
-
-                callback.Invoke(ref info);
-            }
+        private static Quaternion CyalumeControlRotation(LiveTimelineKey key)
+        {
+            var k = key as LiveTimelineKeyCyalumeControlData;
+            if (k == null)
+                return Quaternion.identity;
+            return k.Rotation == default ? Quaternion.Euler(k.Angle) : k.Rotation;
         }
 
         private const float kBlinkFps = 60f;
@@ -3714,15 +3773,15 @@ namespace Gallop.Live.Cutt
             if (OnUpdateHdrBloom == null)
                 return;
 
-            if (sheet == null || sheet.hdrBloomList == null)
+            if (sheet == null || sheet.hdrBloomKeys == null)
                 return;
 
-            int count = sheet.hdrBloomList.Count;
+            int count = sheet.hdrBloomKeys.Count;
 
             for (int i = 0; i < count; i++)
             {
                 LiveTimelineHdrBloomData timelineData =
-                    sheet.hdrBloomList[i];
+                    sheet.hdrBloomKeys[i];
 
                 if (timelineData == null ||
                     timelineData.keys == null)

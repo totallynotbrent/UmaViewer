@@ -424,6 +424,8 @@ namespace Gallop.Live.Cutt
         public float TotalTimeLength;
         public bool Lyrics;
         public LiveTimelineDefine.SheetIndex SheetType;
+        public int SheetVariationId;
+        public bool IsVariationSheet;
         [SerializeField] public LiveTimelineKeyTimescaleDataList timescaleKeys;
         [SerializeField] public LiveTimelineKeyCameraPositionDataList cameraPosKeys;
         [SerializeField] public List<LiveTimelineMultiCameraPositionData> multiCameraPosKeys;
@@ -448,7 +450,7 @@ namespace Gallop.Live.Cutt
         [SerializeField] public List<LiveTimelineAudienceData> audienceList;
 
         [SerializeField]
-        public List<LiveTimelineHdrBloomData> hdrBloomList;
+        public List<LiveTimelineHdrBloomData> hdrBloomKeys;
 
         [SerializeField] public List<LiveTimelineCharaMotSeqData> charaMotSeqList;
         [SerializeField] public List<LiveTimelineAnimationData> animationList = new List<LiveTimelineAnimationData>();
@@ -462,7 +464,8 @@ namespace Gallop.Live.Cutt
         [SerializeField] public LiveTimelineFormationOffsetData formationOffsetSet;
 
         [SerializeField] public List<LiveTimelineGlobalLightData> globalLightDataLists;
-        [SerializeField] public List<LiveTimelineStageEnvironmentData> environmentDataLists;
+        [SerializeField] public List<LiveTimelineEnvironmentData> environmentDataLists;
+        [SerializeField] public List<LiveTimelineMirrorReflectionData> MirrorReflectionDataList;
         [SerializeField] public List<LiveTimelineBgColor1Data> bgColor1List;
         [SerializeField] public List<LiveTimelineBgColor2Data> bgColor2List;
         [SerializeField] public List<LiveTimelineBlinkLightData> blinkLightList;
@@ -488,8 +491,8 @@ namespace Gallop.Live.Cutt
         [SerializeField] public List<LiveTimelineLightShaftsData> lightShaftsKeysLine = new List<LiveTimelineLightShaftsData>();
         [SerializeField] public List<LiveTimelineNodeScaleData> nodeScaleList = new List<LiveTimelineNodeScaleData>();
         [SerializeField] public LiveTimelineTitleData titleKeys;
-        [SerializeField] public List<LiveTimelineMobCyalumeControlData> mobControlList;
-        [SerializeField] public List<LiveTimelineMobCyalumeControlData> cyalumeControlList;
+        [SerializeField] public List<LiveTimelineMobControlData> MobControlKeys;
+        [SerializeField] public List<LiveTimelineCyalumeControlData> CyalumeControlKeys;
 
         [SerializeField] public LiveTimelineKeyHandShakeCameraDataList handShakeCameraKeys;
 
@@ -511,6 +514,54 @@ namespace Gallop.Live.Cutt
         public LiveTimelineKeyPostFilmDataList postFilm3Keys;
         [SerializeField]
         public List<LiveTimelinePropsData> propsList;
+        [SerializeField] public List<LiveTimelineKeyCameraMotionDataList> cameraMotionKeys;
+        [SerializeField] public LiveTimelineKeyEventDataList eventKeys;
+        [SerializeField] public List<LiveTimelineTextureAnimationData> textureAnimationList;
+        [SerializeField] public List<LiveTimelineWaveObjectData> waveObjectList;
+        [SerializeField] public List<LiveTimelineParentConstraintData> ParentConstraintDataList;
+        [SerializeField] public LiveTimelineKeyLipSyncPatternRangeDataList LipSyncPatternRangeKeys;
+        [SerializeField] public List<LiveTimelineLipSyncPatternData> LipSyncPatternDataList;
+        [SerializeField] public LiveTimelineKeyTransmittedLightDataList TransmittedLightKeys;
+        [SerializeField] public List<LiveTimelineTransmittedLightMaskData> transmittedLightMaskDataList;
+        [SerializeField] public LiveTimelineKeyLensDistortionDataList LensDistortionKeys;
+        [SerializeField] public LiveTimelineKeyScreenCaptureDataList ScreenCaptureDataList;
+        [SerializeField] public LiveTimelineKeyTailMotionDataList tailMotionDataList;
+        [SerializeField] public LiveTimelineKeyFacialEyeTrackDataList other4EyeTrackKeys;
+        [SerializeField] public LiveTimelineFacialToonData facialToonSet;
+        [SerializeField] public List<LiveTimelinePreColorCorrectionData> preColorCorrectionDataLists;
+        [SerializeField] public List<LiveTimelineMonitorCameraLayerData> monitorCameraLayerKeys;
+        [SerializeField] public List<LiveTimelineMultiCameraLayerData> multiCameraLayerKeys;
+        [SerializeField] public List<LiveTimelineEffectData> effectList;
+        [SerializeField] public List<LiveTimelineContactEffectData> ContactEffectDataList;
+        [SerializeField] public List<LiveTimelineRayHitEffectData> RayHitEffectDataList;
+        [SerializeField] public LiveTimelineKeyHatchingDataList hatchingKeys;
+        [SerializeField] public LiveTimelineKeyEdgeStyleDataList edgeStyleKeys;
+        [SerializeField] public LiveTimelineKeyFlashPlayerDataList flashPlayerKeys;
+        [SerializeField] public List<LiveTimelineCharaNodeData> CharaNodeDataList;
+        [SerializeField] public List<LiveTimelineCharaNodeOffsetData> CharaNodeOffsetDataList;
+        [SerializeField] public LiveTimelineKeyCharaFootLightDataList charaFootLightKeys;
+        [SerializeField] public List<LiveTimelineBillboardData> billboardList;
+        [SerializeField] public List<LiveTimelineMultiCameraPostFilmData> postFilm1MultiCameraKeys;
+        [SerializeField] public List<LiveTimelineMultiCameraPostFilmData> postFilm2MultiCameraKeys;
+        [SerializeField] public List<LiveTimelineMultiCameraPostFilmData> postFilm3MultiCameraKeys;
+        [SerializeField] public List<LiveTimelineMultiCameraPostEffectBloomDiffusionData> postEffectBloomDiffusionMultiCameraKeys;
+        [SerializeField] public List<LiveTimelineMultiCameraColorCorrectionData> multiCameraColorCorrectionDataLists;
+        [SerializeField] public List<LiveTimelineMultiCameraTiltShiftData> multiCameraTiltShiftDataLists;
+        [SerializeField] public List<LiveTimelineMultiCameraRadialBlurData> multiCameraRadialBlurDataLists;
+        [SerializeField] public List<LiveTimelineMultiCameraPostEffectDOFData> postEffectDOFMultiCameraKeys;
+        [SerializeField] public List<LiveTimelineMultiCameraTransmittedLightData> MultiCameraTransmittedLightDataList;
+        [SerializeField] public List<LiveTimelineAdditionalLight> AdditionalLightList;
+        [SerializeField] public LiveTimelineKeyMultiLightShadowDataList MultiLightShadowKeys;
+        [SerializeField] public LiveTimelineCharaWindData charaWind;
+        [SerializeField] public LiveTimelineCharaPartsData CharaPartsKeys;
+        [SerializeField] public List<LiveTimelineCharaCollisionData> CharaCollisionDataList;
+        [SerializeField] public List<LiveTimelineEyeCameraPositionData> EyeCameraPosList;
+        [SerializeField] public List<LiveTimelineEyeCameraLookAtData> EyeCameraLookAtList;
+        [SerializeField] public LiveTimelineKeyVoiceDataList VoiceKeys;
+        [SerializeField] public LiveTimelineKeyTransparentCameraDataList TransparentCameraKeys;
+        [SerializeField] public LiveTimelineKeyMiniCharaCameraDataList MiniCharaCameraKeys;
+        [SerializeField] public List<LiveTimelineMiniCharaMotionData> MiniCharaMotionDataList;
+        [SerializeField] public List<LiveTimelineMiniCharaColorData> MiniCharaColorDataList;
         [SerializeField]
         public List<LiveTimelinePropsAttachData> propsAttachList;
         [SerializeField]

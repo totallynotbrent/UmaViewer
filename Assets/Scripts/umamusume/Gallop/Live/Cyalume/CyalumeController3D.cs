@@ -455,11 +455,8 @@ namespace Gallop.Live.Cyalume
 
         private static int ResolveGroupIndex(MobCyalumeUpdateInfo info)
         {
-            if ((uint)info.unk0 < 11u)
-                return info.unk0;
-
-            if (info.data != null && info.data.keys != null && (uint)info.data.keys.unk48 < 11u)
-                return info.data.keys.unk48;
+            if ((uint)info.groupIndex < 11u)
+                return info.groupIndex;
 
             return -1;
         }
