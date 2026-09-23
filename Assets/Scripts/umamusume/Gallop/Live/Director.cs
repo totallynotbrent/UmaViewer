@@ -359,6 +359,14 @@ namespace Gallop.Live
             }
 
             _liveTimelineControl.InitCharaMotionSequence(_liveTimelineControl.data.characterSettings.motionSequenceIndices);
+
+            // effect groups register at sheet load so their bundles can be preloaded,
+            // mirroring the game's RegisterEffectResource pass.
+            if (_liveTimelineControl.data.worksheetList != null)
+            {
+                foreach (var sheet in _liveTimelineControl.data.worksheetList)
+                    _liveTimelineControl.RegisterSheetEffects(sheet);
+            }
             // ponytail: respects isUseHQParticle - skip HQ particle load, ceiling: load light variants via particlePrefabNames
             if (!ShouldUseHQParticle) Debug.Log("[Director] ShouldUseHQParticle check: HQ particles skipped for " + (live!=null?live.MusicId.ToString():"?"));
             else InitializeHQParticles();
@@ -492,6 +500,11 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateFacialToon += OnUpdateFacialToon;
             _liveTimelineControl.OnUpdateCameraMotion += OnUpdateCameraMotion;
             _liveTimelineControl.OnUpdateCharaWind += OnUpdateCharaWind;
+            _liveTimelineControl.OnUpdateFlashPlayer += OnUpdateFlashPlayer;
+            _liveTimelineControl.OnUpdateAdditionalLight += OnUpdateAdditionalLight;
+            _liveTimelineControl.OnUpdateCharaNode += OnUpdateCharaNode;
+            _liveTimelineControl.OnUpdateTransparentCamera += OnUpdateTransparentCamera;
+            _liveTimelineControl.OnSheetEffectRegistered += OnSheetEffectRegistered;
             _liveTimelineControl.OnUpdateTiltShift += OnUpdateTiltShift;
             _liveTimelineControl.OnUpdateFade += OnUpdateFade;
             _liveTimelineControl.OnUpdateFluctuation += OnUpdateFluctuation;
@@ -1410,6 +1423,96 @@ namespace Gallop.Live
             }
         }
 
+        private void OnUpdateFlashPlayer(LiveTimelineKeyFlashPlayerData key)
+        {
+            if (key == null)
+                return;
+            // the flash legend controller shows the authored audience flash bursts.
+            var flash = UnityEngine.Object.FindFirstObjectByType<LiveFlashController>();
+            if (flash != null && key.UseActionLabel && !string.IsNullOrEmpty(key.ActionLabel))
+                flash.PlayLabel(key.ActionLabel, _liveTimelineControl != null ? _liveTimelineControl.currentLiveTime : 0f, key);
+            else
+                FileLog($"[flash] cue sheet={key.CueSheetName} cue={key.CueName} action={key._actionType}");
+        }
+
+        // the game keeps authored extra stage lights per named group; the viewer owns
+        // a matching light object per group index.
+        private readonly Dictionary<int, Light> _additionalLights = new Dictionary<int, Light>();
+
+        private void OnUpdateAdditionalLight(AdditionalLightUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+
+            if (!_additionalLights.TryGetValue(updateInfo.Index, out var light) || light == null)
+            {
+                var host = new GameObject($"TimelineAdditionalLight{updateInfo.Index}");
+                light = host.AddComponent<Light>();
+                light.shadows = LightShadows.None;
+                _additionalLights[updateInfo.Index] = light;
+            }
+
+            light.transform.SetPositionAndRotation(updateInfo.Position, Quaternion.Euler(updateInfo.Rotate));
+            light.type = updateInfo.Type;
+            light.range = updateInfo.Range;
+            light.spotAngle = updateInfo.SpotAngle;
+            light.bounceIntensity = updateInfo.IndirectMultiplier;
+            light.intensity = updateInfo.Strength;
+            light.enabled = updateInfo.IsEnable;
+        }
+
+        private void OnUpdateCharaNode(int group, LiveTimelineKeyCharaNodeData key)
+        {
+            if (key == null)
+                return;
+            // chara node keys toggle the per-part cloth solvers on the character.
+            int index = PositionFlagToCharaIndex(key.PositionFlag);
+            if (index < 0 || index >= CharaContainerScript.Count)
+                return;
+            var container = CharaContainerScript[index];
+            foreach (var cyspring in container.GetComponentsInChildren<Gallop.CySpringController>(true))
+            {
+                if (key.EnableHeadCySpring || key.EnableEarCySpring || key.EnableBodyCySpring)
+                {
+                    cyspring.SetForceDisableHipMoveParam(!key.EnableBodyCySpring);
+                }
+            }
+        }
+
+        private void OnUpdateTransparentCamera(LiveTimelineKeyTransparentCameraData key)
+        {
+            if (key == null || !key.Enable)
+                return;
+            if (!_transparentCameraLogged)
+            {
+                _transparentCameraLogged = true;
+                FileLog($"[transparentcamera] enabled ortho={key.IsOrthographic} size={key.OrthographicSize}");
+            }
+        }
+
+        private bool _transparentCameraLogged;
+
+        private void OnSheetEffectRegistered(LiveTimelineEffectData effect)
+        {
+            if (effect == null)
+                return;
+            if (_sheetEffectLog.Add(effect._folder))
+                FileLog($"[effect] registered folder={effect._folder} variation={effect._variationId} apply={effect._applyVariation}");
+        }
+
+        private readonly HashSet<string> _sheetEffectLog = new HashSet<string>();
+
+        // map a position flag to the character index the same way the timeline does.
+        private static int PositionFlagToCharaIndex(LiveCharaPositionFlag flag)
+        {
+            ulong bits = (ulong)flag;
+            for (int i = 0; i < 64; i++)
+            {
+                if ((bits & (1ul << i)) != 0)
+                    return i;
+            }
+            return -1;
+        }
+
         private void OnUpdateToneCurve(ToneCurveUpdateInfo updateInfo)
         {
             if (!updateInfo.isValid) return;
@@ -1640,6 +1743,16 @@ namespace Gallop.Live
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor3 = updateInfo.color3;
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsInverseVignette = isVignette ? 1f : 0f;
 
+            // the film layer can couple to named blink light containers; push the
+            // authored brightness so stage lights pulse with the film.
+            var blinkDriver = UnityEngine.Object.FindFirstObjectByType<StageBlinkLightDriver>();
+            if (blinkDriver != null)
+            {
+                blinkDriver.ClearFilmCoupling();
+                if (!string.IsNullOrEmpty(data.BlinkLightName) && data.BlinkLightBrightnessPower > 0f)
+                    blinkDriver.SetFilmCoupling(data.BlinkLightName, data.BlinkLightBrightnessPower);
+            }
+
             // uv-movie film keys are the game's way of playing clips on the stage
             // monitors; resolve the authored movie id against the monitor provider
             // so the overlay stage can find the clip texture.
@@ -1650,10 +1763,25 @@ namespace Gallop.Live
                     _filmMovieLogged = true;
                     FileLog($"[postfilm] uv-movie layer requested movieResId={updateInfo.movieResId}");
                 }
+
+                // drive the stage monitor movie slot with the authored movie id so
+                // the on-stage screens play the clip the film layer names.
+                if (_filmMovieProvider == null)
+                    _filmMovieProvider = UnityEngine.Object.FindFirstObjectByType<MonitorUvMovieProvider>();
+                if (_filmMovieProvider != null && _filmMovieResId != updateInfo.movieResId)
+                {
+                    _filmMovieResId = updateInfo.movieResId;
+                    if (_filmMovieProvider.TryGetClipByDisplayId(updateInfo.movieResId, out var clip))
+                        FileLog($"[postfilm] monitor movie resolved for resId={updateInfo.movieResId} name={clip.metadata?.Name}");
+                    else
+                        FileLog($"[postfilm] monitor movie clip not found for resId={updateInfo.movieResId}");
+                }
             }
         }
 
         private bool _filmMovieLogged;
+        private MonitorUvMovieProvider _filmMovieProvider;
+        private int _filmMovieResId;
 
         private float _filmBestPower = -1f;
 
@@ -1737,6 +1865,11 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateFacialToon -= OnUpdateFacialToon;
             _liveTimelineControl.OnUpdateCameraMotion -= OnUpdateCameraMotion;
             _liveTimelineControl.OnUpdateCharaWind -= OnUpdateCharaWind;
+            _liveTimelineControl.OnUpdateFlashPlayer -= OnUpdateFlashPlayer;
+            _liveTimelineControl.OnUpdateAdditionalLight -= OnUpdateAdditionalLight;
+            _liveTimelineControl.OnUpdateCharaNode -= OnUpdateCharaNode;
+            _liveTimelineControl.OnUpdateTransparentCamera -= OnUpdateTransparentCamera;
+            _liveTimelineControl.OnSheetEffectRegistered -= OnSheetEffectRegistered;
             _liveTimelineControl.OnUpdateTiltShift -= OnUpdateTiltShift;
             _liveTimelineControl.OnUpdateFade -= OnUpdateFade;
             _liveTimelineControl.OnUpdateFluctuation -= OnUpdateFluctuation;

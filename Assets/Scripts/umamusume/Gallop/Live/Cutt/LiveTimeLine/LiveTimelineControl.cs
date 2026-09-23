@@ -270,6 +270,11 @@ namespace Gallop.Live.Cutt
         public event Action<int, FacialToonUpdateInfo> OnUpdateFacialToon;
         public event Action<LiveTimelineKeyCameraMotionData, float> OnUpdateCameraMotion;
         public event Action<int, LiveTimelineKeyCharaWindData> OnUpdateCharaWind;
+        public event Action<LiveTimelineKeyFlashPlayerData> OnUpdateFlashPlayer;
+        public event Action<AdditionalLightUpdateInfo> OnUpdateAdditionalLight;
+        public event Action<int, LiveTimelineKeyCharaNodeData> OnUpdateCharaNode;
+        public event Action<LiveTimelineKeyTransparentCameraData> OnUpdateTransparentCamera;
+        public event Action<LiveTimelineEffectData> OnSheetEffectRegistered;
         public event Action<Spotlight3dUpdateInfo> OnUpdateSpotlight3d;
 
         public event UVScrollLightUpdateInfoDelegate OnUpdateUVScrollLight;
@@ -678,6 +683,10 @@ namespace Gallop.Live.Cutt
                 AlterUpdate_CharaFootLight(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_FacialToon(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_CharaWind(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_FlashPlayer(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_AdditionalLight(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_CharaNode(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_TransparentCamera(ws, Mathf.RoundToInt(_currentFrame));
             }
 
             //BgColor2属于全局舞台颜色控制，只使用主 worksheet。
@@ -4013,6 +4022,133 @@ namespace Gallop.Live.Cutt
                     continue;
 
                 handler(i, currentKey);
+            }
+        }
+
+        private void AlterUpdate_FlashPlayer(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            var handler = OnUpdateFlashPlayer;
+            if (handler == null)
+                return;
+
+            var keys = sheet?.flashPlayerKeys;
+            if (keys == null || keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            // flash keys are cue triggers crossed by the playhead.
+            for (int k = 0; k < keys.Count; k++)
+            {
+                var key = keys[k] as LiveTimelineKeyFlashPlayerData;
+                if (key == null)
+                    continue;
+                int frame = key.frame;
+                int oldFrame = Mathf.RoundToInt(_oldFrame);
+                if (frame > oldFrame && frame <= currentFrame)
+                    handler(key);
+            }
+        }
+
+        private void AlterUpdate_AdditionalLight(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            var handler = OnUpdateAdditionalLight;
+            if (handler == null)
+                return;
+
+            var groups = sheet?.AdditionalLightList;
+            if (groups == null)
+                return;
+
+            for (int g = 0; g < groups.Count; g++)
+            {
+                var group = groups[g];
+                if (group == null || group.keys == null || group.keys.Count <= 0 ||
+                    group.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !group.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                AlterUpdate_SimpleList<LiveTimelineKeyAdditionalLightData>(group.keys, currentFrame, null);
+                var currentKey = _simpleListCurrentKey as LiveTimelineKeyAdditionalLightData;
+                if (currentKey == null)
+                    continue;
+
+                AdditionalLightUpdateInfo updateInfo = default;
+                updateInfo.isValid = true;
+                updateInfo.Index = g;
+                updateInfo.Position = currentKey.Position;
+                updateInfo.Rotate = currentKey.Rotate;
+                updateInfo.IsEnable = currentKey.IsEnable;
+                updateInfo.Type = (LightType)currentKey.Type;
+                updateInfo.Range = currentKey.Range;
+                updateInfo.SpotAngle = currentKey.SpotAngle;
+                updateInfo.IndirectMultiplier = currentKey.IndirectMultiplier;
+                updateInfo.Strength = currentKey.Strength;
+                updateInfo.Bias = currentKey.Bias;
+                updateInfo.NormalBias = currentKey.NormalBias;
+                updateInfo.NearPlane = currentKey.NearPlane;
+                handler(updateInfo);
+            }
+        }
+
+        private void AlterUpdate_CharaNode(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            var handler = OnUpdateCharaNode;
+            if (handler == null)
+                return;
+
+            var groups = sheet?.CharaNodeDataList;
+            if (groups == null)
+                return;
+
+            for (int g = 0; g < groups.Count; g++)
+            {
+                var group = groups[g];
+                if (group == null || group.keys == null || group.keys.Count <= 0 ||
+                    group.keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !group.keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var _, group.keys, currentFrame);
+                var currentKey = curKey as LiveTimelineKeyCharaNodeData;
+                if (currentKey == null)
+                    continue;
+
+                handler(g, currentKey);
+            }
+        }
+
+        private void AlterUpdate_TransparentCamera(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            var handler = OnUpdateTransparentCamera;
+            if (handler == null)
+                return;
+
+            var keys = sheet?.TransparentCameraKeys;
+            if (keys == null || keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var _, keys, currentFrame);
+            if (curKey is not LiveTimelineKeyTransparentCameraData key)
+                return;
+
+            handler(key);
+        }
+
+        // effect groups are registered once when a sheet activates so the effect
+        // driver can preload their bundles, mirroring the game's register path.
+        public void RegisterSheetEffects(LiveTimelineWorkSheet sheet)
+        {
+            if (OnSheetEffectRegistered == null || sheet?.effectList == null)
+                return;
+            for (int i = 0; i < sheet.effectList.Count; i++)
+            {
+                var effect = sheet.effectList[i];
+                if (effect == null)
+                    continue;
+                OnSheetEffectRegistered(effect);
             }
         }
 

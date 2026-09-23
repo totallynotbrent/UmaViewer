@@ -919,6 +919,12 @@ namespace Gallop.Live
 
             var rt = GetOrCreateRuntime(runtimeKey);
             ApplyUpdateInfoToRuntime(rt, rc.slotCount, updateInfo, liveNow);
+            if (_filmCouplingByName.Count > 0 &&
+                _filmCouplingByName.TryGetValue(rootGo.name, out float filmScale))
+            {
+                for (int i = 0; i < rc.slotCount; i++)
+                    rt.slots[i].currentPower *= filmScale;
+            }
             BuildCurrentColors(rt, rc.slotCount);
             SetWashLightBlendMode(rc, updateInfo.UseWashLightBlendMode);
             int baseOrder = GetRootBase(runtimeKey);
@@ -1266,6 +1272,22 @@ namespace Gallop.Live
                 s.currentVRatio = 0f;
                 s.loopCount = 0;
             }
+        }
+
+        // film keys can couple a post-film layer to specific blink light containers by
+        // the authored container name.
+        private readonly Dictionary<string, float> _filmCouplingByName = new Dictionary<string, float>(16);
+
+        public void SetFilmCoupling(string lightName, float brightnessPower)
+        {
+            if (string.IsNullOrEmpty(lightName))
+                return;
+            _filmCouplingByName[lightName] = brightnessPower;
+        }
+
+        public void ClearFilmCoupling()
+        {
+            _filmCouplingByName.Clear();
         }
 
         private static void BuildCurrentColors(BlinkRootRuntime rt, int slotCount)
