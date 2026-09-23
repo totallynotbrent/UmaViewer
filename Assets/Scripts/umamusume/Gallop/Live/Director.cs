@@ -488,6 +488,10 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateTransmittedLight += OnUpdateTransmittedLight;
             _liveTimelineControl.OnUpdateVoice += OnUpdateVoice;
             _liveTimelineControl.OnUpdateCharaParts += OnUpdateCharaParts;
+            _liveTimelineControl.OnUpdateCharaFootLight += OnUpdateCharaFootLight;
+            _liveTimelineControl.OnUpdateFacialToon += OnUpdateFacialToon;
+            _liveTimelineControl.OnUpdateCameraMotion += OnUpdateCameraMotion;
+            _liveTimelineControl.OnUpdateCharaWind += OnUpdateCharaWind;
             _liveTimelineControl.OnUpdateTiltShift += OnUpdateTiltShift;
             _liveTimelineControl.OnUpdateFade += OnUpdateFade;
             _liveTimelineControl.OnUpdateFluctuation += OnUpdateFluctuation;
@@ -1309,6 +1313,103 @@ namespace Gallop.Live
             }
         }
 
+        // the game maintains a per-character foot light driven by the chara foot light
+        // track; the viewer owns a small spotlight child per character.
+        private readonly Dictionary<int, Light> _charaFootLights = new Dictionary<int, Light>();
+
+        private void OnUpdateCharaFootLight(CharaFootLightUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            int index = updateInfo.CharacterIndex;
+            if (index < 0 || index >= CharaContainerScript.Count)
+                return;
+            var container = CharaContainerScript[index];
+
+            if (!_charaFootLights.TryGetValue(index, out var light) || light == null)
+            {
+                var host = new GameObject("TimelineCharaFootLight");
+                host.transform.SetParent(container.transform, false);
+                light = host.AddComponent<Light>();
+                light.type = LightType.Spot;
+                light.shadows = LightShadows.None;
+                light.spotAngle = 70f;
+                light.range = 3f;
+                _charaFootLights[index] = light;
+                FileLog($"[footlight] spawned foot light for chara {index}");
+            }
+
+            light.color = updateInfo.lightColor;
+            light.intensity = Mathf.Clamp01(updateInfo.hightMax) * 2f;
+            light.enabled = updateInfo.hightMax > 0.001f;
+        }
+
+        // facial toon parameters ride per-character material state; the viewer applies
+        // them to the face renderers through a property block.
+        private void OnUpdateFacialToon(int slot, FacialToonUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid || slot < 0 || slot >= CharaContainerScript.Count)
+                return;
+            var container = CharaContainerScript[slot];
+            var faceRoot = container.Head != null ? container.Head.transform : container.transform;
+            foreach (var ren in faceRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                var mpb = new MaterialPropertyBlock();
+                ren.GetPropertyBlock(mpb);
+                mpb.SetFloat(Shader.PropertyToID("_CheekPretenseThreshold"), updateInfo.CheekPretenseThreshold);
+                mpb.SetFloat(Shader.PropertyToID("_NosePretenseThreshold"), updateInfo.NosePretenseThreshold);
+                mpb.SetFloat(Shader.PropertyToID("_CylinderBlend"), updateInfo.CylinderBlend);
+                mpb.SetFloat(Shader.PropertyToID("_HairNormalBlend"), updateInfo.HairNormalBlend);
+                mpb.SetFloat(Shader.PropertyToID("_EyeToonStep"), updateInfo.EyeToonStep);
+                mpb.SetFloat(Shader.PropertyToID("_EyeToonFeather"), updateInfo.EyeToonFeather);
+                mpb.SetFloat(Shader.PropertyToID("_EyeSaturation"), updateInfo.EyeSaturation);
+                if (updateInfo.UseOriginalDirectionalLight != 0)
+                    mpb.SetVector(Shader.PropertyToID("_OriginalDirectionalLightDir"), updateInfo.OriginalDirectionalLightDir);
+                ren.SetPropertyBlock(mpb);
+            }
+        }
+
+        // authored camera AnimationClips: sample on a proxy and copy onto the active
+        // camera at the game's late-update phase so pos keys layer on top.
+        private GameObject _cameraMotionProxy;
+        private bool _cameraMotionLogged;
+
+        private void OnUpdateCameraMotion(LiveTimelineKeyCameraMotionData key, float clipTime)
+        {
+            if (key == null || key.Clip == null || !key.IsEnable)
+                return;
+
+            if (!_cameraMotionLogged)
+            {
+                _cameraMotionLogged = true;
+                FileLog($"[cameramotion] playing clip '{key.Clip.name}' motionType={key.MotionType} speed={key.PlaySpeed}");
+            }
+
+            if (_cameraMotionProxy == null)
+                _cameraMotionProxy = new GameObject("TimelineCameraMotionProxy");
+
+            key.Clip.SampleAnimation(_cameraMotionProxy, clipTime);
+
+            var cam = MainCameraTransform != null ? MainCameraTransform : _cameraMotionProxy.transform;
+            var target = Camera.main;
+            if (target == null)
+                return;
+            target.transform.SetPositionAndRotation(_cameraMotionProxy.transform.position + key.Offset,
+                _cameraMotionProxy.transform.rotation);
+        }
+
+        // authored wind keys feed the cloth solver; the viewer drives the same dummy-wind
+        // entry the physics settings panel uses, per character.
+        private void OnUpdateCharaWind(int slot, LiveTimelineKeyCharaWindData key)
+        {
+            if (key == null || slot < 0 || slot >= CharaContainerScript.Count)
+                return;
+            var container = CharaContainerScript[slot];
+            foreach (var cyspring in container.GetComponentsInChildren<Gallop.CySpringController>(true))
+            {
+                cyspring.SetEnableCySpringDummyWind(key.IsEnableWind, key.WindParam != null ? key.WindParam.Direction : Vector3.forward);
+            }
+        }
+
         private void OnUpdateToneCurve(ToneCurveUpdateInfo updateInfo)
         {
             if (!updateInfo.isValid) return;
@@ -1632,6 +1733,10 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateTransmittedLight -= OnUpdateTransmittedLight;
             _liveTimelineControl.OnUpdateVoice -= OnUpdateVoice;
             _liveTimelineControl.OnUpdateCharaParts -= OnUpdateCharaParts;
+            _liveTimelineControl.OnUpdateCharaFootLight -= OnUpdateCharaFootLight;
+            _liveTimelineControl.OnUpdateFacialToon -= OnUpdateFacialToon;
+            _liveTimelineControl.OnUpdateCameraMotion -= OnUpdateCameraMotion;
+            _liveTimelineControl.OnUpdateCharaWind -= OnUpdateCharaWind;
             _liveTimelineControl.OnUpdateTiltShift -= OnUpdateTiltShift;
             _liveTimelineControl.OnUpdateFade -= OnUpdateFade;
             _liveTimelineControl.OnUpdateFluctuation -= OnUpdateFluctuation;

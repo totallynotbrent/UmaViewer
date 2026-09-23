@@ -514,7 +514,7 @@ namespace Gallop.Live.Cutt
         public LiveTimelineKeyPostFilmDataList postFilm3Keys;
         [SerializeField]
         public List<LiveTimelinePropsData> propsList;
-        [SerializeField] public List<LiveTimelineKeyCameraMotionDataList> cameraMotionKeys;
+        [SerializeField] public LiveTimelineKeyCameraMotionDataList cameraMotionKeys;
         [SerializeField] public LiveTimelineKeyEventDataList eventKeys;
         [SerializeField] public List<LiveTimelineTextureAnimationData> textureAnimationList;
         [SerializeField] public List<LiveTimelineWaveObjectData> waveObjectList;

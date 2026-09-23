@@ -266,6 +266,10 @@ namespace Gallop.Live.Cutt
         public event Action<TransmittedLightUpdateInfo> OnUpdateTransmittedLight;
         public event Action<VoiceUpdateInfo> OnUpdateVoice;
         public event System.Action<int, LiveTimelineKeyCharaPartsData> OnUpdateCharaParts;
+        public event Action<CharaFootLightUpdateInfo> OnUpdateCharaFootLight;
+        public event Action<int, FacialToonUpdateInfo> OnUpdateFacialToon;
+        public event Action<LiveTimelineKeyCameraMotionData, float> OnUpdateCameraMotion;
+        public event Action<int, LiveTimelineKeyCharaWindData> OnUpdateCharaWind;
         public event Action<Spotlight3dUpdateInfo> OnUpdateSpotlight3d;
 
         public event UVScrollLightUpdateInfoDelegate OnUpdateUVScrollLight;
@@ -607,6 +611,7 @@ namespace Gallop.Live.Cutt
             LatestCameraLookAtPosition = liveStageCenterPos;
 
             AlterLateUpdate_FormationOffset(currentLiveTime);
+            AlterLateUpdate_CameraMotion(camSheet, _currentFrame);
             AlterUpdate_CameraSwitcher(camSheet, _currentFrame);
             AlterUpdate_CameraPos(camSheet, _currentFrame);
             AlterUpdate_CameraLookAt(camSheet, _currentFrame, ref outLookAt);
@@ -670,6 +675,9 @@ namespace Gallop.Live.Cutt
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
                 AlterUpdate_Voice(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_CharaParts(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_CharaFootLight(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_FacialToon(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_CharaWind(ws, Mathf.RoundToInt(_currentFrame));
             }
 
             //BgColor2属于全局舞台颜色控制，只使用主 worksheet。
@@ -3715,6 +3723,30 @@ namespace Gallop.Live.Cutt
             return Mathf.Clamp01((currentFrame - curKey.frame) / span);
         }
 
+        // the game plays authored camera AnimationClips through an animator override;
+        // the viewer samples the clip onto the camera transform at the same phase.
+        private void AlterLateUpdate_CameraMotion(LiveTimelineWorkSheet sheet, float currentFrame)
+        {
+            var handler = OnUpdateCameraMotion;
+            if (handler == null)
+                return;
+
+            var keys = sheet?.cameraMotionKeys;
+            if (keys == null ||
+                keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var _, keys, currentFrame);
+            if (curKey is not LiveTimelineKeyCameraMotionData key || key.Clip == null)
+                return;
+
+            // the clip's own time axis runs at the authored speed from the key frame.
+            float clipTime = (currentFrame - key.frame) / 60f * key.PlaySpeed + key.MotionHeadTime;
+            handler(key, clipTime);
+        }
+
         private void AlterUpdate_ToneCurve(LiveTimelineWorkSheet sheet, int currentFrame)
         {
             if (OnUpdateToneCurve == null || sheet?.ToneCurveKeys == null)
@@ -3859,6 +3891,128 @@ namespace Gallop.Live.Cutt
                     continue;
 
                 OnUpdateCharaParts(i, currentKey);
+            }
+        }
+
+        private void AlterUpdate_CharaFootLight(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateCharaFootLight == null)
+                return;
+
+            var keys = sheet?.charaFootLightKeys;
+            if (keys == null ||
+                keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var nextKey, keys, currentFrame);
+            var currentKey = curKey as LiveTimelineKeyCharaFootLightData;
+            var upcomingKey = nextKey as LiveTimelineKeyCharaFootLightData;
+            if (currentKey == null)
+                return;
+
+            float t = KeyFrameFraction(currentKey, upcomingKey, currentFrame);
+            CharaFootLightUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.CharacterIndex = PositionFlagToIndex(currentKey.positionFlag);
+            updateInfo.hightMax = LerpWithoutClamp(currentKey.hightMax != null && currentKey.hightMax.Length > 0 ? currentKey.hightMax[0] : 0f,
+                upcomingKey != null && upcomingKey.hightMax != null && upcomingKey.hightMax.Length > 0 ? upcomingKey.hightMax[0] : 0f, t);
+            updateInfo.lightColor = LerpWithoutClamp(
+                currentKey.lightColor != null && currentKey.lightColor.Length > 0 ? currentKey.lightColor[0] : Color.white,
+                upcomingKey != null && upcomingKey.lightColor != null && upcomingKey.lightColor.Length > 0 ? upcomingKey.lightColor[0] : Color.white, t);
+            updateInfo.LightBlendMode = currentKey.LightBlendModeArray != null && currentKey.LightBlendModeArray.Length > 0 ? currentKey.LightBlendModeArray[0] : 0;
+            updateInfo.Easing = currentKey.EasingArray != null && currentKey.EasingArray.Length > 0 ? currentKey.EasingArray[0] : 0;
+            OnUpdateCharaFootLight(updateInfo);
+        }
+
+        private void AlterUpdate_FacialToon(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateFacialToon == null)
+                return;
+
+            var group = sheet?.facialToonSet;
+            if (group == null)
+                return;
+
+            var slots = new LiveTimelineKeyFacialToonDataList[]
+            {
+                group.centerKeys, group.left1Keys, group.right1Keys, group.left2Keys, group.right2Keys,
+                group.motion5Keys, group.motion6Keys, group.motion7Keys, group.motion8Keys, group.motion9Keys,
+                group.motion10Keys, group.motion11Keys, group.motion12Keys, group.motion13Keys, group.motion14Keys,
+                group.motion15Keys, group.motion16Keys, group.motion17Keys, group.motion18Keys, group.motion19Keys
+            };
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var keys = slots[i];
+                if (keys == null || keys.Count <= 0 ||
+                    keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                AlterUpdate_SimpleList<LiveTimelineKeyFacialToonData>(keys, currentFrame, null);
+                var currentKey = _simpleListCurrentKey as LiveTimelineKeyFacialToonData;
+                if (currentKey == null)
+                    continue;
+
+                FacialToonUpdateInfo updateInfo = default;
+                updateInfo.isValid = true;
+                updateInfo.CheekPretenseThreshold = currentKey.CheekPretenseThreshold;
+                updateInfo.NosePretenseThreshold = currentKey.NosePretenseThreshold;
+                updateInfo.CylinderBlend = currentKey.CylinderBlend;
+                updateInfo.HairNormalBlend = currentKey.HairNormalBlend;
+                updateInfo.UseOriginalDirectionalLight = currentKey.UseOriginalDirectionalLight;
+                updateInfo.OriginalDirectionalLightDir = currentKey.OriginalDirectionalLightDir;
+                updateInfo.EyeToonStep = currentKey.EyeToonStep;
+                updateInfo.EyeToonFeather = currentKey.EyeToonFeather;
+                updateInfo.EyeSaturation = currentKey.EyeSaturation;
+                OnUpdateFacialToon(i, updateInfo);
+            }
+        }
+
+        // position flag bits are one character each; the game resolves them by index.
+        private static int PositionFlagToIndex(LiveCharaPositionFlag flag)
+        {
+            ulong bits = (ulong)flag;
+            for (int i = 0; i < 64; i++)
+            {
+                if ((bits & (1ul << i)) != 0)
+                    return i;
+            }
+            return -1;
+        }
+
+        private void AlterUpdate_CharaWind(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            var handler = OnUpdateCharaWind;
+            if (handler == null)
+                return;
+
+            var group = sheet?.charaWind;
+            if (group == null)
+                return;
+
+            var slots = new LiveTimelineKeyCharaWindDataList[]
+            {
+                group.centerKeys, group.left1Keys, group.right1Keys, group.left2Keys, group.right2Keys,
+                group.place06Keys, group.place07Keys, group.place08Keys, group.place09Keys, group.place10Keys,
+                group.place11Keys, group.place12Keys, group.place13Keys, group.place14Keys, group.place15Keys,
+                group.place16Keys, group.place17Keys, group.place18Keys, group.place19Keys, group.place20Keys
+            };
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var keys = slots[i];
+                if (keys == null || keys.Count <= 0 ||
+                    keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                AlterUpdate_SimpleList<LiveTimelineKeyCharaWindData>(keys, currentFrame, null);
+                var currentKey = _simpleListCurrentKey as LiveTimelineKeyCharaWindData;
+                if (currentKey == null)
+                    continue;
+
+                handler(i, currentKey);
             }
         }
 
