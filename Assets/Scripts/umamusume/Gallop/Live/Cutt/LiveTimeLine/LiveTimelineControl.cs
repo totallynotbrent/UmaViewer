@@ -3595,10 +3595,10 @@ namespace Gallop.Live.Cutt
         {
             TitleUpdateInfoDelegate handler = OnUpdateTitle;
             if (handler == null || sheet == null || sheet.titleKeys == null ||
-                sheet.titleKeys.keys == null)
+                sheet.titleKeys == null)
                 return;
 
-            var keys = sheet.titleKeys.keys;
+            var keys = sheet.titleKeys;
             if (keys.Count <= 0 ||
                 keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
                 !keys.EnablePlayModeTimeline(_playMode))
@@ -3622,9 +3622,9 @@ namespace Gallop.Live.Cutt
 
         private void AlterUpdate_CameraLayer(LiveTimelineWorkSheet sheet, float currentFrame)
         {
-            if (sheet == null || sheet.cameraLayerKeys == null || sheet.cameraLayerKeys.keys == null)
+            if (sheet == null || sheet.cameraLayerKeys == null || sheet.cameraLayerKeys == null)
                 return;
-            var keys = sheet.cameraLayerKeys.keys;
+            var keys = sheet.cameraLayerKeys;
             if (keys.Count <= 0 ||
                 keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
                 !keys.EnablePlayModeTimeline(_playMode))
@@ -3643,9 +3643,9 @@ namespace Gallop.Live.Cutt
         {
             FacialNoiseUpdateInfoDelegate handler = OnUpdateFacialNoise;
             if (handler == null || sheet == null || sheet.facialNoiseKeys == null ||
-                sheet.facialNoiseKeys.keys == null)
+                sheet.facialNoiseKeys == null)
                 return;
-            var keys = sheet.facialNoiseKeys.keys;
+            var keys = sheet.facialNoiseKeys;
             if (keys.Count <= 0 ||
                 keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
                 !keys.EnablePlayModeTimeline(_playMode))
@@ -3664,9 +3664,9 @@ namespace Gallop.Live.Cutt
         {
             CharaMotionNoiseUpdateInfoDelegate handler = OnUpdateCharaMotionNoise;
             if (handler == null || sheet == null || sheet.charaMotionNoiseKeys == null ||
-                sheet.charaMotionNoiseKeys.keys == null)
+                sheet.charaMotionNoiseKeys == null)
                 return;
-            var keys = sheet.charaMotionNoiseKeys.keys;
+            var keys = sheet.charaMotionNoiseKeys;
             if (keys.Count <= 0 ||
                 keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
                 !keys.EnablePlayModeTimeline(_playMode))

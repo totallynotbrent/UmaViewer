@@ -69,6 +69,11 @@ namespace Gallop.Live.Cutt
         public float movieSpeed; // 0xC8
         public LiveTimelineKeyPostFilmData.ColorBlend colorBlend; // 0xCC
         public float colorBlendFactor; // 0xD0
+        public string BlinkLightName; // 0xD4
+        public int BlinkLightNameHash; // 0xD8
+        public int BlinkLightContainerIndex; // 0xDC
+        public float BlinkLightBrightnessPower; // 0xE0
+        public bool IsAdjustedBlinkLightColor; // 0xE4
     }
 
     [System.Serializable]

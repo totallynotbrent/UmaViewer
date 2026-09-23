@@ -1449,7 +1449,21 @@ namespace Gallop.Live
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor2 = updateInfo.color2;
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor3 = updateInfo.color3;
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsInverseVignette = isVignette ? 1f : 0f;
+
+            // uv-movie film keys are the game's way of playing clips on the stage
+            // monitors; resolve the authored movie id against the monitor provider
+            // so the overlay stage can find the clip texture.
+            if (updateInfo.layerMode == LiveTimelineKeyPostFilmData.LayerMode.UVMovie && updateInfo.movieResId != 0)
+            {
+                if (!_filmMovieLogged)
+                {
+                    _filmMovieLogged = true;
+                    FileLog($"[postfilm] uv-movie layer requested movieResId={updateInfo.movieResId}");
+                }
+            }
         }
+
+        private bool _filmMovieLogged;
 
         private float _filmBestPower = -1f;
 
