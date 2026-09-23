@@ -40,6 +40,7 @@ namespace Gallop.RenderPipeline
             public static float BloomIsScreenBlend = 1f;
 
             private Material _fastBloomMaterial;
+            private Material _postBloomMaterial;
             private RTHandle _bloomA;
             private RTHandle _bloomB;
             private RTHandle _bloomC;
@@ -75,14 +76,18 @@ namespace Gallop.RenderPipeline
                 if (_fastBloomMaterial == null)
                 {
                     var shader = Gallop.ShaderManager.GetShader(Gallop.ShaderManager.ShaderKinds.FastBloom);
-                    if (shader != null && shader.isSupported)
+                    var postShader = Gallop.ShaderManager.GetShader(Gallop.ShaderManager.ShaderKinds.PostBloom_Rich);
+                    if (shader != null && shader.isSupported && postShader != null && postShader.isSupported)
                     {
                         _fastBloomMaterial = new Material(shader) { hideFlags = HideFlags.DontSave };
-                        Debug.Log($"[gamebloom] FastBloom shader loaded, passCount={shader.passCount}");
+                        _postBloomMaterial = new Material(postShader) { hideFlags = HideFlags.DontSave };
+                        Debug.Log($"[gamebloom] pyramid=FastBloom({shader.passCount}p) composite=PostBloom_Rich({postShader.passCount}p)");
+                        Gallop.Live.Director.FileLog($"[gamebloom] pyramid=FastBloom({shader.passCount}p) composite=PostBloom_Rich({postShader.passCount}p)");
                     }
                     else
                     {
-                        Debug.LogWarning("[gamebloom] game FastBloom shader unavailable, falling back to URP bloom");
+                        Debug.LogWarning("[gamebloom] game bloom shaders unavailable (FastBloom=" + (shader != null) + " PostBloom_Rich=" + (postShader != null) + "), falling back to URP bloom");
+                        Gallop.Live.Director.FileLog($"[gamebloom] shaders unavailable fastbloom={shader != null} postbloom={postShader != null}, falling back to urp bloom");
                         GameBloomEnabled = false;
                     }
                 }
@@ -90,7 +95,7 @@ namespace Gallop.RenderPipeline
 
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
-                if (_fastBloomMaterial == null || !GameBloomEnabled)
+                if (_fastBloomMaterial == null || _postBloomMaterial == null || !GameBloomEnabled)
                     return;
 
                 var cmd = CommandBufferPool.Get("GameFastBloom");
@@ -119,14 +124,16 @@ namespace Gallop.RenderPipeline
                 Blit(cmd, _bloomB, _bloomC, _fastBloomMaterial, 2);
                 Blit(cmd, _bloomC, _bloomA, _fastBloomMaterial, 3);
 
-                // pass 0 is the composite: it reads the globals _Bloom, _BloomIsScreenBlend
-                // and _bloomDofWeight, exactly like the game's OnRenderImageFastBloom.
-                // it must write to a texture other than _Bloom itself or the
-                // sampled texel and the written texel are the same memory.
+                // the composite is a different shader in the game: PostBloom_Rich pass 0
+                // (the pass class keeps two materials, _fastBloomMaterial at +0x130 for
+                // the pyramid and _bloomMaterial at +0x120 for the composite). it reads
+                // the globals _Bloom, _BloomIsScreenBlend and _bloomDofWeight, and must
+                // write to a texture other than _Bloom itself or the sampled texel and
+                // the written texel are the same memory.
                 cmd.SetGlobalTexture(BloomId, _bloomA);
                 cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
                 cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
-                Blit(cmd, source, _composite, _fastBloomMaterial, 0);
+                Blit(cmd, source, _composite, _postBloomMaterial, 0);
                 Blit(cmd, _composite, source);
 
                 context.ExecuteCommandBuffer(cmd);
