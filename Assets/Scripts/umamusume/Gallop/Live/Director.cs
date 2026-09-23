@@ -1437,6 +1437,18 @@ namespace Gallop.Live
                 _filmBestPower = power;
                 imageEffect.ApplyTimelineFilm(updateInfo.color0, power, isVignette, blend);
             }
+
+            // the game's postbloom composite reads the whole postfilm global block
+            // every frame; mirror the authored values so the bloom path sees the
+            // same state the game's screen-overlay chain would have set.
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmPower = power;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmOffsetParam = updateInfo.filmOffsetParam;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmOptionParam = updateInfo.filmOptionParam;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor0 = updateInfo.color0;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor1 = updateInfo.color1;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor2 = updateInfo.color2;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor3 = updateInfo.color3;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsInverseVignette = isVignette ? 1f : 0f;
         }
 
         private float _filmBestPower = -1f;

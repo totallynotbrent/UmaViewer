@@ -39,6 +39,17 @@ namespace Gallop.RenderPipeline
             public static float BloomDofWeight = 1f;
             public static float BloomIsScreenBlend = 1f;
 
+            // the postfilm block the game's screen-overlay chain publishes every
+            // frame; the postbloom composite samples these alongside the bloom.
+            public static float PostFilmPower = 1f;
+            public static Vector4 PostFilmOffsetParam = Vector4.one;
+            public static Vector4 PostFilmOptionParam = Vector4.one;
+            public static Color PostFilmColor0 = Color.white;
+            public static Color PostFilmColor1 = Color.white;
+            public static Color PostFilmColor2 = Color.white;
+            public static Color PostFilmColor3 = Color.white;
+            public static float PostFilmIsInverseVignette;
+
             private Material _fastBloomMaterial;
             private Material _postBloomMaterial;
             private RTHandle _bloomA;
@@ -47,6 +58,14 @@ namespace Gallop.RenderPipeline
             private RTHandle _composite;
 
             private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+            private static readonly int PostFilmPowerId = Shader.PropertyToID("_PostFilmPower");
+            private static readonly int PostFilmOffsetParamId = Shader.PropertyToID("_PostFilmOffsetParam");
+            private static readonly int PostFilmOptionParamId = Shader.PropertyToID("_PostFilmOptionParam");
+            private static readonly int PostFilmColor0Id = Shader.PropertyToID("_PostFilmColor0");
+            private static readonly int PostFilmColor1Id = Shader.PropertyToID("_PostFilmColor1");
+            private static readonly int PostFilmColor2Id = Shader.PropertyToID("_PostFilmColor2");
+            private static readonly int PostFilmColor3Id = Shader.PropertyToID("_PostFilmColor3");
+            private static readonly int PostFilmIsInverseVignetteId = Shader.PropertyToID("_PostFilmIsInverseVignette");
             private static readonly int ParameterId = Shader.PropertyToID("_Parameter");
             private static readonly int BloomId = Shader.PropertyToID("_Bloom");
             private static readonly int BloomIsScreenBlendId = Shader.PropertyToID("_BloomIsScreenBlend");
@@ -140,6 +159,14 @@ namespace Gallop.RenderPipeline
                 cmd.SetGlobalTexture(BloomId, _bloomA);
                 cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
                 cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
+                cmd.SetGlobalFloat(PostFilmPowerId, PostFilmPower);
+                cmd.SetGlobalVector(PostFilmOffsetParamId, PostFilmOffsetParam);
+                cmd.SetGlobalVector(PostFilmOptionParamId, PostFilmOptionParam);
+                cmd.SetGlobalColor(PostFilmColor0Id, PostFilmColor0);
+                cmd.SetGlobalColor(PostFilmColor1Id, PostFilmColor1);
+                cmd.SetGlobalColor(PostFilmColor2Id, PostFilmColor2);
+                cmd.SetGlobalColor(PostFilmColor3Id, PostFilmColor3);
+                cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, PostFilmIsInverseVignette);
                 _postBloomMaterial.SetTexture(MainTexId, source);
                 Blitter.BlitCameraTexture(cmd, source, _composite, _postBloomMaterial, 0);
                 Blitter.BlitCameraTexture(cmd, _composite, source);
