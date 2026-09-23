@@ -63,6 +63,9 @@ MonoBehaviour:
   - {fileID: -53754397225917022}
   - {fileID: 2075802744604386734}
   - {fileID: 4128775609312370189}
+  - {fileID: 7263918440012451001}
+  - {fileID: 7263918440012451002}
+  - {fileID: 7263918440012451003}
   m_RendererFeatureMap: a2e53b18a90641ffaee5ec1f99bbce1c
   m_UseNativeRenderPass: 0
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -140,5 +143,45 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: baca95030b554351bde300bb4f2920c9, type: 3}
   m_Name: GallopGameBloomFeature
+  m_EditorClassIdentifier: 
+  m_Active: 1
+
+--- !u!114 &7263918440012451001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8aee4b8b1a564e42a439a24cd0eaa6d3, type: 3}
+  m_Name: GallopToneCurveFeature
+  m_EditorClassIdentifier: 
+  m_Active: 1
+--- !u!114 &7263918440012451002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 640edcb86fc54edbb461724b94dca509, type: 3}
+  m_Name: GallopLensDistortionFeature
+  m_EditorClassIdentifier: 
+  m_Active: 1
+--- !u!114 &7263918440012451003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9dd223d635624bf1bd1701adbc131671, type: 3}
+  m_Name: GallopTransmittedLightFeature
   m_EditorClassIdentifier: 
   m_Active: 1

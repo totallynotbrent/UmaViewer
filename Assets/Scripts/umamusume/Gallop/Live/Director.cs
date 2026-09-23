@@ -483,6 +483,11 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateHdrBloom += OnUpdateHdrBloom;
             _liveTimelineControl.OnUpdatePostEffect_DOF += OnUpdatePostEffect_DOF;
             _liveTimelineControl.OnUpdateRadialBlur += OnUpdateRadialBlur;
+            _liveTimelineControl.OnUpdateToneCurve += OnUpdateToneCurve;
+            _liveTimelineControl.OnUpdateLensDistortion += OnUpdateLensDistortion;
+            _liveTimelineControl.OnUpdateTransmittedLight += OnUpdateTransmittedLight;
+            _liveTimelineControl.OnUpdateVoice += OnUpdateVoice;
+            _liveTimelineControl.OnUpdateCharaParts += OnUpdateCharaParts;
             _liveTimelineControl.OnUpdateTiltShift += OnUpdateTiltShift;
             _liveTimelineControl.OnUpdateFade += OnUpdateFade;
             _liveTimelineControl.OnUpdateFluctuation += OnUpdateFluctuation;
@@ -1280,6 +1285,90 @@ namespace Gallop.Live
             ApplyRadialBlur(updateInfo.radialBlurPower, updateInfo.radialBlurStartArea);
         }
 
+        // map a chara slot index (center/left1/right1/...) to the loaded character
+        // container the same way the facial handler resolves positions.
+        private UmaContainerCharacter ResolveCharacterBySlot(int slot)
+        {
+            if (slot < 0 || slot >= CharaContainerScript.Count)
+                return null;
+            return CharaContainerScript[slot];
+        }
+
+        // toggle every renderer whose object name matches the authored part name.
+        private void ApplyRendererVisible(UmaContainerCharacter character, string partName, bool visible)
+        {
+            if (character == null || string.IsNullOrEmpty(partName))
+                return;
+            var root = character.Body != null ? character.Body.transform
+                : character.Head != null ? character.Head.transform
+                : character.transform;
+            foreach (var ren in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (ren.name == partName || ren.transform.name == partName)
+                    ren.enabled = visible;
+            }
+        }
+
+        private void OnUpdateToneCurve(ToneCurveUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.Enabled = true;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.IsEnable = updateInfo.IsEnable;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.ToneCurve = updateInfo.ToneAnimationCurve;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.MaskToneCurve = updateInfo.MaskToneCurve;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.MinCorrectionLevel = updateInfo.MinCorrectionLevel;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.MaxCorrectionLevel = updateInfo.MaxCorrectionLevel;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.MaskMinCorrectionLevel = updateInfo.MaskMinCorrectionLevel;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.MaskMaxCorrectionLevel = updateInfo.MaskMaxCorrectionLevel;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.DepthMask = updateInfo.DepthMask;
+        }
+
+        private void OnUpdateLensDistortion(LensDistortionUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.Enabled = true;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.Intensity = updateInfo.Intensity;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.IntensityX = updateInfo.IntensityX;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.IntensityY = updateInfo.IntensityY;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.CenterX = updateInfo.CenterX;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.CenterY = updateInfo.CenterY;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.Scale = updateInfo.Scale;
+        }
+
+        private void OnUpdateTransmittedLight(TransmittedLightUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Enabled = true;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.IsEnabled = updateInfo.IsEnabled;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Iterations = updateInfo.Iterations;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Intensity = updateInfo.Intensity;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Threshold = updateInfo.Threshold;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.BlurSpread = updateInfo.BlurSpread;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.BlendMode = updateInfo.BlendMode;
+        }
+
+        private void OnUpdateVoice(VoiceUpdateInfo updateInfo)
+        {
+            if (!updateInfo.isValid) return;
+            FileLog($"[voice] cue={updateInfo.CueId} at t={updateInfo.Time:F2}s");
+        }
+
+        // costume part visibility per character slot; the game toggles the named
+        // renderers on the resolved character model.
+        private void OnUpdateCharaParts(int slot, LiveTimelineKeyCharaPartsData key)
+        {
+            if (key == null || key.rendererNames == null)
+                return;
+            var character = ResolveCharacterBySlot(slot);
+            if (character == null)
+                return;
+            for (int i = 0; i < key.rendererNames.Count; i++)
+            {
+                bool visible = i < key.rendererVisibles.Count ? key.rendererVisibles[i] : true;
+                ApplyRendererVisible(character, key.rendererNames[i], visible);
+            }
+        }
+
         private void OnUpdateTiltShift(TiltShiftUpdateInfo updateInfo)
         {
             if (!updateInfo.isValid) return;
@@ -1538,6 +1627,11 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdatePostEffect_DOF -= OnUpdatePostEffect_DOF;
             _liveTimelineControl.OnUpdateRadialBlur -= OnUpdateRadialBlur;
+            _liveTimelineControl.OnUpdateToneCurve -= OnUpdateToneCurve;
+            _liveTimelineControl.OnUpdateLensDistortion -= OnUpdateLensDistortion;
+            _liveTimelineControl.OnUpdateTransmittedLight -= OnUpdateTransmittedLight;
+            _liveTimelineControl.OnUpdateVoice -= OnUpdateVoice;
+            _liveTimelineControl.OnUpdateCharaParts -= OnUpdateCharaParts;
             _liveTimelineControl.OnUpdateTiltShift -= OnUpdateTiltShift;
             _liveTimelineControl.OnUpdateFade -= OnUpdateFade;
             _liveTimelineControl.OnUpdateFluctuation -= OnUpdateFluctuation;

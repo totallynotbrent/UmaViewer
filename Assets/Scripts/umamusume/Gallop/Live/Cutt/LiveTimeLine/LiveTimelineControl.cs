@@ -258,6 +258,14 @@ namespace Gallop.Live.Cutt
         public event Action<HandShakeCameraUpdateInfo> OnUpdateHandShakeCamera;
         public event Action<PropsUpdateInfo> OnUpdateProps;
         public event Action<PropsAttachUpdateInfo> OnUpdatePropsAttach;
+
+        // the authoring-driven image effect and event tracks decoded from the game's
+        // own update loop; each fires once per frame with the interpolated key state.
+        public event Action<ToneCurveUpdateInfo> OnUpdateToneCurve;
+        public event Action<LensDistortionUpdateInfo> OnUpdateLensDistortion;
+        public event Action<TransmittedLightUpdateInfo> OnUpdateTransmittedLight;
+        public event Action<VoiceUpdateInfo> OnUpdateVoice;
+        public event System.Action<int, LiveTimelineKeyCharaPartsData> OnUpdateCharaParts;
         public event Action<Spotlight3dUpdateInfo> OnUpdateSpotlight3d;
 
         public event UVScrollLightUpdateInfoDelegate OnUpdateUVScrollLight;
@@ -660,6 +668,8 @@ namespace Gallop.Live.Cutt
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
+                AlterUpdate_Voice(ws, Mathf.RoundToInt(_currentFrame));
+                AlterUpdate_CharaParts(ws, Mathf.RoundToInt(_currentFrame));
             }
 
             //BgColor2属于全局舞台颜色控制，只使用主 worksheet。
@@ -670,6 +680,12 @@ namespace Gallop.Live.Cutt
             AlterUpdate_StageGrade(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_VolumeLight(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_ChromaticAberration(camSheet, Mathf.RoundToInt(_currentFrame));
+
+            // the game drives tone curve, lens distortion and transmitted light from
+            // the same late phase; voice and chara parts run in its update phase.
+            AlterUpdate_ToneCurve(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_LensDistortion(camSheet, Mathf.RoundToInt(_currentFrame));
+            AlterUpdate_TransmittedLight(camSheet, Mathf.RoundToInt(_currentFrame));
 
             _isNowAlterUpdate = false;
 
@@ -3685,6 +3701,165 @@ namespace Gallop.Live.Cutt
             updateInfo.backFrequency = key.backChrMotNoiseFrequency;
             updateInfo.isNegativeCheck = key.isNegativeCheck;
             handler(ref updateInfo);
+        }
+
+        // plain keys carry no interpolation data; use the frame fraction between the
+        // current and next key as the blend factor.
+        private static float KeyFrameFraction(LiveTimelineKey curKey, LiveTimelineKey nextKey, float currentFrame)
+        {
+            if (curKey == null)
+                return 0f;
+            if (nextKey == null || nextKey.frame <= curKey.frame)
+                return 0f;
+            float span = nextKey.frame - curKey.frame;
+            return Mathf.Clamp01((currentFrame - curKey.frame) / span);
+        }
+
+        private void AlterUpdate_ToneCurve(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateToneCurve == null || sheet?.ToneCurveKeys == null)
+                return;
+
+            AlterUpdate_SimpleList<LiveTimelineKeyToneCurveData>(sheet.ToneCurveKeys, currentFrame, null);
+            var currentKey = _simpleListCurrentKey as LiveTimelineKeyToneCurveData;
+            if (currentKey == null)
+                return;
+
+            ToneCurveUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.IsEnable = currentKey.IsEnable;
+            updateInfo.ToneAnimationCurve = currentKey.ToneAnimationCurve;
+            updateInfo.MaskToneCurve = currentKey.MaskToneCurve;
+            updateInfo.MinCorrectionLevel = currentKey.MinCorrectionLevel;
+            updateInfo.MaxCorrectionLevel = currentKey.MaxCorrectionLevel;
+            updateInfo.MaskMinCorrectionLevel = currentKey.MaskMinCorrectionLevel;
+            updateInfo.MaskMaxCorrectionLevel = currentKey.MaskMaxCorrectionLevel;
+            updateInfo.DepthMask = currentKey.DepthMask;
+            OnUpdateToneCurve(updateInfo);
+        }
+
+        private void AlterUpdate_LensDistortion(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateLensDistortion == null || sheet?.LensDistortionKeys == null)
+                return;
+
+            var keys = sheet.LensDistortionKeys;
+            if (keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var nextKey, keys, currentFrame);
+            var currentKey = curKey as LiveTimelineKeyLensDistortionData;
+            var upcomingKey = nextKey as LiveTimelineKeyLensDistortionData;
+            if (currentKey == null)
+                return;
+
+            float t = KeyFrameFraction(currentKey, upcomingKey, currentFrame);
+            LensDistortionUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.Intensity = LerpWithoutClamp(currentKey.Intensity, upcomingKey != null ? upcomingKey.Intensity : currentKey.Intensity, t);
+            updateInfo.IntensityX = LerpWithoutClamp(currentKey.IntensityX, upcomingKey != null ? upcomingKey.IntensityX : currentKey.IntensityX, t);
+            updateInfo.IntensityY = LerpWithoutClamp(currentKey.IntensityY, upcomingKey != null ? upcomingKey.IntensityY : currentKey.IntensityY, t);
+            updateInfo.CenterX = LerpWithoutClamp(currentKey.CenterX, upcomingKey != null ? upcomingKey.CenterX : currentKey.CenterX, t);
+            updateInfo.CenterY = LerpWithoutClamp(currentKey.CenterY, upcomingKey != null ? upcomingKey.CenterY : currentKey.CenterY, t);
+            updateInfo.Scale = LerpWithoutClamp(currentKey.Scale, upcomingKey != null ? upcomingKey.Scale : currentKey.Scale, t);
+            OnUpdateLensDistortion(updateInfo);
+        }
+
+        private void AlterUpdate_TransmittedLight(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateTransmittedLight == null)
+                return;
+
+            var keys = sheet?.TransmittedLightKeys;
+            if (keys == null ||
+                keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            FindTimelineKey(out var curKey, out var _, keys, currentFrame);
+            var currentKey = curKey as LiveTimelineKeyTransmittedLightData;
+            if (currentKey == null)
+                return;
+
+            TransmittedLightUpdateInfo updateInfo = default;
+            updateInfo.isValid = true;
+            updateInfo.IsEnabled = currentKey.ATTR_ENABLE != 0;
+            updateInfo.Iterations = currentKey.Iterations;
+            updateInfo.Intensity = currentKey.Intensity;
+            updateInfo.Threshold = currentKey.Threshold;
+            updateInfo.BlurSpread = currentKey.BlurSpread;
+            updateInfo.BlendMode = currentKey.BlendMode;
+            OnUpdateTransmittedLight(updateInfo);
+        }
+
+        private void AlterUpdate_Voice(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateVoice == null)
+                return;
+
+            var keys = sheet?.VoiceKeys;
+            if (keys == null ||
+                keys.Count <= 0 ||
+                keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                !keys.EnablePlayModeTimeline(_playMode))
+                return;
+
+            // voice keys are one-shot cue triggers: fire when the playhead crosses
+            // the key frame between the old and current frames.
+            for (int k = 0; k < keys.Count; k++)
+            {
+                var key = keys[k] as LiveTimelineKeyVoiceData;
+                if (key == null)
+                    continue;
+                int frame = key.frame;
+                int oldFrame = Mathf.RoundToInt(_oldFrame);
+                if (frame > oldFrame && frame <= currentFrame)
+                {
+                    VoiceUpdateInfo updateInfo = default;
+                    updateInfo.isValid = true;
+                    updateInfo.CueId = key.CueId;
+                    updateInfo.Time = key.frame / 60f;
+                    OnUpdateVoice(updateInfo);
+                }
+            }
+        }
+
+        private void AlterUpdate_CharaParts(LiveTimelineWorkSheet sheet, int currentFrame)
+        {
+            if (OnUpdateCharaParts == null)
+                return;
+
+            var group = sheet?.CharaPartsKeys;
+            if (group == null)
+                return;
+
+            // the game drives chara parts per character slot; the slot index maps to
+            // the standing position the same way facial toon slots do.
+            var slots = new LiveTimelineKeyCharaPartsDataList[]
+            {
+                group.centerKeys, group.left1Keys, group.right1Keys, group.left2Keys, group.right2Keys,
+                group.place06Keys, group.place07Keys, group.place08Keys, group.place09Keys, group.place10Keys,
+                group.place11Keys, group.place12Keys, group.place13Keys, group.place14Keys, group.place15Keys,
+                group.place16Keys, group.place17Keys, group.place18Keys, group.place19Keys, group.place20Keys
+            };
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var keys = slots[i];
+                if (keys == null || keys.Count <= 0 ||
+                    keys.HasAttribute(LiveTimelineKeyDataListAttr.Disable) ||
+                    !keys.EnablePlayModeTimeline(_playMode))
+                    continue;
+
+                FindTimelineKey(out var curKey, out var _, keys, currentFrame);
+                var currentKey = curKey as LiveTimelineKeyCharaPartsData;
+                if (currentKey == null)
+                    continue;
+
+                OnUpdateCharaParts(i, currentKey);
+            }
         }
 
         private void AlterUpdate_SweatLocator(LiveTimelineWorkSheet sheet, float currentFrame)
