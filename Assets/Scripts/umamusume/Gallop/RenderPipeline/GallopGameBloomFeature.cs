@@ -137,6 +137,8 @@ namespace Gallop.RenderPipeline
                     else
                     {
                         Debug.LogWarning("[gamebloom] game bloom shaders unavailable (FastBloom=" + (shader != null) + " PostBloom_Rich=" + (postShader != null) + "), falling back to URP bloom");
+                        if (shader != null && postShader != null && (!shader.isSupported || !postShader.isSupported))
+                            Gallop.Live.Director.FileLog("[gamebloom] UNSUPPORTED-ON-THIS-GFX-API: the game shaders did not compile on this graphics api; this session benches the urp fallback, not the game bloom path");
                         Gallop.Live.Director.FileLog($"[gamebloom] shaders unavailable fastbloom={shader != null} postbloom={postShader != null}, falling back to urp bloom");
                         GameBloomEnabled = false;
                     }
@@ -249,6 +251,10 @@ namespace Gallop.RenderPipeline
                     : _postBloomMaterial;
                 compositeMaterial.SetTexture(MainTexId, source);
                 Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, 0);
+                // the game chains a second overlay pass after the bloom composite; the
+                // film layer rides on it, so draw it when the shader exposes the pass.
+                if (compositeMaterial.passCount > 1)
+                    Blitter.BlitCameraTexture(cmd, _composite, _composite, compositeMaterial, 1);
 
                 if (!_envLogged)
                 {
@@ -277,16 +283,21 @@ namespace Gallop.RenderPipeline
             {
                 var m = _postBloomMaterial;
                 var sb = new System.Text.StringBuilder("[gamebloom] material defaults");
-                foreach (var prop in new[] { "_colorBlendFactor", "_movieScale", "_movieOffset", "_MainTex_ST" })
+                foreach (var prop in new[] { "_colorBlendFactor", "_movieScale", "_movieOffset", "_MainTex_ST", "_DimmerColor" })
                 {
-                    if (m.HasProperty(prop))
+                    if (!m.HasProperty(prop))
                     {
-                        var v = m.GetVector(prop);
-                        sb.Append($" {prop}=({v.x:F2},{v.y:F2},{v.z:F2},{v.w:F2})");
+                        sb.Append($" {prop}=absent");
+                    }
+                    else if (prop == "_DimmerColor")
+                    {
+                        var c = m.GetColor(prop);
+                        sb.Append($" {prop}=({c.r:F2},{c.g:F2},{c.b:F2},{c.a:F2})");
                     }
                     else
                     {
-                        sb.Append($" {prop}=absent");
+                        var v = m.GetVector(prop);
+                        sb.Append($" {prop}=({v.x:F2},{v.y:F2},{v.z:F2},{v.w:F2})");
                     }
                 }
                 Gallop.Live.Director.FileLog(sb.ToString());
@@ -295,6 +306,12 @@ namespace Gallop.RenderPipeline
                     // a zero blend factor multiplies the whole composite to black.
                     m.SetVector("_colorBlendFactor", new Vector4(1f, 1f, 1f, 1f));
                     Gallop.Live.Director.FileLog("[gamebloom] _colorBlendFactor defaulted to zero; pinned to one");
+                }
+                if (m.HasProperty("_DimmerColor") && m.GetColor("_DimmerColor").r == 0f)
+                {
+                    // the composite multiplies its whole output by the dimmer color.
+                    m.SetColor("_DimmerColor", Color.white);
+                    Gallop.Live.Director.FileLog("[gamebloom] _DimmerColor defaulted to zero; pinned to white");
                 }
             }
 
