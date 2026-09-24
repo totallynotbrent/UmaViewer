@@ -43,6 +43,7 @@ namespace Gallop.Live
         public float _liveCurrentTime;  //Edited to public
         public bool _isLiveSetup; //Edit to pulic
         private bool _forceGameBloomOff;
+        private bool _bypassComposite;
         private bool _forceAuthoredPassesOff;
         public StageController _stageController; //Edited to public
         [SerializeField]
@@ -731,6 +732,15 @@ namespace Gallop.Live
                 if (Input.GetKeyDown(KeyCode.F9))
                 {
                     ToggleGallopWinParity();
+                }
+
+                // f6 bypasses the composite with a plain copy so a black screen
+                // splits between the composite draw and the plumbing in one keystroke.
+                if (Input.GetKeyDown(KeyCode.F6))
+                {
+                    _bypassComposite = !_bypassComposite;
+                    Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.BypassComposite = _bypassComposite;
+                    FileLog($"[killswitch] composite bypass {(_bypassComposite ? "on (plain copy)" : "off")}");
                 }
 
                 // f10 force-kills the game bloom pass so a black screen can be

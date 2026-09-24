@@ -62,6 +62,10 @@ namespace Gallop.RenderPipeline
             public static float PostFilmIsInverseVignette;
             public static bool InverseVignette;
 
+            // f9 kill switch: copy the source straight through without running the
+            // composite; separates a bad composite draw from bad plumbing around it.
+            public static bool BypassComposite;
+
             // the game draws up to three film layers after the bloom composite,
             // each gated by the same validity rules as ScreenOverlay.Overlay.IsValid.
             public sealed class FilmLayerState
@@ -205,6 +209,17 @@ namespace Gallop.RenderPipeline
 
                 var cmd = CommandBufferPool.Get("GameFastBloom");
                 var source = renderingData.cameraData.renderer.cameraColorTargetHandle;
+
+                if (BypassComposite)
+                {
+                    // straight copy: if the screen still shows the concert with this
+                    // path, the composite draw itself is the blackener.
+                    Blitter.BlitCameraTexture(cmd, source, _composite);
+                    Blitter.BlitCameraTexture(cmd, _composite, source);
+                    context.ExecuteCommandBuffer(cmd);
+                    CommandBufferPool.Release(cmd);
+                    return;
+                }
 
                 int srcW = renderingData.cameraData.cameraTargetDescriptor.width;
                 int srcH = renderingData.cameraData.cameraTargetDescriptor.height;
