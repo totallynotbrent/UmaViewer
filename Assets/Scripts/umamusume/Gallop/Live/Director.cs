@@ -42,6 +42,8 @@ namespace Gallop.Live
         [SerializeField]
         public float _liveCurrentTime;  //Edited to public
         public bool _isLiveSetup; //Edit to pulic
+        private bool _forceGameBloomOff;
+        private bool _forceAuthoredPassesOff;
         public StageController _stageController; //Edited to public
         [SerializeField]
         private GameObject[] _cameraNodes;
@@ -1887,6 +1889,12 @@ namespace Gallop.Live
             Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.IsEnabled = false;
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.GameBloomEnabled = false;
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.DiffusionEnabled = false;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.ForceDisabled = false;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.ForceDisabled = false;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.ForceDisabled = false;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.ForceDisabled = false;
+            _forceGameBloomOff = false;
+            _forceAuthoredPassesOff = false;
             _cameraMotionLogged = false;
             _isLiveSetup = false;
             _liveTimelineControl.OnUpdateTiltShift -= OnUpdateTiltShift;

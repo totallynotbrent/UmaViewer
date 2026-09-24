@@ -24,7 +24,7 @@ namespace Gallop.RenderPipeline
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            if (!GallopGameBloomPass.GameBloomEnabled)
+            if (!GallopGameBloomPass.GameBloomEnabled || GallopGameBloomPass.ForceDisabled)
                 return;
             // only the live main camera owns the bloom; mirror and multi cameras would
             // thrash the shared pyramid textures at their own resolutions.
@@ -43,6 +43,7 @@ namespace Gallop.RenderPipeline
             // set by GallopImageEffect when the game shader path is active for the frame.
             public static bool GameBloomEnabled;
             public static bool DiffusionEnabled;
+            public static bool ForceDisabled;
             public static float Intensity = 1f;
             public static float Threshold = 0.8f;
             public static float BlurSize = 3f;
@@ -69,6 +70,8 @@ namespace Gallop.RenderPipeline
             private RTHandle _composite;
             private int _lastBloomW = -1;
             private int _lastBloomH = -1;
+            private float _nextProbeTime = -1f;
+            private bool _envLogged;
             private int _lastLoggedW = -1;
             private int _lastLoggedH = -1;
 
@@ -123,7 +126,7 @@ namespace Gallop.RenderPipeline
 
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
-                if (_fastBloomMaterial == null || _postBloomMaterial == null || !GameBloomEnabled)
+                if (_fastBloomMaterial == null || _postBloomMaterial == null || !GameBloomEnabled || ForceDisabled)
                     return;
 
                 var cmd = CommandBufferPool.Get("GameFastBloom");
@@ -216,6 +219,14 @@ namespace Gallop.RenderPipeline
                     : _postBloomMaterial;
                 compositeMaterial.SetTexture(MainTexId, source);
                 Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, 0);
+
+                if (!_envLogged)
+                {
+                    _envLogged = true;
+                    LogCompositeEnvironment();
+                }
+                ProbeLuminance(cmd, source, _bloomA, _bloomB, _bloomC, _composite);
+
                 Blitter.BlitCameraTexture(cmd, _composite, source);
 
                 context.ExecuteCommandBuffer(cmd);
@@ -228,6 +239,58 @@ namespace Gallop.RenderPipeline
                 _bloomB?.Release();
                 _bloomC?.Release();
                 _composite?.Release();
+            }
+
+            // one-shot dump of every global the composite consumes so a bad value is
+            // visible in the log instead of guessed at.
+            private void LogCompositeEnvironment()
+            {
+                Gallop.Live.Director.FileLog(
+                    $"[gamebloom] env diffusion={DiffusionEnabled} blend={BloomIsScreenBlend} dofWeight={BloomDofWeight:F2} " +
+                    $"power={PostFilmPower:F3} offset=({PostFilmOffsetParam.x:F2},{PostFilmOffsetParam.y:F2},{PostFilmOffsetParam.z:F2},{PostFilmOffsetParam.w:F2}) " +
+                    $"option=({PostFilmOptionParam.x:F2},{PostFilmOptionParam.y:F2},{PostFilmOptionParam.z:F2},{PostFilmOptionParam.w:F2}) " +
+                    $"c0=({PostFilmColor0.r:F2},{PostFilmColor0.g:F2},{PostFilmColor0.b:F2},{PostFilmColor0.a:F2}) " +
+                    $"c1=({PostFilmColor1.r:F2},{PostFilmColor1.g:F2},{PostFilmColor1.b:F2},{PostFilmColor1.a:F2}) " +
+                    $"c2=({PostFilmColor2.r:F2},{PostFilmColor2.g:F2},{PostFilmColor2.b:F2},{PostFilmColor2.a:F2}) " +
+                    $"c3=({PostFilmColor3.r:F2},{PostFilmColor3.g:F2},{PostFilmColor3.b:F2},{PostFilmColor3.a:F2}) " +
+                    $"invVignette={PostFilmIsInverseVignette:F2}");
+            }
+
+            // async gpu readback of the four key textures so the log shows which stage
+            // of the chain is black instead of inferring it from the screen.
+            private void ProbeLuminance(CommandBuffer cmd, RTHandle source, RTHandle a, RTHandle b, RTHandle c, RTHandle composite)
+            {
+                float now = UnityEngine.Time.unscaledTime;
+                if (_nextProbeTime > 0f && now < _nextProbeTime)
+                    return;
+                _nextProbeTime = now + 3f;
+                Gallop.Live.Director.FileLog(
+                    $"[gamebloom] probe t={now:F1} src={ProbeTexture(cmd, source)} A={ProbeTexture(cmd, a)} B={ProbeTexture(cmd, b)} C={ProbeTexture(cmd, c)} out={ProbeTexture(cmd, composite)}");
+            }
+
+            private string ProbeTexture(CommandBuffer cmd, RTHandle handle)
+            {
+                if (handle == null || handle.rt == null)
+                    return "null";
+                var tmp = new UnityEngine.Texture2D(4, 4, UnityEngine.TextureFormat.RGBA32, false);
+                var prev = UnityEngine.RenderTexture.active;
+                var src = handle.rt;
+                UnityEngine.RenderTexture.active = src;
+                tmp.ReadPixels(new UnityEngine.Rect(0, 0, 4, 4), 0, 0, false);
+                tmp.Apply(false);
+                UnityEngine.RenderTexture.active = prev;
+                var px = tmp.GetPixels32();
+                float sum = 0f;
+                float max = 0f;
+                foreach (var p in px)
+                {
+                    float l = (p.r + p.g + p.b) / 765f;
+                    sum += l;
+                    if (l > max) max = l;
+                }
+                float avg = sum / px.Length;
+                UnityEngine.Object.Destroy(tmp);
+                return $"(avg={avg:F4} max={max:F3})";
             }
 
             public override void OnCameraCleanup(CommandBuffer cmd)

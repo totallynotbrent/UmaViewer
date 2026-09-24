@@ -22,7 +22,7 @@ namespace Gallop.RenderPipeline
         {
             // authored image effects only apply to the live camera; the menu and
             // freecam never carry the film track state.
-            if (!GallopToneCurvePass.Enabled || !IsLiveCamera(renderingData))
+            if (!GallopToneCurvePass.Enabled || GallopToneCurvePass.ForceDisabled || !IsLiveCamera(renderingData))
                 return;
             renderer.EnqueuePass(_pass);
             GallopToneCurvePass.Enabled = false;
@@ -44,6 +44,7 @@ namespace Gallop.RenderPipeline
         {
             // fed by the director from the authored tone curve keys each frame.
             public static bool Enabled;
+            public static bool ForceDisabled;
             public static bool IsEnable;
             public static AnimationCurve ToneCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
             public static AnimationCurve MaskToneCurve;
@@ -93,7 +94,7 @@ namespace Gallop.RenderPipeline
 
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
-                if (_material == null || !Enabled || !IsEnable)
+                if (_material == null || !Enabled || !IsEnable || ForceDisabled)
                     return;
 
                 var cmd = CommandBufferPool.Get("GallopToneCurve");

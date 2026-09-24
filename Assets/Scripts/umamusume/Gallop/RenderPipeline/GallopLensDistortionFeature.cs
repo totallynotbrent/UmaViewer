@@ -22,7 +22,7 @@ namespace Gallop.RenderPipeline
         {
             // authored image effects only apply to the live camera; the menu and
             // freecam never carry the film track state.
-            if (!GallopLensDistortionPass.Enabled || !IsLiveCamera(renderingData))
+            if (!GallopLensDistortionPass.Enabled || GallopLensDistortionPass.ForceDisabled || !IsLiveCamera(renderingData))
                 return;
             renderer.EnqueuePass(_pass);
             GallopLensDistortionPass.Enabled = false;
@@ -44,6 +44,7 @@ namespace Gallop.RenderPipeline
         {
             // fed by the director from the authored lens distortion keys each frame.
             public static bool Enabled;
+            public static bool ForceDisabled;
             public static float Intensity;
             public static float IntensityX = 0.0001f;
             public static float IntensityY = 0.0001f;
@@ -83,7 +84,7 @@ namespace Gallop.RenderPipeline
 
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
-                if (_material == null || !Enabled)
+                if (_material == null || !Enabled || ForceDisabled)
                     return;
 
                 var cmd = CommandBufferPool.Get("GallopLensDistortion");

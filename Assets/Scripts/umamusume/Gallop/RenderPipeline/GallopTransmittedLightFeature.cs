@@ -23,7 +23,7 @@ namespace Gallop.RenderPipeline
         {
             // authored image effects only apply to the live camera; the menu and
             // freecam never carry the film track state.
-            if (!GallopTransmittedLightPass.Enabled || !IsLiveCamera(renderingData))
+            if (!GallopTransmittedLightPass.Enabled || GallopTransmittedLightPass.ForceDisabled || !IsLiveCamera(renderingData))
                 return;
             renderer.EnqueuePass(_pass);
             GallopTransmittedLightPass.Enabled = false;
@@ -45,6 +45,7 @@ namespace Gallop.RenderPipeline
         {
             // fed by the director from the authored transmitted light keys each frame.
             public static bool Enabled;
+            public static bool ForceDisabled;
             public static bool IsEnabled;
             public static int Iterations = 3;
             public static float Intensity = 1f;
@@ -91,7 +92,7 @@ namespace Gallop.RenderPipeline
 
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
-                if (_fastBloomMaterial == null || _compositeMaterial == null || !Enabled || !IsEnabled)
+                if (_fastBloomMaterial == null || _compositeMaterial == null || !Enabled || !IsEnabled || ForceDisabled)
                     return;
 
                 var cmd = CommandBufferPool.Get("GallopTransmittedLight");
