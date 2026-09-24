@@ -65,7 +65,7 @@ namespace Gallop.RenderPipeline
             public static Vector4 PostFilmRollParameter = new Vector4(0f, 1f, 0f, 1f);
             public static Vector4 PostFilmScaleParameter = new Vector4(1f, 1f, 0f, 0f);
             public static float PostFilmIsAlphaMasking;
-            public static float PostFilmIsWithoutDepth;
+            public static float PostFilmIsWithoutDepth = 1f;
 
             private Material _fastBloomMaterial;
             private Material _postBloomMaterial;
@@ -97,6 +97,11 @@ namespace Gallop.RenderPipeline
             private static readonly int PostFilmIsAlphaMaskingId = Shader.PropertyToID("_PostFilmIsAlphaMasking");
             private static readonly int PostFilmIsWithoutDepthId = Shader.PropertyToID("_PostFilmIsWithoutDepth");
             private static readonly int ColorBlendFactorId = Shader.PropertyToID("_colorBlendFactor");
+            private static readonly int RgbTexId = Shader.PropertyToID("_RgbTex");
+            private static readonly int ColorParamId = Shader.PropertyToID("_ColorParam");
+            private static readonly int PostFilmIsUVMovieNoScaleId = Shader.PropertyToID("_PostFilmIsUVMovieNoScale");
+            public static Vector4 ColorParam = new Vector4(1f, 1f, 1f, 1f);
+            public static float PostFilmIsUVMovieNoScale;
             private static readonly int ParameterId = Shader.PropertyToID("_Parameter");
             private static readonly int BloomId = Shader.PropertyToID("_Bloom");
             private static readonly int CameraDepthTextureId = Shader.PropertyToID("_CameraDepthTexture");
@@ -233,6 +238,11 @@ namespace Gallop.RenderPipeline
                 cmd.SetGlobalVector(PostFilmScaleParameterId, PostFilmScaleParameter);
                 cmd.SetGlobalFloat(PostFilmIsAlphaMaskingId, PostFilmIsAlphaMasking);
                 cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, PostFilmIsWithoutDepth);
+                cmd.SetGlobalFloat(PostFilmIsUVMovieNoScaleId, PostFilmIsUVMovieNoScale);
+                // the game binds the plain rgb input and a color-correction vector
+                // right before the composite; an unbound _RgbTex samples black.
+                cmd.SetGlobalTexture(RgbTexId, source);
+                cmd.SetGlobalVector(ColorParamId, ColorParam);
                 // the diffusion composite is its own shader in the game; pick per state.
                 Material compositeMaterial = DiffusionEnabled && _diffusionBloomMaterial != null
                     ? _diffusionBloomMaterial
