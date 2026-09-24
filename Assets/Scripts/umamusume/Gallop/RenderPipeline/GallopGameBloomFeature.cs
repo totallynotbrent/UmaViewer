@@ -60,6 +60,12 @@ namespace Gallop.RenderPipeline
             public static Color PostFilmColor2 = Color.white;
             public static Color PostFilmColor3 = Color.white;
             public static float PostFilmIsInverseVignette;
+            public static float DepthPower = 1f;
+            public static float DepthClip = 2f;
+            public static Vector4 PostFilmRollParameter = new Vector4(0f, 1f, 0f, 1f);
+            public static Vector4 PostFilmScaleParameter = new Vector4(1f, 1f, 0f, 0f);
+            public static float PostFilmIsAlphaMasking;
+            public static float PostFilmIsWithoutDepth;
 
             private Material _fastBloomMaterial;
             private Material _postBloomMaterial;
@@ -84,6 +90,13 @@ namespace Gallop.RenderPipeline
             private static readonly int PostFilmColor2Id = Shader.PropertyToID("_PostFilmColor2");
             private static readonly int PostFilmColor3Id = Shader.PropertyToID("_PostFilmColor3");
             private static readonly int PostFilmIsInverseVignetteId = Shader.PropertyToID("_PostFilmIsInverseVignette");
+            private static readonly int DepthPowerId = Shader.PropertyToID("_DepthPower");
+            private static readonly int DepthClipId = Shader.PropertyToID("_DepthClip");
+            private static readonly int PostFilmRollParameterId = Shader.PropertyToID("_PostFilmRollParameter");
+            private static readonly int PostFilmScaleParameterId = Shader.PropertyToID("_PostFilmScaleParameter");
+            private static readonly int PostFilmIsAlphaMaskingId = Shader.PropertyToID("_PostFilmIsAlphaMasking");
+            private static readonly int PostFilmIsWithoutDepthId = Shader.PropertyToID("_PostFilmIsWithoutDepth");
+            private static readonly int ColorBlendFactorId = Shader.PropertyToID("_colorBlendFactor");
             private static readonly int ParameterId = Shader.PropertyToID("_Parameter");
             private static readonly int BloomId = Shader.PropertyToID("_Bloom");
             private static readonly int CameraDepthTextureId = Shader.PropertyToID("_CameraDepthTexture");
@@ -109,6 +122,7 @@ namespace Gallop.RenderPipeline
                     {
                         _fastBloomMaterial = new Material(shader) { hideFlags = HideFlags.DontSave };
                         _postBloomMaterial = new Material(postShader) { hideFlags = HideFlags.DontSave };
+                        DumpCompositeMaterialDefaults();
                         var diffusionShader = Gallop.ShaderManager.GetShader(Gallop.ShaderManager.ShaderKinds.PostDiffusionBloom_Rich);
                         if (diffusionShader != null && diffusionShader.isSupported)
                             _diffusionBloomMaterial = new Material(diffusionShader) { hideFlags = HideFlags.DontSave };
@@ -213,6 +227,12 @@ namespace Gallop.RenderPipeline
                 cmd.SetGlobalColor(PostFilmColor2Id, PostFilmColor2);
                 cmd.SetGlobalColor(PostFilmColor3Id, PostFilmColor3);
                 cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, PostFilmIsInverseVignette);
+                cmd.SetGlobalFloat(DepthPowerId, DepthPower);
+                cmd.SetGlobalFloat(DepthClipId, DepthClip);
+                cmd.SetGlobalVector(PostFilmRollParameterId, PostFilmRollParameter);
+                cmd.SetGlobalVector(PostFilmScaleParameterId, PostFilmScaleParameter);
+                cmd.SetGlobalFloat(PostFilmIsAlphaMaskingId, PostFilmIsAlphaMasking);
+                cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, PostFilmIsWithoutDepth);
                 // the diffusion composite is its own shader in the game; pick per state.
                 Material compositeMaterial = DiffusionEnabled && _diffusionBloomMaterial != null
                     ? _diffusionBloomMaterial
@@ -239,6 +259,33 @@ namespace Gallop.RenderPipeline
                 _bloomB?.Release();
                 _bloomC?.Release();
                 _composite?.Release();
+            }
+
+            // the composite reads per-material values the game never sets either, so
+            // log what the shader defaults them to and pin the blend factor to neutral.
+            private void DumpCompositeMaterialDefaults()
+            {
+                var m = _postBloomMaterial;
+                var sb = new System.Text.StringBuilder("[gamebloom] material defaults");
+                foreach (var prop in new[] { "_colorBlendFactor", "_movieScale", "_movieOffset", "_MainTex_ST" })
+                {
+                    if (m.HasProperty(prop))
+                    {
+                        var v = m.GetVector(prop);
+                        sb.Append($" {prop}=({v.x:F2},{v.y:F2},{v.z:F2},{v.w:F2})");
+                    }
+                    else
+                    {
+                        sb.Append($" {prop}=absent");
+                    }
+                }
+                Gallop.Live.Director.FileLog(sb.ToString());
+                if (m.HasProperty("_colorBlendFactor") && m.GetVector("_colorBlendFactor").x == 0f)
+                {
+                    // a zero blend factor multiplies the whole composite to black.
+                    m.SetVector("_colorBlendFactor", new Vector4(1f, 1f, 1f, 1f));
+                    Gallop.Live.Director.FileLog("[gamebloom] _colorBlendFactor defaulted to zero; pinned to one");
+                }
             }
 
             // one-shot dump of every global the composite consumes so a bad value is
