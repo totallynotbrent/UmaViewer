@@ -1199,6 +1199,10 @@ namespace Gallop.Live
 
             // Post-FX only runs if the camera renders post-processing.
             mainCamera.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            // the game's bloom composite samples _CameraDepthTexture to weight the
+            // bloom by distance; without a depth texture the sample reads black and
+            // the composite dims the whole screen to black.
+            mainCamera.GetUniversalAdditionalCameraData().requiresDepthTexture = true;
 
             return _mainGallopImageEffect;
         }

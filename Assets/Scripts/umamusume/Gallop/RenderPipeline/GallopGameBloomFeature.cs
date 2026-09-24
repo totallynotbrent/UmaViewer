@@ -26,6 +26,15 @@ namespace Gallop.RenderPipeline
         {
             if (!GallopGameBloomPass.GameBloomEnabled)
                 return;
+            // only the live main camera owns the bloom; mirror and multi cameras would
+            // thrash the shared pyramid textures at their own resolutions.
+            var cam = renderingData.cameraData.camera;
+            var director = Gallop.Live.Director.instance;
+            if (director == null || !director._isLiveSetup)
+                return;
+            if (cam == null || director.MainCameraTransform == null ||
+                cam.transform != director.MainCameraTransform)
+                return;
             renderer.EnqueuePass(_pass);
         }
 
@@ -74,6 +83,7 @@ namespace Gallop.RenderPipeline
             private static readonly int PostFilmIsInverseVignetteId = Shader.PropertyToID("_PostFilmIsInverseVignette");
             private static readonly int ParameterId = Shader.PropertyToID("_Parameter");
             private static readonly int BloomId = Shader.PropertyToID("_Bloom");
+            private static readonly int CameraDepthTextureId = Shader.PropertyToID("_CameraDepthTexture");
             private static readonly int BloomIsScreenBlendId = Shader.PropertyToID("_BloomIsScreenBlend");
             private static readonly int BloomDofWeightId = Shader.PropertyToID("_bloomDofWeight");
 
@@ -165,12 +175,17 @@ namespace Gallop.RenderPipeline
 
                 // the game shaders sample _MainTex, so every blit binds it explicitly;
                 // the urp blitter owns _BlitTexture and does not set _MainTex itself.
+                // the game's pyramid: blit1 thresholds source into A with the screen
+                // size and authored values in the parameter, blit2 runs pass 1 again
+                // with a neutral parameter, then passes 2 and 3 blur through B and C.
                 _fastBloomMaterial.SetTexture(MainTexId, source);
                 Blitter.BlitCameraTexture(cmd, source, _bloomA, _fastBloomMaterial, 1);
                 _fastBloomMaterial.SetTexture(MainTexId, _bloomA);
-                Blitter.BlitCameraTexture(cmd, _bloomA, _bloomB, _fastBloomMaterial, 2);
+                Blitter.BlitCameraTexture(cmd, _bloomA, _bloomB, _fastBloomMaterial, 1);
                 _fastBloomMaterial.SetTexture(MainTexId, _bloomB);
-                Blitter.BlitCameraTexture(cmd, _bloomB, _bloomC, _fastBloomMaterial, 3);
+                Blitter.BlitCameraTexture(cmd, _bloomB, _bloomC, _fastBloomMaterial, 2);
+                _fastBloomMaterial.SetTexture(MainTexId, _bloomC);
+                Blitter.BlitCameraTexture(cmd, _bloomC, _bloomB, _fastBloomMaterial, 3);
 
                 // the composite is a different shader in the game: PostBloom_Rich pass 0
                 // (the pass class keeps two materials, _fastBloomMaterial at +0x130 for
@@ -178,7 +193,13 @@ namespace Gallop.RenderPipeline
                 // the globals _Bloom, _BloomIsScreenBlend and _bloomDofWeight, and must
                 // write to a texture other than _Bloom itself or the sampled texel and
                 // the written texel are the same memory.
-                cmd.SetGlobalTexture(BloomId, _bloomA);
+                cmd.SetGlobalTexture(BloomId, _bloomB);
+                // the composite samples _CameraDepthTexture to weight bloom by
+                // distance; urp binds it only when the camera requires depth, which the
+                // director now turns on for the live camera.
+                cmd.SetGlobalTexture(
+                    CameraDepthTextureId,
+                    renderingData.cameraData.renderer.cameraDepthTargetHandle);
                 cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
                 cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
                 cmd.SetGlobalFloat(PostFilmPowerId, PostFilmPower);
