@@ -131,6 +131,7 @@ namespace Gallop.RenderPipeline
             private RTHandle _bloomC;
             private RTHandle _bloomD;
             private RTHandle _composite;
+            private RTHandle _compositeB;
             private int _lastBloomW = -1;
             private int _lastBloomH = -1;
             private float _nextProbeTime = -1f;
@@ -175,6 +176,7 @@ namespace Gallop.RenderPipeline
                 // texture the shader samples as the global _Bloom (a read-while-write
                 // hazard renders black on most drivers).
                 RenderingUtils.ReAllocateIfNeeded(ref _composite, desc, FilterMode.Bilinear, name: "_GameBloomComposite");
+                RenderingUtils.ReAllocateIfNeeded(ref _compositeB, desc, FilterMode.Bilinear, name: "_GameBloomCompositeB");
 
                 if (_fastBloomMaterial == null)
                 {
@@ -265,22 +267,19 @@ namespace Gallop.RenderPipeline
                 // the game's CreateBloomTexture, blit for blit: threshold into A,
                 // then a neutral downsample into B (this is the level the composite
                 // samples as _Bloom), then two blur blits into C and D. each blit
-                // carries its own _Parameter shape exactly as authored.
-                _fastBloomMaterial.SetTexture(MainTexId, source);
+                // carries its own _Parameter shape exactly as authored, drawn with
+                // the legacy blit that binds _MainTex itself.
                 cmd.SetGlobalVector(ParameterId, new Vector4(srcW, srcH, Threshold, Intensity));
-                Blitter.BlitCameraTexture(cmd, source, _bloomA, _fastBloomMaterial, 1);
-                _fastBloomMaterial.SetTexture(MainTexId, _bloomA);
+                cmd.Blit(source.rt, _bloomA.rt, _fastBloomMaterial, 1);
                 cmd.SetGlobalVector(ParameterId, new Vector4(srcW, srcH, 0f, 1f));
-                Blitter.BlitCameraTexture(cmd, _bloomA, _bloomB, _fastBloomMaterial, 1);
-                _fastBloomMaterial.SetTexture(MainTexId, _bloomB);
+                cmd.Blit(_bloomA.rt, _bloomB.rt, _fastBloomMaterial, 1);
                 cmd.SetGlobalVector(ParameterId, new Vector4(
                     blur / aspect * 0.00195312f,
                     blur * 0.00195312f,
                     Threshold,
                     Intensity));
-                Blitter.BlitCameraTexture(cmd, _bloomB, _bloomC, _fastBloomMaterial, 2);
-                _fastBloomMaterial.SetTexture(MainTexId, _bloomC);
-                Blitter.BlitCameraTexture(cmd, _bloomC, _bloomD, _fastBloomMaterial, 3);
+                cmd.Blit(_bloomB.rt, _bloomC.rt, _fastBloomMaterial, 2);
+                cmd.Blit(_bloomC.rt, _bloomD.rt, _fastBloomMaterial, 3);
 
                 // the composite is a different shader in the game: PostBloom_Rich pass 0
                 // (the pass class keeps two materials, _fastBloomMaterial at +0x130 for
@@ -308,9 +307,11 @@ namespace Gallop.RenderPipeline
                 Material compositeMaterial = DiffusionEnabled && _diffusionBloomMaterial != null
                     ? _diffusionBloomMaterial
                     : _postBloomMaterial;
-                compositeMaterial.SetTexture(MainTexId, source);
-                // the composite core enables the first valid layer's mode/blend keywords
-                // before its own blit, and draws plain when no layer is valid.
+                // the game draws the composite with the legacy CommandBuffer.Blit:
+                // unity binds _MainTex itself and renders the fullscreen quad the
+                // shader's vertex stage was authored for. the urp blitter's big
+                // triangle and flipped-y convention are not what this shader
+                // expects, so mirror the game's own draw path here.
                 FilmLayerState compositeLayer = null;
                 for (int i = 0; i < FilmLayers.Length; i++)
                 {
@@ -330,35 +331,43 @@ namespace Gallop.RenderPipeline
                 {
                     ClearFilmKeywords(compositeMaterial);
                 }
-                // the bloom composite is always pass 0; the game's screen-overlay
-                // chain only shifts the FILM passes, never the composite itself.
-                Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, 0);
+                // the bloom composite is always pass 0, drawn the legacy way.
+                compositeMaterial.SetTexture(MainTexId, source);
+                cmd.Blit(source.rt, _composite.rt, compositeMaterial, 0);
                 // the game draws up to three film layers after the composite, each
                 // gated by its own validity and drawn through the film passes with
-                // the mode/blend keywords selecting the subprogram variant.
-                var filmTarget = _composite;
+                // the mode/blend keywords selecting the subprogram variant. each
+                // layer ping-pongs through the second composite rt so a pass never
+                // samples the target it is writing.
+                var filmSrc = _composite;
+                var filmDst = _compositeB;
+                bool filmDrawn = false;
                 for (int i = 0; i < FilmLayers.Length; i++)
                 {
                     var layer = FilmLayers[i];
                     if (layer == null || !layer.IsValid())
                         continue;
                     SetFilmKeywords(compositeMaterial, layer);
-                    SetFilmGlobals(cmd, layer, filmTarget);
-                    // layer 1 draws the first film pass, layers 2/3 share the second;
-                    // inverse-vignette keys shift to the variant pass (+1).
+                    SetFilmGlobals(cmd, layer, filmSrc);
                     int filmPass = (i == 0 ? 1 : 3) + (layer.inverseVignette ? 1 : 0);
-                    Blitter.BlitCameraTexture(cmd, filmTarget, filmTarget, compositeMaterial, filmPass);
+                    compositeMaterial.SetTexture(MainTexId, filmSrc.rt);
+                    cmd.Blit(filmSrc.rt, filmDst.rt, compositeMaterial, filmPass);
+                    var swap = filmSrc;
+                    filmSrc = filmDst;
+                    filmDst = swap;
+                    filmDrawn = true;
                 }
                 ClearFilmKeywords(compositeMaterial);
+                var compositeResult = filmDrawn ? filmSrc : _composite;
 
                 if (!_envLogged)
                 {
                     _envLogged = true;
                     LogCompositeEnvironment();
                 }
-                ProbeLuminance(cmd, source, _bloomA, _bloomB, _bloomC, _bloomD, _composite);
+                ProbeLuminance(cmd, source, _bloomA, _bloomB, _bloomC, _bloomD, compositeResult);
 
-                Blitter.BlitCameraTexture(cmd, _composite, source);
+                Blitter.BlitCameraTexture(cmd, compositeResult, source);
 
                 context.ExecuteCommandBuffer(cmd);
                 CommandBufferPool.Release(cmd);
@@ -371,6 +380,7 @@ namespace Gallop.RenderPipeline
                 _bloomC?.Release();
                 _bloomD?.Release();
                 _composite?.Release();
+                _compositeB?.Release();
             }
 
             // the game enables one mode keyword and one blend keyword per drawn film
