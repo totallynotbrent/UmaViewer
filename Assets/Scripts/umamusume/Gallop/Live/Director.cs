@@ -1760,36 +1760,43 @@ namespace Gallop.Live
                 imageEffect.ApplyTimelineFilm(updateInfo.color0, power, isVignette, blend);
             }
 
-            // the game's postbloom composite reads the whole postfilm global block
-            // every frame; mirror the authored values so the bloom path sees the
-            // same state the game's screen-overlay chain would have set.
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmPower = power;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmOffsetParam = updateInfo.filmOffsetParam;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmOptionParam = updateInfo.filmOptionParam;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor0 = updateInfo.color0;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor1 = updateInfo.color1;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor2 = updateInfo.color2;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor3 = updateInfo.color3;
-            // the game's draw helper pushes the depth and film-shape globals every
-            // frame from the same authored fields; mirror them so the composite sees
-            // identical state.
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.DepthPower = updateInfo.depthPower;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.DepthClip = Mathf.Max(0f, updateInfo.DepthClip);
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmRollParameter = new Vector4(updateInfo.RollAngle, 1f, 0f, 1f);
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmScaleParameter = new Vector4(updateInfo.FilmScale.x, updateInfo.FilmScale.y, 0f, 0f);
+            // the game drives the bloom composite's film layers per layer index:
+            // each of the three postfilm tracks publishes its own state and the
+            // screen-overlay chain draws the valid ones after the composite.
+            int layerIdx = Mathf.Clamp(updateInfo.layerIndex, 0, 2);
+            var layers = Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.FilmLayers;
+            var layer = layers[layerIdx];
+            if (layer == null)
+                layers[layerIdx] = layer = new Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.FilmLayerState();
+            layer.mode = (int)updateInfo.filmMode;
+            layer.power = power;
+            layer.depthPower = updateInfo.depthPower;
+            layer.depthClip = updateInfo.DepthClip;
+            layer.offsetParam = updateInfo.filmOffsetParam;
+            layer.optionParam = updateInfo.filmOptionParam;
+            layer.color0 = updateInfo.color0;
+            layer.color1 = updateInfo.color1;
+            layer.color2 = updateInfo.color2;
+            layer.color3 = updateInfo.color3;
+            layer.layerMode = (int)updateInfo.layerMode;
+            layer.colorBlend = (int)updateInfo.colorBlend;
+            layer.colorBlendFactor = updateInfo.colorBlendFactor;
+            // roll packs sin/cos of the authored angle; scale packs reciprocals the
+            // way the game's SetScale does, with the aspect landing in roll.z later.
+            float rollAngle = updateInfo.RollAngle;
+            layer.rollParameter = new Vector4(Mathf.Sin(rollAngle), Mathf.Cos(rollAngle), 0f, 1f);
+            layer.scaleParameter = new Vector4(
+                updateInfo.FilmScale.x != 0f ? 1f / updateInfo.FilmScale.x : 1f,
+                updateInfo.FilmScale.y != 0f ? 1f / updateInfo.FilmScale.y : 1f,
+                0f,
+                0f);
             // the game reads the authored kAttr bits per key: 18 selects the alpha
             // mask subprograms, 19 the no-scale uv movie path, 20 the inverse
-            // vignette composite variant.
+            // vignette film pass variant.
             int attrBits = (int)data.attribute;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsAlphaMasking =
-                (attrBits & 0x40000) != 0 ? 1f : 0f;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsUVMovieNoScale =
-                (attrBits & 0x80000) != 0 ? 1f : 0f;
-            bool inverseVignette = (attrBits & 0x100000) != 0;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsInverseVignette =
-                inverseVignette ? 1f : 0f;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.InverseVignette =
-                inverseVignette;
+            layer.isAlphaMasking = (attrBits & 0x40000) != 0;
+            layer.inverseVignette = (attrBits & 0x100000) != 0;
+            layer.isUVMovieNoScale = (attrBits & 0x80000) != 0;
 
             // the film layer can couple to named blink light containers; push the
             // authored brightness so stage lights pulse with the film.

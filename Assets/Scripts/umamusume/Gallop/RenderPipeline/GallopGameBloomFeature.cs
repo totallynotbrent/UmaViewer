@@ -61,6 +61,57 @@ namespace Gallop.RenderPipeline
             public static Color PostFilmColor3 = Color.white;
             public static float PostFilmIsInverseVignette;
             public static bool InverseVignette;
+
+            // the game draws up to three film layers after the bloom composite,
+            // each gated by the same validity rules as ScreenOverlay.Overlay.IsValid.
+            public sealed class FilmLayerState
+            {
+                public int mode;
+                public float power;
+                public float depthPower;
+                public float depthClip;
+                public Vector4 offsetParam;
+                public Vector4 optionParam;
+                public Color color0;
+                public Color color1;
+                public Color color2;
+                public Color color3;
+                public int layerMode;
+                public int colorBlend;
+                public float colorBlendFactor;
+                public Vector4 rollParameter;
+                public Vector4 scaleParameter;
+                public bool inverseVignette;
+                public bool isAlphaMasking;
+                public bool isUVMovieNoScale;
+
+                public bool IsValid()
+                {
+                    // mirrors ScreenOverlay.Overlay.IsValid: mul and vignette modes
+                    // always draw, monochrome needs an opaque color, the rest need power.
+                    if (mode == 0)
+                        return false;
+                    if (mode == 3 || mode == 4 || mode == 6)
+                        return true;
+                    if (mode == 7)
+                        return color0.a > 0f;
+                    return power > 0f;
+                }
+            }
+
+            // keywords that select the subprogram variant per drawn layer; order
+            // matches the game's SHADER_KEYWORD_MODE / SHADER_KEYWORD_BLEND tables.
+            private static readonly string[] ShaderKeywordMode =
+            {
+                "MODE_NONE", "MODE_LERP", "MODE_ADD", "MODE_MUL",
+                "MODE_VIGNETTE_LERP", "MODE_VIGNETTE_ADD", "MODE_VIGNETTE_MUL",
+                "MODE_MONOCHROME", "MODE_SCREENBLEND", "MODE_VIGNETT_SCREENBLEND"
+            };
+            private static readonly string[] ShaderKeywordBlend =
+            {
+                "MASK_VIGNETTE", "BLEND_NONE", "BLEND_LERP", "BLEND_ADD", "BLEND_MUL"
+            };
+            public static readonly FilmLayerState[] FilmLayers = new FilmLayerState[3];
             public static float DepthPower = 1f;
             public static float DepthClip = 2f;
             public static Vector4 PostFilmRollParameter = new Vector4(0f, 1f, 0f, 1f);
@@ -227,21 +278,30 @@ namespace Gallop.RenderPipeline
                     renderingData.cameraData.renderer.cameraDepthTargetHandle);
                 cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
                 cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
-                cmd.SetGlobalFloat(PostFilmPowerId, PostFilmPower);
-                cmd.SetGlobalVector(PostFilmOffsetParamId, PostFilmOffsetParam);
-                cmd.SetGlobalVector(PostFilmOptionParamId, PostFilmOptionParam);
-                cmd.SetGlobalColor(PostFilmColor0Id, PostFilmColor0);
-                cmd.SetGlobalColor(PostFilmColor1Id, PostFilmColor1);
-                cmd.SetGlobalColor(PostFilmColor2Id, PostFilmColor2);
-                cmd.SetGlobalColor(PostFilmColor3Id, PostFilmColor3);
-                cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, PostFilmIsInverseVignette);
-                cmd.SetGlobalFloat(DepthPowerId, DepthPower);
-                cmd.SetGlobalFloat(DepthClipId, DepthClip);
-                cmd.SetGlobalVector(PostFilmRollParameterId, PostFilmRollParameter);
-                cmd.SetGlobalVector(PostFilmScaleParameterId, PostFilmScaleParameter);
-                cmd.SetGlobalFloat(PostFilmIsAlphaMaskingId, PostFilmIsAlphaMasking);
-                cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, PostFilmIsWithoutDepth);
-                cmd.SetGlobalFloat(PostFilmIsUVMovieNoScaleId, PostFilmIsUVMovieNoScale);
+                // the game pushes the active film layer's params before the composite
+                // blit; layer 1 is the strongest track in every authored song.
+                var compositeLayer = FilmLayers[0];
+                if (compositeLayer != null)
+                {
+                    cmd.SetGlobalFloat(PostFilmPowerId, compositeLayer.power);
+                    cmd.SetGlobalVector(PostFilmOffsetParamId, new Vector4(compositeLayer.offsetParam.x, compositeLayer.offsetParam.y, 0f, 0f));
+                    cmd.SetGlobalVector(PostFilmOptionParamId, compositeLayer.optionParam);
+                    cmd.SetGlobalColor(PostFilmColor0Id, compositeLayer.color0);
+                    cmd.SetGlobalColor(PostFilmColor1Id, compositeLayer.color1);
+                    cmd.SetGlobalColor(PostFilmColor2Id, compositeLayer.color2);
+                    cmd.SetGlobalColor(PostFilmColor3Id, compositeLayer.color3);
+                    cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, compositeLayer.inverseVignette ? 1f : 0f);
+                    cmd.SetGlobalFloat(DepthPowerId, compositeLayer.depthPower);
+                    cmd.SetGlobalFloat(DepthClipId, compositeLayer.depthClip > 1f ? 0f : 1f - compositeLayer.depthClip);
+                    Vector4 roll = compositeLayer.rollParameter;
+                    if (srcH != 0)
+                        roll.z = srcW / (float)srcH;
+                    cmd.SetGlobalVector(PostFilmRollParameterId, roll);
+                    cmd.SetGlobalVector(PostFilmScaleParameterId, compositeLayer.scaleParameter);
+                    cmd.SetGlobalFloat(PostFilmIsAlphaMaskingId, compositeLayer.isAlphaMasking ? 1f : 0f);
+                    cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, 0f);
+                    cmd.SetGlobalFloat(PostFilmIsUVMovieNoScaleId, compositeLayer.isUVMovieNoScale ? 1f : 0f);
+                }
                 // the game binds the plain rgb input and a color-correction vector
                 // right before the composite; an unbound _RgbTex samples black.
                 cmd.SetGlobalTexture(RgbTexId, source);
@@ -251,14 +311,25 @@ namespace Gallop.RenderPipeline
                     ? _diffusionBloomMaterial
                     : _postBloomMaterial;
                 compositeMaterial.SetTexture(MainTexId, source);
-                // the game composites through the inverse-vignette pass variants when
-                // the film key sets the kAttr bit; pass 0/1 otherwise.
-                int basePass = InverseVignette ? 2 : 0;
-                Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, basePass);
-                // the game chains a second overlay pass after the bloom composite; the
-                // film layer rides on it, so draw it when the shader exposes the pass.
-                if (compositeMaterial.passCount > basePass + 1)
-                    Blitter.BlitCameraTexture(cmd, _composite, _composite, compositeMaterial, basePass + 1);
+                // the bloom composite is always pass 0; the game's screen-overlay
+                // chain only shifts the FILM passes, never the composite itself.
+                Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, 0);
+                // the game draws up to three film layers after the composite, each
+                // gated by its own validity and drawn through the film passes with
+                // the mode/blend keywords selecting the subprogram variant.
+                var filmTarget = _composite;
+                for (int i = 0; i < FilmLayers.Length; i++)
+                {
+                    var layer = FilmLayers[i];
+                    if (layer == null || !layer.IsValid())
+                        continue;
+                    SetFilmKeywords(compositeMaterial, layer);
+                    SetFilmGlobals(cmd, layer, filmTarget);
+                    // layer 1 draws the first film pass, layers 2/3 share the second;
+                    // inverse-vignette keys shift to the variant pass (+1).
+                    int filmPass = (i == 0 ? 1 : 3) + (layer.inverseVignette ? 1 : 0);
+                    Blitter.BlitCameraTexture(cmd, filmTarget, filmTarget, compositeMaterial, filmPass);
+                }
 
                 if (!_envLogged)
                 {
@@ -279,6 +350,52 @@ namespace Gallop.RenderPipeline
                 _bloomB?.Release();
                 _bloomC?.Release();
                 _composite?.Release();
+            }
+
+            // the game enables one mode keyword and one blend keyword per drawn film
+            // layer; the keyword pair selects the subprogram variant.
+            private static void SetFilmKeywords(Material material, FilmLayerState layer)
+            {
+                for (int i = 0; i < ShaderKeywordMode.Length; i++)
+                {
+                    if (i == layer.mode)
+                        material.EnableKeyword(ShaderKeywordMode[i]);
+                    else
+                        material.DisableKeyword(ShaderKeywordMode[i]);
+                }
+                int blendId = layer.layerMode == 0
+                    ? 0
+                    : Mathf.Clamp(layer.layerMode + layer.colorBlend, 0, ShaderKeywordBlend.Length - 1);
+                for (int i = 0; i < ShaderKeywordBlend.Length; i++)
+                {
+                    if (i == blendId)
+                        material.EnableKeyword(ShaderKeywordBlend[i]);
+                    else
+                        material.DisableKeyword(ShaderKeywordBlend[i]);
+                }
+            }
+
+            // per-layer film globals, packed the way Overlay.Update packs them.
+            private static void SetFilmGlobals(CommandBuffer cmd, FilmLayerState layer, RTHandle mainTexture)
+            {
+                cmd.SetGlobalFloat(PostFilmPowerId, layer.power);
+                cmd.SetGlobalFloat(DepthPowerId, layer.depthPower);
+                cmd.SetGlobalFloat(DepthClipId, layer.depthClip > 1f ? 0f : 1f - layer.depthClip);
+                cmd.SetGlobalVector(PostFilmOffsetParamId, new Vector4(layer.offsetParam.x, layer.offsetParam.y, 0f, 0f));
+                cmd.SetGlobalVector(PostFilmOptionParamId, layer.optionParam);
+                cmd.SetGlobalColor(PostFilmColor0Id, layer.color0);
+                cmd.SetGlobalColor(PostFilmColor1Id, layer.color1);
+                cmd.SetGlobalColor(PostFilmColor2Id, layer.color2);
+                cmd.SetGlobalColor(PostFilmColor3Id, layer.color3);
+                Vector4 roll = layer.rollParameter;
+                if (mainTexture != null && mainTexture.rt != null && mainTexture.rt.height != 0)
+                    roll.z = mainTexture.rt.width / (float)mainTexture.rt.height;
+                cmd.SetGlobalVector(PostFilmRollParameterId, roll);
+                cmd.SetGlobalVector(PostFilmScaleParameterId, layer.scaleParameter);
+                cmd.SetGlobalFloat(PostFilmIsUVMovieNoScaleId, layer.layerMode == 2 ? 1f : 0f);
+                cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, layer.inverseVignette ? 1f : 0f);
+                cmd.SetGlobalFloat(PostFilmIsAlphaMaskingId, layer.isAlphaMasking ? 1f : 0f);
+                cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, 0f);
             }
 
             // the composite reads per-material values the game never sets either, so
@@ -342,8 +459,18 @@ namespace Gallop.RenderPipeline
                 if (_nextProbeTime > 0f && now < _nextProbeTime)
                     return;
                 _nextProbeTime = now + 3f;
+                // log which film layers pass the game's validity gate and which pass
+                // they will draw, so the chain state is visible next to the pixels.
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < FilmLayers.Length; i++)
+                {
+                    var layer = FilmLayers[i];
+                    if (layer == null) { sb.Append($" L{i}=none"); continue; }
+                    if (!layer.IsValid()) { sb.Append($" L{i}=off(mode={layer.mode},p={layer.power:F2})"); continue; }
+                    sb.Append($" L{i}=pass{(i == 0 ? 1 : 3) + (layer.inverseVignette ? 1 : 0)}(mode={layer.mode},p={layer.power:F2},inv={layer.inverseVignette})");
+                }
                 Gallop.Live.Director.FileLog(
-                    $"[gamebloom] probe t={now:F1} src={ProbeTexture(cmd, source)} A={ProbeTexture(cmd, a)} B={ProbeTexture(cmd, b)} C={ProbeTexture(cmd, c)} out={ProbeTexture(cmd, composite)}");
+                    $"[gamebloom] probe t={now:F1} film:{sb} src={ProbeTexture(cmd, source)} A={ProbeTexture(cmd, a)} B={ProbeTexture(cmd, b)} C={ProbeTexture(cmd, c)} out={ProbeTexture(cmd, composite)}");
             }
 
             private string ProbeTexture(CommandBuffer cmd, RTHandle handle)
@@ -354,7 +481,11 @@ namespace Gallop.RenderPipeline
                 var prev = UnityEngine.RenderTexture.active;
                 var src = handle.rt;
                 UnityEngine.RenderTexture.active = src;
-                tmp.ReadPixels(new UnityEngine.Rect(0, 0, 4, 4), 0, 0, false);
+                // read the CENTER of the texture: the bottom-left corner is always
+                // dim stage floor and reads as black even when the frame is fine.
+                float cx = Mathf.Max(0f, src.width * 0.5f - 2f);
+                float cy = Mathf.Max(0f, src.height * 0.5f - 2f);
+                tmp.ReadPixels(new UnityEngine.Rect(cx, cy, 4, 4), 0, 0, false);
                 tmp.Apply(false);
                 UnityEngine.RenderTexture.active = prev;
                 var px = tmp.GetPixels32();
