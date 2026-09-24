@@ -733,6 +733,26 @@ namespace Gallop.Live
                     ToggleGallopWinParity();
                 }
 
+                // f10 force-kills the game bloom pass so a black screen can be
+                // attributed to the composite in one keystroke.
+                if (Input.GetKeyDown(KeyCode.F10))
+                {
+                    _forceGameBloomOff = !_forceGameBloomOff;
+                    Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.ForceDisabled = _forceGameBloomOff;
+                    FileLog($"[killswitch] game bloom {(_forceGameBloomOff ? "forced off" : "restored")}");
+                }
+
+                // f11 force-kills the tone curve, lens distortion and transmitted
+                // light passes to bisect a black screen between them and the bloom.
+                if (Input.GetKeyDown(KeyCode.F11))
+                {
+                    _forceAuthoredPassesOff = !_forceAuthoredPassesOff;
+                    Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.ForceDisabled = _forceAuthoredPassesOff;
+                    Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.ForceDisabled = _forceAuthoredPassesOff;
+                    Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.ForceDisabled = _forceAuthoredPassesOff;
+                    FileLog($"[killswitch] authored passes {(_forceAuthoredPassesOff ? "forced off" : "restored")}");
+                }
+
                 if (_syncTime == false)
                 {
                     if(liveMusic.sourceList.Count == 0)
