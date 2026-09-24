@@ -60,6 +60,7 @@ namespace Gallop.RenderPipeline
             public static Color PostFilmColor2 = Color.white;
             public static Color PostFilmColor3 = Color.white;
             public static float PostFilmIsInverseVignette;
+            public static bool InverseVignette;
             public static float DepthPower = 1f;
             public static float DepthClip = 2f;
             public static Vector4 PostFilmRollParameter = new Vector4(0f, 1f, 0f, 1f);
@@ -250,11 +251,14 @@ namespace Gallop.RenderPipeline
                     ? _diffusionBloomMaterial
                     : _postBloomMaterial;
                 compositeMaterial.SetTexture(MainTexId, source);
-                Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, 0);
+                // the game composites through the inverse-vignette pass variants when
+                // the film key sets the kAttr bit; pass 0/1 otherwise.
+                int basePass = InverseVignette ? 2 : 0;
+                Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, basePass);
                 // the game chains a second overlay pass after the bloom composite; the
                 // film layer rides on it, so draw it when the shader exposes the pass.
-                if (compositeMaterial.passCount > 1)
-                    Blitter.BlitCameraTexture(cmd, _composite, _composite, compositeMaterial, 1);
+                if (compositeMaterial.passCount > basePass + 1)
+                    Blitter.BlitCameraTexture(cmd, _composite, _composite, compositeMaterial, basePass + 1);
 
                 if (!_envLogged)
                 {

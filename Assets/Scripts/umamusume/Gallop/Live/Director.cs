@@ -1770,7 +1770,6 @@ namespace Gallop.Live
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor1 = updateInfo.color1;
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor2 = updateInfo.color2;
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmColor3 = updateInfo.color3;
-            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsInverseVignette = isVignette ? 1f : 0f;
             // the game's draw helper pushes the depth and film-shape globals every
             // frame from the same authored fields; mirror them so the composite sees
             // identical state.
@@ -1778,8 +1777,19 @@ namespace Gallop.Live
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.DepthClip = Mathf.Max(0f, updateInfo.DepthClip);
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmRollParameter = new Vector4(updateInfo.RollAngle, 1f, 0f, 1f);
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmScaleParameter = new Vector4(updateInfo.FilmScale.x, updateInfo.FilmScale.y, 0f, 0f);
+            // the game reads the authored kAttr bits per key: 18 selects the alpha
+            // mask subprograms, 19 the no-scale uv movie path, 20 the inverse
+            // vignette composite variant.
+            int attrBits = (int)data.attribute;
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsAlphaMasking =
-                updateInfo.colorBlend != LiveTimelineKeyPostFilmData.ColorBlend.None ? 1f : 0f;
+                (attrBits & 0x40000) != 0 ? 1f : 0f;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsUVMovieNoScale =
+                (attrBits & 0x80000) != 0 ? 1f : 0f;
+            bool inverseVignette = (attrBits & 0x100000) != 0;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.PostFilmIsInverseVignette =
+                inverseVignette ? 1f : 0f;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.InverseVignette =
+                inverseVignette;
 
             // the film layer can couple to named blink light containers; push the
             // authored brightness so stage lights pulse with the film.
