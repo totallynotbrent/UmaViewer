@@ -275,11 +275,14 @@ namespace Gallop.RenderPipeline
                 // the written texel are the same memory.
                 cmd.SetGlobalTexture(BloomId, _bloomB);
                 // the composite samples _CameraDepthTexture to weight bloom by
-                // distance; urp binds it only when the camera requires depth, which the
-                // director now turns on for the live camera.
-                cmd.SetGlobalTexture(
-                    CameraDepthTextureId,
-                    renderingData.cameraData.renderer.cameraDepthTargetHandle);
+                // distance. the raw camera depth TARGET is the msaa depth buffer which a
+                // regular sampler cannot read; urp's resolved global depth texture is
+                // what the game's pipeline binds, so prefer it and fall back to the
+                // handle only when urp has not published one.
+                var depthTexture = UnityEngine.Shader.GetGlobalTexture(CameraDepthTextureId);
+                if (depthTexture == null)
+                    depthTexture = renderingData.cameraData.renderer.cameraDepthTargetHandle;
+                cmd.SetGlobalTexture(CameraDepthTextureId, depthTexture);
                 cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
                 cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
                 // the game binds the plain rgb input and a color-correction vector
@@ -394,7 +397,15 @@ namespace Gallop.RenderPipeline
                 cmd.SetGlobalFloat(PostFilmPowerId, layer.power);
                 cmd.SetGlobalFloat(DepthPowerId, layer.depthPower);
                 cmd.SetGlobalFloat(DepthClipId, layer.depthClip > 1f ? 0f : 1f - layer.depthClip);
-                cmd.SetGlobalVector(PostFilmOffsetParamId, new Vector4(layer.offsetParam.x, layer.offsetParam.y, 0f, 0f));
+                Vector4 filmOffset = new Vector4(layer.offsetParam.x, layer.offsetParam.y, 0f, 0f);
+                if (mainTexture != null && mainTexture.rt != null)
+                {
+                    // the game's draw helper packs the target dimensions into the
+                    // offset's zw; the vertex stage reads them to build screen uvs.
+                    filmOffset.z = mainTexture.rt.width;
+                    filmOffset.w = mainTexture.rt.height;
+                }
+                cmd.SetGlobalVector(PostFilmOffsetParamId, filmOffset);
                 cmd.SetGlobalVector(PostFilmOptionParamId, layer.optionParam);
                 cmd.SetGlobalColor(PostFilmColor0Id, layer.color0);
                 cmd.SetGlobalColor(PostFilmColor1Id, layer.color1);
