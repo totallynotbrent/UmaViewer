@@ -33,6 +33,7 @@ namespace Gallop.RenderPipeline
         {
             // set by GallopImageEffect when the game shader path is active for the frame.
             public static bool GameBloomEnabled;
+            public static bool DiffusionEnabled;
             public static float Intensity = 1f;
             public static float Threshold = 0.8f;
             public static float BlurSize = 3f;
@@ -52,6 +53,7 @@ namespace Gallop.RenderPipeline
 
             private Material _fastBloomMaterial;
             private Material _postBloomMaterial;
+            private Material _diffusionBloomMaterial;
             private RTHandle _bloomA;
             private RTHandle _bloomB;
             private RTHandle _bloomC;
@@ -94,8 +96,11 @@ namespace Gallop.RenderPipeline
                     {
                         _fastBloomMaterial = new Material(shader) { hideFlags = HideFlags.DontSave };
                         _postBloomMaterial = new Material(postShader) { hideFlags = HideFlags.DontSave };
-                        Debug.Log($"[gamebloom] pyramid=FastBloom({shader.passCount}p) composite=PostBloom_Rich({postShader.passCount}p)");
-                        Gallop.Live.Director.FileLog($"[gamebloom] pyramid=FastBloom({shader.passCount}p) composite=PostBloom_Rich({postShader.passCount}p)");
+                        var diffusionShader = Gallop.ShaderManager.GetShader(Gallop.ShaderManager.ShaderKinds.PostDiffusionBloom_Rich);
+                        if (diffusionShader != null && diffusionShader.isSupported)
+                            _diffusionBloomMaterial = new Material(diffusionShader) { hideFlags = HideFlags.DontSave };
+                        Debug.Log($"[gamebloom] pyramid=FastBloom({shader.passCount}p) composite=PostBloom_Rich({postShader.passCount}p) diffusion=PostDiffusionBloom_Rich({(diffusionShader != null ? diffusionShader.passCount : 0)}p)");
+                        Gallop.Live.Director.FileLog($"[gamebloom] pyramid=FastBloom({shader.passCount}p) composite=PostBloom_Rich({postShader.passCount}p) diffusion=PostDiffusionBloom_Rich({(diffusionShader != null ? diffusionShader.passCount : 0)}p)");
                     }
                     else
                     {
@@ -141,11 +146,15 @@ namespace Gallop.RenderPipeline
                 // intensity straight from the param object.
                 float blur = Mathf.Max(0.5f, BlurSize);
                 float aspect = (float)srcW / Mathf.Max(1, srcH);
-                Vector4 parameter = new Vector4(
-                    blur / aspect * 0.00195312f,
-                    blur * 0.00195312f,
-                    Threshold,
-                    Intensity);
+                // the diffusion path feeds the screen aspect and a halved blur; the
+                // plain bloom path feeds the blur texel scale in 1/512 units.
+                Vector4 parameter = DiffusionEnabled
+                    ? new Vector4(aspect, blur * 0.5f, Threshold, Intensity)
+                    : new Vector4(
+                        blur / aspect * 0.00195312f,
+                        blur * 0.00195312f,
+                        Threshold,
+                        Intensity);
                 cmd.SetGlobalVector(ParameterId, parameter);
                 if (_lastLoggedW != bloomW || _lastLoggedH != bloomH)
                 {
@@ -180,8 +189,12 @@ namespace Gallop.RenderPipeline
                 cmd.SetGlobalColor(PostFilmColor2Id, PostFilmColor2);
                 cmd.SetGlobalColor(PostFilmColor3Id, PostFilmColor3);
                 cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, PostFilmIsInverseVignette);
-                _postBloomMaterial.SetTexture(MainTexId, source);
-                Blitter.BlitCameraTexture(cmd, source, _composite, _postBloomMaterial, 0);
+                // the diffusion composite is its own shader in the game; pick per state.
+                Material compositeMaterial = DiffusionEnabled && _diffusionBloomMaterial != null
+                    ? _diffusionBloomMaterial
+                    : _postBloomMaterial;
+                compositeMaterial.SetTexture(MainTexId, source);
+                Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, 0);
                 Blitter.BlitCameraTexture(cmd, _composite, source);
 
                 context.ExecuteCommandBuffer(cmd);

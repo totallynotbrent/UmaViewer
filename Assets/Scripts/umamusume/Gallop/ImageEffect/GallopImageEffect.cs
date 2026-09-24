@@ -413,6 +413,9 @@ namespace Gallop
             if (useGameBloom)
             {
                 _bloom.active = false;
+                // the game dispatches its own diffusion composite when the diffusion
+                // layer is authored on; mirror the dispatch so the right shader runs.
+                Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.DiffusionEnabled = param.IsEnableDiffusion;
                 Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.Intensity = Mathf.Min(authoredBloomIntensity, 12f);
                 Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.Threshold = param.BloomThreshold;
                 float gameBlur = Mathf.Max(param.IsEnableBloom ? param.BloomBlurSize : 0f,

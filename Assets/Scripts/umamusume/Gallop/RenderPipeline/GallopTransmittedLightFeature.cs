@@ -21,9 +21,24 @@ namespace Gallop.RenderPipeline
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            if (!GallopTransmittedLightPass.Enabled)
+            // authored image effects only apply to the live camera; the menu and
+            // freecam never carry the film track state.
+            if (!GallopTransmittedLightPass.Enabled || !IsLiveCamera(renderingData))
                 return;
             renderer.EnqueuePass(_pass);
+            GallopTransmittedLightPass.Enabled = false;
+        }
+
+        // the live camera is the one the timeline drives; identify it by the director
+        // reporting an active live and the camera being the live scene's main camera.
+        private static bool IsLiveCamera(RenderingData renderingData)
+        {
+            var director = Gallop.Live.Director.instance;
+            if (director == null || !director._isLiveSetup)
+                return false;
+            var cam = renderingData.cameraData.camera;
+            return cam != null && director.MainCameraTransform != null &&
+                   cam.transform == director.MainCameraTransform;
         }
 
         public class GallopTransmittedLightPass : ScriptableRenderPass

@@ -1516,7 +1516,8 @@ namespace Gallop.Live
         private void OnUpdateToneCurve(ToneCurveUpdateInfo updateInfo)
         {
             if (!updateInfo.isValid) return;
-            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.Enabled = true;
+            // the game gates the pass on the authored enable flag.
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.Enabled = updateInfo.IsEnable;
             Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.IsEnable = updateInfo.IsEnable;
             Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.ToneCurve = updateInfo.ToneAnimationCurve;
             Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.MaskToneCurve = updateInfo.MaskToneCurve;
@@ -1530,7 +1531,9 @@ namespace Gallop.Live
         private void OnUpdateLensDistortion(LensDistortionUpdateInfo updateInfo)
         {
             if (!updateInfo.isValid) return;
-            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.Enabled = true;
+            // zero intensity is the authored off state; the shader would still run.
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.Enabled =
+                Mathf.Abs(updateInfo.Intensity) > 0.001f;
             Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.Intensity = updateInfo.Intensity;
             Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.IntensityX = updateInfo.IntensityX;
             Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.IntensityY = updateInfo.IntensityY;
@@ -1542,7 +1545,7 @@ namespace Gallop.Live
         private void OnUpdateTransmittedLight(TransmittedLightUpdateInfo updateInfo)
         {
             if (!updateInfo.isValid) return;
-            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Enabled = true;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Enabled = updateInfo.IsEnabled;
             Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.IsEnabled = updateInfo.IsEnabled;
             Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Iterations = updateInfo.Iterations;
             Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Intensity = updateInfo.Intensity;
@@ -1870,6 +1873,18 @@ namespace Gallop.Live
             _liveTimelineControl.OnUpdateCharaNode -= OnUpdateCharaNode;
             _liveTimelineControl.OnUpdateTransparentCamera -= OnUpdateTransparentCamera;
             _liveTimelineControl.OnSheetEffectRegistered -= OnSheetEffectRegistered;
+
+            // the authored image-effect passes are statics; clear their armed state so
+            // nothing from this live leaks onto the menu or the next live.
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.Enabled = false;
+            Gallop.RenderPipeline.GallopToneCurveFeature.GallopToneCurvePass.IsEnable = false;
+            Gallop.RenderPipeline.GallopLensDistortionFeature.GallopLensDistortionPass.Enabled = false;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.Enabled = false;
+            Gallop.RenderPipeline.GallopTransmittedLightFeature.GallopTransmittedLightPass.IsEnabled = false;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.GameBloomEnabled = false;
+            Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.DiffusionEnabled = false;
+            _cameraMotionLogged = false;
+            _isLiveSetup = false;
             _liveTimelineControl.OnUpdateTiltShift -= OnUpdateTiltShift;
             _liveTimelineControl.OnUpdateFade -= OnUpdateFade;
             _liveTimelineControl.OnUpdateFluctuation -= OnUpdateFluctuation;
