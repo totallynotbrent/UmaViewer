@@ -125,6 +125,7 @@ namespace Gallop.RenderPipeline
             private RTHandle _bloomA;
             private RTHandle _bloomB;
             private RTHandle _bloomC;
+            private RTHandle _bloomD;
             private RTHandle _composite;
             private int _lastBloomW = -1;
             private int _lastBloomH = -1;
@@ -225,15 +226,13 @@ namespace Gallop.RenderPipeline
                     RenderingUtils.ReAllocateIfNeeded(ref _bloomA, bloomDesc, FilterMode.Bilinear, name: "_GameBloomA");
                     RenderingUtils.ReAllocateIfNeeded(ref _bloomB, bloomDesc, FilterMode.Bilinear, name: "_GameBloomB");
                     RenderingUtils.ReAllocateIfNeeded(ref _bloomC, bloomDesc, FilterMode.Bilinear, name: "_GameBloomC");
+                    RenderingUtils.ReAllocateIfNeeded(ref _bloomD, bloomDesc, FilterMode.Bilinear, name: "_GameBloomD");
                 }
 
-                // the parameter vector mirrors the game exactly: x/y are the blur texel
-                // scale (aspect-corrected, 1/512 units), z/w the authored threshold and
-                // intensity straight from the param object.
+                // the game's blur parameter is shared by the two blur blits; blits 1
+                // and 2 each carry their own screen-space parameter instead.
                 float blur = Mathf.Max(0.5f, BlurSize);
                 float aspect = (float)srcW / Mathf.Max(1, srcH);
-                // the diffusion path feeds the screen aspect and a halved blur; the
-                // plain bloom path feeds the blur texel scale in 1/512 units.
                 Vector4 parameter = DiffusionEnabled
                     ? new Vector4(aspect, blur * 0.5f, Threshold, Intensity)
                     : new Vector4(
@@ -241,7 +240,6 @@ namespace Gallop.RenderPipeline
                         blur * 0.00195312f,
                         Threshold,
                         Intensity);
-                cmd.SetGlobalVector(ParameterId, parameter);
                 if (_lastLoggedW != bloomW || _lastLoggedH != bloomH)
                 {
                     _lastLoggedW = bloomW;
@@ -249,19 +247,25 @@ namespace Gallop.RenderPipeline
                     Gallop.Live.Director.FileLog($"[gamebloom] pyramid res={bloomW}x{bloomH} param=({parameter.x:F5},{parameter.y:F5},{parameter.z:F3},{parameter.w:F2})");
                 }
 
-                // the game shaders sample _MainTex, so every blit binds it explicitly;
-                // the urp blitter owns _BlitTexture and does not set _MainTex itself.
-                // the game's pyramid: blit1 thresholds source into A with the screen
-                // size and authored values in the parameter, blit2 runs pass 1 again
-                // with a neutral parameter, then passes 2 and 3 blur through B and C.
+                // the game's CreateBloomTexture, blit for blit: threshold into A,
+                // then a neutral downsample into B (this is the level the composite
+                // samples as _Bloom), then two blur blits into C and D. each blit
+                // carries its own _Parameter shape exactly as authored.
                 _fastBloomMaterial.SetTexture(MainTexId, source);
+                cmd.SetGlobalVector(ParameterId, new Vector4(srcW, srcH, Threshold, Intensity));
                 Blitter.BlitCameraTexture(cmd, source, _bloomA, _fastBloomMaterial, 1);
                 _fastBloomMaterial.SetTexture(MainTexId, _bloomA);
+                cmd.SetGlobalVector(ParameterId, new Vector4(srcW, srcH, 0f, 1f));
                 Blitter.BlitCameraTexture(cmd, _bloomA, _bloomB, _fastBloomMaterial, 1);
                 _fastBloomMaterial.SetTexture(MainTexId, _bloomB);
+                cmd.SetGlobalVector(ParameterId, new Vector4(
+                    blur / aspect * 0.00195312f,
+                    blur * 0.00195312f,
+                    Threshold,
+                    Intensity));
                 Blitter.BlitCameraTexture(cmd, _bloomB, _bloomC, _fastBloomMaterial, 2);
                 _fastBloomMaterial.SetTexture(MainTexId, _bloomC);
-                Blitter.BlitCameraTexture(cmd, _bloomC, _bloomB, _fastBloomMaterial, 3);
+                Blitter.BlitCameraTexture(cmd, _bloomC, _bloomD, _fastBloomMaterial, 3);
 
                 // the composite is a different shader in the game: PostBloom_Rich pass 0
                 // (the pass class keeps two materials, _fastBloomMaterial at +0x130 for
@@ -278,30 +282,6 @@ namespace Gallop.RenderPipeline
                     renderingData.cameraData.renderer.cameraDepthTargetHandle);
                 cmd.SetGlobalFloat(BloomIsScreenBlendId, BloomIsScreenBlend);
                 cmd.SetGlobalFloat(BloomDofWeightId, BloomDofWeight);
-                // the game pushes the active film layer's params before the composite
-                // blit; layer 1 is the strongest track in every authored song.
-                var compositeLayer = FilmLayers[0];
-                if (compositeLayer != null)
-                {
-                    cmd.SetGlobalFloat(PostFilmPowerId, compositeLayer.power);
-                    cmd.SetGlobalVector(PostFilmOffsetParamId, new Vector4(compositeLayer.offsetParam.x, compositeLayer.offsetParam.y, 0f, 0f));
-                    cmd.SetGlobalVector(PostFilmOptionParamId, compositeLayer.optionParam);
-                    cmd.SetGlobalColor(PostFilmColor0Id, compositeLayer.color0);
-                    cmd.SetGlobalColor(PostFilmColor1Id, compositeLayer.color1);
-                    cmd.SetGlobalColor(PostFilmColor2Id, compositeLayer.color2);
-                    cmd.SetGlobalColor(PostFilmColor3Id, compositeLayer.color3);
-                    cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, compositeLayer.inverseVignette ? 1f : 0f);
-                    cmd.SetGlobalFloat(DepthPowerId, compositeLayer.depthPower);
-                    cmd.SetGlobalFloat(DepthClipId, compositeLayer.depthClip > 1f ? 0f : 1f - compositeLayer.depthClip);
-                    Vector4 roll = compositeLayer.rollParameter;
-                    if (srcH != 0)
-                        roll.z = srcW / (float)srcH;
-                    cmd.SetGlobalVector(PostFilmRollParameterId, roll);
-                    cmd.SetGlobalVector(PostFilmScaleParameterId, compositeLayer.scaleParameter);
-                    cmd.SetGlobalFloat(PostFilmIsAlphaMaskingId, compositeLayer.isAlphaMasking ? 1f : 0f);
-                    cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, 0f);
-                    cmd.SetGlobalFloat(PostFilmIsUVMovieNoScaleId, compositeLayer.isUVMovieNoScale ? 1f : 0f);
-                }
                 // the game binds the plain rgb input and a color-correction vector
                 // right before the composite; an unbound _RgbTex samples black.
                 cmd.SetGlobalTexture(RgbTexId, source);
@@ -311,6 +291,27 @@ namespace Gallop.RenderPipeline
                     ? _diffusionBloomMaterial
                     : _postBloomMaterial;
                 compositeMaterial.SetTexture(MainTexId, source);
+                // the composite core enables the first valid layer's mode/blend keywords
+                // before its own blit, and draws plain when no layer is valid.
+                FilmLayerState compositeLayer = null;
+                for (int i = 0; i < FilmLayers.Length; i++)
+                {
+                    var candidate = FilmLayers[i];
+                    if (candidate != null && candidate.IsValid())
+                    {
+                        compositeLayer = candidate;
+                        break;
+                    }
+                }
+                if (compositeLayer != null)
+                {
+                    SetFilmKeywords(compositeMaterial, compositeLayer);
+                    SetFilmGlobals(cmd, compositeLayer, _composite);
+                }
+                else
+                {
+                    ClearFilmKeywords(compositeMaterial);
+                }
                 // the bloom composite is always pass 0; the game's screen-overlay
                 // chain only shifts the FILM passes, never the composite itself.
                 Blitter.BlitCameraTexture(cmd, source, _composite, compositeMaterial, 0);
@@ -330,13 +331,14 @@ namespace Gallop.RenderPipeline
                     int filmPass = (i == 0 ? 1 : 3) + (layer.inverseVignette ? 1 : 0);
                     Blitter.BlitCameraTexture(cmd, filmTarget, filmTarget, compositeMaterial, filmPass);
                 }
+                ClearFilmKeywords(compositeMaterial);
 
                 if (!_envLogged)
                 {
                     _envLogged = true;
                     LogCompositeEnvironment();
                 }
-                ProbeLuminance(cmd, source, _bloomA, _bloomB, _bloomC, _composite);
+                ProbeLuminance(cmd, source, _bloomA, _bloomB, _bloomC, _bloomD, _composite);
 
                 Blitter.BlitCameraTexture(cmd, _composite, source);
 
@@ -349,6 +351,7 @@ namespace Gallop.RenderPipeline
                 _bloomA?.Release();
                 _bloomB?.Release();
                 _bloomC?.Release();
+                _bloomD?.Release();
                 _composite?.Release();
             }
 
@@ -375,6 +378,16 @@ namespace Gallop.RenderPipeline
                 }
             }
 
+            // no valid film layer: the composite draws the plain bloom variant with
+            // every variant keyword disabled, exactly as the game's gated helper does.
+            private static void ClearFilmKeywords(Material material)
+            {
+                for (int i = 0; i < ShaderKeywordMode.Length; i++)
+                    material.DisableKeyword(ShaderKeywordMode[i]);
+                for (int i = 0; i < ShaderKeywordBlend.Length; i++)
+                    material.DisableKeyword(ShaderKeywordBlend[i]);
+            }
+
             // per-layer film globals, packed the way Overlay.Update packs them.
             private static void SetFilmGlobals(CommandBuffer cmd, FilmLayerState layer, RTHandle mainTexture)
             {
@@ -395,7 +408,7 @@ namespace Gallop.RenderPipeline
                 cmd.SetGlobalFloat(PostFilmIsUVMovieNoScaleId, layer.layerMode == 2 ? 1f : 0f);
                 cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, layer.inverseVignette ? 1f : 0f);
                 cmd.SetGlobalFloat(PostFilmIsAlphaMaskingId, layer.isAlphaMasking ? 1f : 0f);
-                cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, 0f);
+                cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, layer.depthClip > 1f || layer.depthClip <= 0f ? 1f : 0f);
             }
 
             // the composite reads per-material values the game never sets either, so
@@ -453,7 +466,7 @@ namespace Gallop.RenderPipeline
 
             // async gpu readback of the four key textures so the log shows which stage
             // of the chain is black instead of inferring it from the screen.
-            private void ProbeLuminance(CommandBuffer cmd, RTHandle source, RTHandle a, RTHandle b, RTHandle c, RTHandle composite)
+            private void ProbeLuminance(CommandBuffer cmd, RTHandle source, RTHandle a, RTHandle b, RTHandle c, RTHandle d, RTHandle composite)
             {
                 float now = UnityEngine.Time.unscaledTime;
                 if (_nextProbeTime > 0f && now < _nextProbeTime)
@@ -470,7 +483,7 @@ namespace Gallop.RenderPipeline
                     sb.Append($" L{i}=pass{(i == 0 ? 1 : 3) + (layer.inverseVignette ? 1 : 0)}(mode={layer.mode},p={layer.power:F2},inv={layer.inverseVignette})");
                 }
                 Gallop.Live.Director.FileLog(
-                    $"[gamebloom] probe t={now:F1} film:{sb} src={ProbeTexture(cmd, source)} A={ProbeTexture(cmd, a)} B={ProbeTexture(cmd, b)} C={ProbeTexture(cmd, c)} out={ProbeTexture(cmd, composite)}");
+                    $"[gamebloom] probe t={now:F1} film:{sb} src={ProbeTexture(cmd, source)} A={ProbeTexture(cmd, a)} B={ProbeTexture(cmd, b)} C={ProbeTexture(cmd, c)} D={ProbeTexture(cmd, d)} out={ProbeTexture(cmd, composite)}");
             }
 
             private string ProbeTexture(CommandBuffer cmd, RTHandle handle)
