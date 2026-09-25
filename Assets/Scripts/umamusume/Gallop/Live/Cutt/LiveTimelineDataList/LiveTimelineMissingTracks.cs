@@ -632,11 +632,18 @@ namespace Gallop.Live.Cutt
     [Serializable]
     public class LiveTimelineKeyMultiCameraPostFilmDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyMultiCameraPostFilmData> { }
 
+    // groups on the per-multicamera post tracks expose their camera slot so the
+    // driver can pick the active camera's keys.
+    public interface IMultiCameraGroup
+    {
+        int MultiCameraNo { get; }
+    }
+
     [Serializable]
-    public class LiveTimelineMultiCameraPostFilmData : ILiveTimelineGroupDataWithName
+    public class LiveTimelineMultiCameraPostFilmData : ILiveTimelineGroupDataWithName, IMultiCameraGroup
     {
         public LiveTimelineKeyMultiCameraPostFilmDataList keys;
-        public int MultiCameraNo;
+        public int MultiCameraNo { get; set; }
 
         public override ILiveTimelineKeyDataList GetKeyList()
         {
@@ -645,7 +652,7 @@ namespace Gallop.Live.Cutt
     }
 
     [Serializable]
-    public class LiveTimelineKeyMultiCameraPostEffectBloomDiffusionData : LiveTimelineKey
+    public class LiveTimelineKeyMultiCameraPostEffectBloomDiffusionData : LiveTimelineKeyWithInterpolate
     {
         public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.MultiCameraPostEffectBloomDiffusion;
 
@@ -665,10 +672,10 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineKeyMultiCameraPostEffectBloomDiffusionDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyMultiCameraPostEffectBloomDiffusionData> { }
 
     [Serializable]
-    public class LiveTimelineMultiCameraPostEffectBloomDiffusionData : ILiveTimelineGroupDataWithName
+    public class LiveTimelineMultiCameraPostEffectBloomDiffusionData : ILiveTimelineGroupDataWithName, IMultiCameraGroup
     {
         public LiveTimelineKeyMultiCameraPostEffectBloomDiffusionDataList keys;
-        public int MultiCameraNo;
+        public int MultiCameraNo { get; set; }
 
         public override ILiveTimelineKeyDataList GetKeyList()
         {
@@ -693,10 +700,10 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineKeyMultiCameraColorCorrectionDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyMultiCameraColorCorrectionData> { }
 
     [Serializable]
-    public class LiveTimelineMultiCameraColorCorrectionData : ILiveTimelineGroupDataWithName
+    public class LiveTimelineMultiCameraColorCorrectionData : ILiveTimelineGroupDataWithName, IMultiCameraGroup
     {
         public LiveTimelineKeyMultiCameraColorCorrectionDataList keys;
-        public int MultiCameraNo;
+        public int MultiCameraNo { get; set; }
 
         public override ILiveTimelineKeyDataList GetKeyList()
         {
@@ -721,10 +728,10 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineKeyMultiCameraTiltShiftDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyMultiCameraTiltShiftData> { }
 
     [Serializable]
-    public class LiveTimelineMultiCameraTiltShiftData : ILiveTimelineGroupDataWithName
+    public class LiveTimelineMultiCameraTiltShiftData : ILiveTimelineGroupDataWithName, IMultiCameraGroup
     {
         public LiveTimelineKeyMultiCameraTiltShiftDataList keys;
-        public int MultiCameraNo;
+        public int MultiCameraNo { get; set; }
 
         public override ILiveTimelineKeyDataList GetKeyList()
         {
@@ -753,10 +760,10 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineKeyMultiCameraRadialBlurDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyMultiCameraRadialBlurData> { }
 
     [Serializable]
-    public class LiveTimelineMultiCameraRadialBlurData : ILiveTimelineGroupDataWithName
+    public class LiveTimelineMultiCameraRadialBlurData : ILiveTimelineGroupDataWithName, IMultiCameraGroup
     {
         public LiveTimelineKeyMultiCameraRadialBlurDataList keys;
-        public int MultiCameraNo;
+        public int MultiCameraNo { get; set; }
 
         public override ILiveTimelineKeyDataList GetKeyList()
         {
@@ -787,10 +794,10 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineKeyMultiCameraPostEffectDOFDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyMultiCameraPostEffectDOFData> { }
 
     [Serializable]
-    public class LiveTimelineMultiCameraPostEffectDOFData : ILiveTimelineGroupDataWithName
+    public class LiveTimelineMultiCameraPostEffectDOFData : ILiveTimelineGroupDataWithName, IMultiCameraGroup
     {
         public LiveTimelineKeyMultiCameraPostEffectDOFDataList keys;
-        public int MultiCameraNo;
+        public int MultiCameraNo { get; set; }
 
         public override ILiveTimelineKeyDataList GetKeyList()
         {
@@ -814,10 +821,10 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineKeyMultiCameraTransmittedLightDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyMultiCameraTransmittedLightData> { }
 
     [Serializable]
-    public class LiveTimelineMultiCameraTransmittedLightData : ILiveTimelineGroupDataWithName
+    public class LiveTimelineMultiCameraTransmittedLightData : ILiveTimelineGroupDataWithName, IMultiCameraGroup
     {
         public LiveTimelineKeyMultiCameraTransmittedLightDataList keys;
-        public int MultiCameraNo;
+        public int MultiCameraNo { get; set; }
 
         public override ILiveTimelineKeyDataList GetKeyList()
         {
@@ -838,7 +845,7 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineMultiCameraLayerData : ILiveTimelineGroupDataWithName
     {
         public LiveTimelineKeyMultiCameraLayerDataList keys;
-        public int MultiCameraNo;
+        public int MultiCameraNo { get; set; }
     }
 
     // extra per-stage lights.

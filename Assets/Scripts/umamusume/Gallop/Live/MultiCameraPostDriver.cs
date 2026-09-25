@@ -60,7 +60,7 @@ namespace Gallop.Live
             List<T> groups,
             int active,
             out ILiveTimelineKeyDataList keys)
-            where T : ILiveTimelineGroupDataWithName
+            where T : class, IMultiCameraGroup
         {
             keys = null;
             if (groups == null)
@@ -70,10 +70,8 @@ namespace Gallop.Live
                 var g = groups[i];
                 if (g == null || g.MultiCameraNo != active)
                     continue;
-                var list = g.GetKeyList();
-                if (list == null)
+                if (!(g is ILiveTimelineGroupData named) || (keys = named.GetKeyList()) == null)
                     continue;
-                keys = list;
                 return true;
             }
             return false;
