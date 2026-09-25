@@ -14,6 +14,9 @@ namespace Gallop.Live
         public string UnitName;
         public GameObject[] ChildObjects;
         public string[] _childObjectNames;
+        // per-child runtime keys ("root__U<i>") built once; the blink driver walks
+        // every child every frame and must not rebuild the string each pass.
+        public string[] _childRuntimeKeys;
     }
 
     [Serializable]

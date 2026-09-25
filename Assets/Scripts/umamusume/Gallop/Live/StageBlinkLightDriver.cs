@@ -64,20 +64,12 @@ namespace Gallop.Live
             return (_liveNowGetter != null) ? _liveNowGetter() : Time.time;
         }
 
+        // currentLiveTime is a plain public property; the old getter reached it through
+        // reflection per frame, which boxes the float every call.
         private static Func<float> BuildLiveNowGetter(LiveTimelineControl ctl)
         {
             if (ctl == null) return null;
-
-            var t = ctl.GetType();
-            var p = t.GetProperty("currentLiveTime") ?? t.GetProperty("CurrentLiveTime");
-            if (p != null && p.PropertyType == typeof(float))
-                return () => (float)p.GetValue(ctl, null);
-
-            var f = t.GetField("currentLiveTime") ?? t.GetField("CurrentLiveTime");
-            if (f != null && f.FieldType == typeof(float))
-                return () => (float)f.GetValue(ctl);
-
-            return null;
+            return () => ctl.currentLiveTime;
         }
 
         private struct CacheItem
@@ -355,60 +347,6 @@ namespace Gallop.Live
             return null;
         }
 
-        private static bool TryReadBoolMember(object obj, out bool value, params string[] names)
-        {
-            value = false;
-            if (obj == null) return false;
-
-            var t = obj.GetType();
-            const BindingFlags flags =
-                BindingFlags.Instance |
-                BindingFlags.Public |
-                BindingFlags.NonPublic;
-
-            for (int i = 0; i < names.Length; i++)
-            {
-                var f = t.GetField(names[i], flags);
-                if (f != null && f.FieldType == typeof(bool))
-                {
-                    value = (bool)f.GetValue(obj);
-                    return true;
-                }
-
-                var p = t.GetProperty(names[i], flags);
-                if (p != null && p.PropertyType == typeof(bool) && p.GetIndexParameters().Length == 0)
-                {
-                    value = (bool)p.GetValue(obj, null);
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool ReadUseWashLightBlendMode(ref BlinkLightUpdateInfo info)
-        {
-            // 官方 UpdateInfo 里读的是 updateInfo + 0x58。
-            // 你项目字段名如果不同，就把真实字段名加到这里。
-            object boxed = info;
-
-            bool v;
-            if (TryReadBoolMember(
-                    boxed,
-                    out v,
-                    "useWashLightBlendMode",
-                    "UseWashLightBlendMode",
-                    "useWashLightBlend",
-                    "UseWashLightBlend",
-                    "isUseWashLightBlendMode",
-                    "IsUseWashLightBlendMode"))
-            {
-                return v;
-            }
-
-            return false;
-        }
-
         private static bool TryGetProjectionMeshRendererSafe(WashLightController wash, out Renderer renderer)
         {
             renderer = null;
@@ -567,9 +505,14 @@ namespace Gallop.Live
                 if (_stage.StageObjectUnitMap.TryGetValue(rootName, out var unit) &&
                     unit != null && unit.ChildObjects != null && unit.ChildObjects.Length > 0)
                 {
-                    // build the per-unit runtime key once per root instead of one string
-                    // allocation per child per frame.
-                    var runtimeKeyForRoot = rootName + "__U";
+                    // build the per-unit runtime keys once per unit; the per-child
+                    // suffix used to allocate a string per child per frame.
+                    if (unit._childRuntimeKeys == null || unit._childRuntimeKeys.Length != unit.ChildObjects.Length)
+                    {
+                        unit._childRuntimeKeys = new string[unit.ChildObjects.Length];
+                        for (int i = 0; i < unit.ChildObjects.Length; i++)
+                            unit._childRuntimeKeys[i] = rootName + "__U" + i;
+                    }
                     for (int i = 0; i < unit.ChildObjects.Length; i++)
                     {
                         var childPrefab = unit.ChildObjects[i];
@@ -578,8 +521,7 @@ namespace Gallop.Live
 
                         if (_stage.StageObjectMap.TryGetValue(childPrefab.name, out var realGo) && realGo != null)
                         {
-                            string runtimeKey = i == 0 ? runtimeKeyForRoot + "0" : runtimeKeyForRoot + i;
-                            ApplyToRootCached(runtimeKey, realGo, updateInfo, liveNow);
+                            ApplyToRootCached(unit._childRuntimeKeys[i], realGo, updateInfo, liveNow);
                         }
                     }
                 }
@@ -982,7 +924,13 @@ namespace Gallop.Live
                     continue;
                 }
 
-                var mats = r.sharedMaterials;
+                // sharedMaterials allocates a fresh array per call, so refetch only at
+                // the 1hz re-resolve cadence; the cached array serves every other frame.
+                Material[] mats = e.cachedSharedMaterialsRef;
+                if (Time.frameCount - rc.lastNameCheckFrame >= 60 || mats == null)
+                {
+                    mats = r.sharedMaterials;
+                }
                 int matsLen = (mats != null) ? mats.Length : 0;
                 if (mats != e.cachedSharedMaterialsRef || matsLen != e.cachedSharedMaterialsLen)
                 {
@@ -1161,35 +1109,6 @@ namespace Gallop.Live
                 s.loopCount = 0;
                 rt.currentColors[i] = Vector4.zero;
             }
-        }
-
-        private static int GetKeyIndexProxy(LiveTimelineKeyBlinkLightData k)
-        {
-            if (k == null) return 0;
-
-            var t = k.GetType();
-
-            var p = t.GetProperty("keyIndex") ??
-                    t.GetProperty("KeyIndex") ??
-                    t.GetProperty("index") ??
-                    t.GetProperty("Index");
-            if (p != null && p.PropertyType == typeof(int))
-            {
-                try { return (int)p.GetValue(k, null); }
-                catch { }
-            }
-
-            var f = t.GetField("keyIndex") ??
-                    t.GetField("KeyIndex") ??
-                    t.GetField("index") ??
-                    t.GetField("Index");
-            if (f != null && f.FieldType == typeof(int))
-            {
-                try { return (int)f.GetValue(k); }
-                catch { }
-            }
-
-            return k.frame;
         }
 
         private static void UpdateSlotState(LightContainerState s)
