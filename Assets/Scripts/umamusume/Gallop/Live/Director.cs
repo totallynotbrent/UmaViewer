@@ -758,6 +758,16 @@ namespace Gallop.Live
                     FileLog($"[killswitch] game bloom {(_forceGameBloomOff ? "forced off" : "restored")}");
                 }
 
+                // f12 cycles the camera arrangement among the variation sheets the
+                // medley songs author alongside the base camera sheet.
+                if (Input.GetKeyDown(KeyCode.F12))
+                {
+                    var desc = _liveTimelineControl != null
+                        ? _liveTimelineControl.CycleCameraSheet()
+                        : "no timeline control";
+                    FileLog($"[variations] {desc}");
+                }
+
                 // f11 force-kills the tone curve, lens distortion and transmitted
                 // light passes to bisect a black screen between them and the bloom.
                 if (Input.GetKeyDown(KeyCode.F11))

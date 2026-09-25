@@ -540,6 +540,55 @@ namespace Gallop.Live.Cutt
             return data.worksheetList[0];
         }
 
+        // the camera sheet cycles between the base arrangement and each variation
+        // sheet on request; medley songs carry named alternates the game selects
+        // per performance and the viewer exposes them as a runtime arrangement picker.
+        private int _variationRequest = -1;
+        private List<LiveTimelineWorkSheet> _variationSheets;
+
+        public LiveTimelineWorkSheet GetCameraSheet()
+        {
+            var sheets = data?.worksheetList;
+            if (sheets == null || sheets.Count == 0)
+                return null;
+            if (_variationRequest >= 0)
+            {
+                EnsureVariationCache(sheets);
+                if (_variationRequest < _variationSheets.Count)
+                    return _variationSheets[_variationRequest];
+            }
+            return sheets[0];
+        }
+
+        // cycles to the next variation sheet or back to the base arrangement and
+        // returns a short description for the caller to log.
+        public string CycleCameraSheet()
+        {
+            var sheets = data?.worksheetList;
+            if (sheets == null || sheets.Count == 0)
+                return "no sheets";
+            EnsureVariationCache(sheets);
+            if (_variationSheets.Count == 0)
+                return "no variation sheets";
+            _variationRequest = _variationRequest + 1;
+            if (_variationRequest >= _variationSheets.Count)
+                _variationRequest = -1;
+            if (_variationRequest < 0)
+                return "base camera sheet";
+            var sheet = _variationSheets[_variationRequest];
+            return $"camera sheet [{_variationRequest}] {sheet?.name} variation={sheet?.IsVariationSheet} id={sheet?.SheetVariationId}";
+        }
+
+        private void EnsureVariationCache(List<LiveTimelineWorkSheet> sheets)
+        {
+            if (_variationSheets != null)
+                return;
+            _variationSheets = new List<LiveTimelineWorkSheet>();
+            foreach (var ws in sheets)
+                if (ws != null && ws.IsVariationSheet)
+                    _variationSheets.Add(ws);
+        }
+
         // ponytail: motion-sequence keys must come from the MainLive sheet. worksheetList[0] is
         // PreLiveSkit when an extended (skit) sheet is present, which desyncs chara motion from
         // the main timeline and manifests as the "神秘平移 / wrong T-pose" bug on 1004-class lives.
@@ -683,7 +732,7 @@ namespace Gallop.Live.Cutt
 
         private void AlterLateUpdateInner()
         {
-            LiveTimelineWorkSheet camSheet = data.worksheetList[0];
+            LiveTimelineWorkSheet camSheet = GetCameraSheet();
 
             _isNowAlterUpdate = true;
 
