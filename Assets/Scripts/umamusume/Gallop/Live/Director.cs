@@ -1718,30 +1718,30 @@ namespace Gallop.Live
 
         private void OnUpdateGlobalFog(ref GlobalFogUpdateInfo info)
         {
+            // the game renders its concert fog through the GlobalFogPass post effect and
+            // publishes the authored startDistance to the _Global_ block its stage
+            // shaders read; forcing Unity's built-in RenderSettings.fog on top of that
+            // double-fogs every material and tints the whole stage from zero meters.
             bool on = info.isDistance || info.isHeight;
-            RenderSettings.fog = on;
+            if (RenderSettings.fog)
+                RenderSettings.fog = false;
 
-            Color fogColor = on ? info.color : Color.clear;
-            Shader.SetGlobalColor(GlobalFogColorId, fogColor);
-            Shader.SetGlobalFloat(GlobalFogMinDistanceId, on ? info.start : 100000f);
-            Shader.SetGlobalFloat(GlobalFogLengthId, on ? Mathf.Max(0.01f, info.end - info.start) : 0f);
+            Shader.SetGlobalColor(GlobalFogColorId, on ? info.color : Color.clear);
+            Shader.SetGlobalFloat(GlobalFogMinDistanceId, on ? info.startDistance : 100000f);
+            Shader.SetGlobalFloat(GlobalFogLengthId, on ? Mathf.Max(0.01f, info.end - info.startDistance) : 0f);
             Shader.SetGlobalFloat(GlobalMaxDensityId, on ? Mathf.Max(0.0001f, info.expDensity) : 0f);
-            Shader.SetGlobalFloat(GlobalMaxHeightId, on ? 1000f : 0f);
-            Shader.SetGlobalVector(GlobalFogWorldOriginId, on ? Vector3.zero : Vector3.zero);
+            // height fog only reads the height block when the key asks for it; a flat
+            // 1000m publish applies ground fog to everything otherwise.
+            Shader.SetGlobalFloat(GlobalMaxHeightId, on && info.isHeight ? info.height : 0f);
+            Shader.SetGlobalVector(GlobalFogWorldOriginId, Vector3.zero);
 
             if (!on)
                 return;
 
-            RenderSettings.fogMode = (FogMode)Mathf.Clamp(info.fogMode, 1, 3);
-            RenderSettings.fogColor = info.color;
-            RenderSettings.fogDensity = Mathf.Max(0.0001f, info.expDensity);
-            RenderSettings.fogStartDistance = info.start;
-            RenderSettings.fogEndDistance = info.end;
-
             if (!_globalFogLogged)
             {
                 _globalFogLogged = true;
-                FileLog($"[fog] authored fog active: mode={info.fogMode} color={info.color} density={info.expDensity:F4} range={info.start}-{info.end}");
+                FileLog($"[fog] authored fog active: mode={info.fogMode} color={info.color} density={info.expDensity:F4} start={info.startDistance} range={info.start}-{info.end} height={info.height}/{info.heightDensity}");
             }
         }
 
