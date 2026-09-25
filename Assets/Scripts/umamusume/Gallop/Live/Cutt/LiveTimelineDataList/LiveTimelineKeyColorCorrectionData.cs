@@ -29,6 +29,7 @@ namespace Gallop.Live.Cutt
         public AnimationCurve depthBlueCurve;
     }
 
+    [Serializable]
     public class LiveTimelineKeyColorCorrectionDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyColorCorrectionData>
     {
     }

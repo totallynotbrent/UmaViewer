@@ -24,6 +24,7 @@ namespace Gallop.Live.Cutt
         public Vector2 blueOffset;
     }
 
+    [Serializable]
     public class LiveTimelineKeyChromaticAberrationDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyChromaticAberrationData>
     {
     }

@@ -33,6 +33,7 @@ namespace Gallop.Live.Cutt
         public Color color1;
     }
 
+    [Serializable]
     public class LiveTimelineKeyVolumeLightDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyVolumeLightData>
     {
     }

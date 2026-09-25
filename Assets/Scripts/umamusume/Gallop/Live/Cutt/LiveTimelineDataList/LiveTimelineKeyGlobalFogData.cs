@@ -34,6 +34,7 @@ namespace Gallop.Live.Cutt
         public bool IsAdjustedBlinkLightColor = true;
     }
 
+    [Serializable]
     public class LiveTimelineKeyGlobalFogDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyGlobalFogData>
     {
     }

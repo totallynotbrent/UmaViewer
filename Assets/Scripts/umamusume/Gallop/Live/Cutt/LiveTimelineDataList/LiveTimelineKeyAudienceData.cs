@@ -58,6 +58,7 @@ namespace Gallop.Live.Cutt
         public Vector3 AudienceDirectionalLightAngle;
     }
 
+    [Serializable]
     public class LiveTimelineKeyAudienceDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyAudienceData>
     {
     }

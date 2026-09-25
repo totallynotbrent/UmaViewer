@@ -23,6 +23,7 @@ namespace Gallop.Live.Cutt
         public float MaskLift;
     }
 
+    [Serializable]
     public class LiveTimelineKeyExposureDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyExposureData>
     {
     }
@@ -49,6 +50,7 @@ namespace Gallop.Live.Cutt
         public Color MaskMaxCorrectionLevel;
     }
 
+    [Serializable]
     public class LiveTimelineKeyToneCurveDataList : LiveTimelineKeyDataListTemplate<LiveTimelineKeyToneCurveData>
     {
     }
