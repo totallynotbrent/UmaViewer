@@ -785,8 +785,11 @@ namespace Gallop.Live.Cutt
             Gallop.Live.SectionProfiler.Begin("timeline.globallight");
             AlterUpdate_GlobalLight(camSheet, _currentFrame);
             Gallop.Live.SectionProfiler.End();
+            Gallop.Live.SectionProfiler.Begin("timeline.mirror");
             AlterUpdate_EnvironmentMirror(camSheet, _currentFrame);
             AlterUpdate_MirrorReflection(camSheet, _currentFrame);
+            Gallop.Live.SectionProfiler.End();
+            Gallop.Live.SectionProfiler.Begin("timeline.postfx");
             AlterUpdate_HdrBloom(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_PostEffect_BloomDiffusion(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_PostEffect_DOF(camSheet, Mathf.RoundToInt(_currentFrame));
@@ -796,11 +799,15 @@ namespace Gallop.Live.Cutt
             AlterUpdate_Fluctuation(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_Vortex(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_HandShakeCamera(camSheet, Mathf.RoundToInt(_currentFrame));
+            Gallop.Live.SectionProfiler.End();
+            Gallop.Live.SectionProfiler.Begin("timeline.props");
             AlterUpdate_Props(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_PropsAttach(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_Spotlight3d(camSheet, Mathf.RoundToInt(_currentFrame));
-
+            Gallop.Live.SectionProfiler.End();
+            Gallop.Live.SectionProfiler.Begin("timeline.bgcolor");
             AlterUpdate_BgColor1(camSheet, _currentFrame);
+            Gallop.Live.SectionProfiler.End();
             _laserRuntimeIndexOffset = 0;
             for (int w = 0; w < wsCount; w++)
             {
@@ -824,10 +831,12 @@ namespace Gallop.Live.Cutt
                 AlterUpdate_Title(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_CameraLayer(ws, _currentFrame);
                 Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("timeline.charafx");
                 AlterUpdate_FacialNoise(ws, mappedFrame);
                 AlterUpdate_CharaMotionNoise(ws, mappedFrame);
                 AlterUpdate_SweatLocator(ws, _currentFrame);
                 AlterUpdate_LightProjection(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
                 Gallop.Live.SectionProfiler.Begin("timeline.chara");
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
@@ -848,18 +857,22 @@ namespace Gallop.Live.Cutt
 
             //BgColor2属于全局舞台颜色控制，只使用主 worksheet。
             //不遍历所有 worksheet,避免同名LaserA/LaserB轨道在同一帧互相覆盖。
+            Gallop.Live.SectionProfiler.Begin("timeline.grade");
             AlterUpdate_GlobalFog(camSheet, _currentFrame);
             AlterUpdate_BgColor2(camSheet, _currentFrame);
             AlterUpdate_PostFilm(camSheet, _currentFrame);
             AlterUpdate_StageGrade(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_VolumeLight(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_ChromaticAberration(camSheet, Mathf.RoundToInt(_currentFrame));
+            Gallop.Live.SectionProfiler.End();
 
             // the game drives tone curve, lens distortion and transmitted light from
             // the same late phase; voice and chara parts run in its update phase.
+            Gallop.Live.SectionProfiler.Begin("timeline.post3");
             AlterUpdate_ToneCurve(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_LensDistortion(camSheet, Mathf.RoundToInt(_currentFrame));
             AlterUpdate_TransmittedLight(camSheet, Mathf.RoundToInt(_currentFrame));
+            Gallop.Live.SectionProfiler.End();
 
             _isNowAlterUpdate = false;
 
