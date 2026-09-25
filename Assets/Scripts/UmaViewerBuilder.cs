@@ -878,6 +878,10 @@ public string[] NormalBodyKeywords  = new[] { "skin", "body", "bdy", "face", "he
 
                     if (mainLive.GetComponent<Gallop.Live.StageMonitorDriver>() == null)
                         mainLive.AddComponent<Gallop.Live.StageMonitorDriver>();
+                    if (mainLive.GetComponent<Gallop.Live.MonitorCameraFeed>() == null)
+                        mainLive.AddComponent<Gallop.Live.MonitorCameraFeed>();
+                    if (mainLive.GetComponent<Gallop.Live.MultiCameraPostDriver>() == null)
+                        mainLive.AddComponent<Gallop.Live.MultiCameraPostDriver>();
 
                     binder.musicId = live.MusicId;
 

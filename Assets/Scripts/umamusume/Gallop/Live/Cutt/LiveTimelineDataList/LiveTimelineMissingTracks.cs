@@ -596,6 +596,37 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineKeyMultiCameraPostFilmData : LiveTimelineKey
     {
         public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.MultiCameraPostFilm;
+
+        public int filmMode;
+        public int colorType;
+        public float filmPower;
+        public Vector2 filmOffsetParam;
+        public Vector4 filmOptionParam;
+        public Color color0;
+        public Color color1;
+        public Color color2;
+        public Color color3;
+        public float depthPower;
+        public float DepthClip;
+        public float RollAngle;
+        public Vector2 FilmScale;
+        public int layerMode;
+        public int movieResId;
+        public int movieFrameOffset;
+        public float movieSpeed;
+        public int colorBlend;
+        public float colorBlendFactor;
+        public string BlinkLightName;
+        public int BlinkLightNameHash;
+        public int BlinkLightContainerIndex;
+        public float BlinkLightBrightnessPower;
+        public bool IsAdjustedBlinkLightColor;
+        public int loopType;
+        public int loopCount;
+        public int loopExecutedCount;
+        public int loopIntervalFrame;
+        public bool isPasteLoopUnit;
+        public bool isChangeLoopInterpolate;
     }
 
     [Serializable]
@@ -605,12 +636,29 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineMultiCameraPostFilmData : ILiveTimelineGroupDataWithName
     {
         public LiveTimelineKeyMultiCameraPostFilmDataList keys;
+        public int MultiCameraNo;
+
+        public override ILiveTimelineKeyDataList GetKeyList()
+        {
+            return keys;
+        }
     }
 
     [Serializable]
     public class LiveTimelineKeyMultiCameraPostEffectBloomDiffusionData : LiveTimelineKey
     {
         public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.MultiCameraPostEffectBloomDiffusion;
+
+        public float bloomDofWeight;
+        public float threshold;
+        public float intensity;
+        public float BloomBlurSize;
+        public int BloomBlendMode;
+        public float diffusionBlurSize;
+        public float diffusionBright;
+        public float diffusionThreshold;
+        public float diffusionSaturation;
+        public float diffusionContrast;
     }
 
     [Serializable]
@@ -620,12 +668,25 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineMultiCameraPostEffectBloomDiffusionData : ILiveTimelineGroupDataWithName
     {
         public LiveTimelineKeyMultiCameraPostEffectBloomDiffusionDataList keys;
+        public int MultiCameraNo;
+
+        public override ILiveTimelineKeyDataList GetKeyList()
+        {
+            return keys;
+        }
     }
 
     [Serializable]
     public class LiveTimelineKeyMultiCameraColorCorrectionData : LiveTimelineKey
     {
         public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.MultiCameraColorCorrection;
+
+        public bool enable;
+        public float saturation;
+        public int mode;
+        public bool selective;
+        public Color keyColor;
+        public Color targetColor;
     }
 
     [Serializable]
@@ -635,12 +696,25 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineMultiCameraColorCorrectionData : ILiveTimelineGroupDataWithName
     {
         public LiveTimelineKeyMultiCameraColorCorrectionDataList keys;
+        public int MultiCameraNo;
+
+        public override ILiveTimelineKeyDataList GetKeyList()
+        {
+            return keys;
+        }
     }
 
     [Serializable]
     public class LiveTimelineKeyMultiCameraTiltShiftData : LiveTimelineKey
     {
         public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.MultiCameraTiltShift;
+
+        public int mode;
+        public int quality;
+        public float blurArea;
+        public float maxBlurSize;
+        public int downsample;
+        public float roll;
     }
 
     [Serializable]
@@ -650,12 +724,29 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineMultiCameraTiltShiftData : ILiveTimelineGroupDataWithName
     {
         public LiveTimelineKeyMultiCameraTiltShiftDataList keys;
+        public int MultiCameraNo;
+
+        public override ILiveTimelineKeyDataList GetKeyList()
+        {
+            return keys;
+        }
     }
 
     [Serializable]
     public class LiveTimelineKeyMultiCameraRadialBlurData : LiveTimelineKey
     {
         public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.MultiCameraRadialBlur;
+
+        public int moveBlurType;
+        public int radialBlurDownsample;
+        public float radialBlurStartArea;
+        public float radialBlurEndArea;
+        public float radialBlurPower;
+        public int radialBlurIteration;
+        public float radialBlurRollEulerAngles;
+        public float depthPowerFront;
+        public float depthPowerBack;
+        public float depthCancelBlendLength;
     }
 
     [Serializable]
@@ -665,12 +756,31 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineMultiCameraRadialBlurData : ILiveTimelineGroupDataWithName
     {
         public LiveTimelineKeyMultiCameraRadialBlurDataList keys;
+        public int MultiCameraNo;
+
+        public override ILiveTimelineKeyDataList GetKeyList()
+        {
+            return keys;
+        }
     }
 
     [Serializable]
     public class LiveTimelineKeyMultiCameraPostEffectDOFData : LiveTimelineKey
     {
         public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.MultiCameraPostEffectDOF;
+
+        public float forcalSize;
+        public float blurSpread;
+        public int charactor;
+        public int dofBlurType;
+        public int dofQuality;
+        public float dofForegroundSize;
+        public float dofFocalPoint;
+        public float dofSmoothness;
+        public float BallBlurPowerFactor;
+        public float BallBlurBrightnessThreshhold;
+        public float BallBlurBrightnessIntensity;
+        public float BallBlurSpread;
     }
 
     [Serializable]
@@ -680,12 +790,24 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineMultiCameraPostEffectDOFData : ILiveTimelineGroupDataWithName
     {
         public LiveTimelineKeyMultiCameraPostEffectDOFDataList keys;
+        public int MultiCameraNo;
+
+        public override ILiveTimelineKeyDataList GetKeyList()
+        {
+            return keys;
+        }
     }
 
     [Serializable]
     public class LiveTimelineKeyMultiCameraTransmittedLightData : LiveTimelineKey
     {
-        public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.Event;
+        public override LiveTimelineKeyDataType dataType => LiveTimelineKeyDataType.MultiCameraTransmittedLight;
+
+        public int Iterations;
+        public float Intensity;
+        public float Threshold;
+        public float BlurSpread;
+        public int BlendMode;
     }
 
     [Serializable]
@@ -695,6 +817,12 @@ namespace Gallop.Live.Cutt
     public class LiveTimelineMultiCameraTransmittedLightData : ILiveTimelineGroupDataWithName
     {
         public LiveTimelineKeyMultiCameraTransmittedLightDataList keys;
+        public int MultiCameraNo;
+
+        public override ILiveTimelineKeyDataList GetKeyList()
+        {
+            return keys;
+        }
     }
 
     [Serializable]

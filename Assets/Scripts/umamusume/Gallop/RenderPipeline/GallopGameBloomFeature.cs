@@ -88,6 +88,8 @@ namespace Gallop.RenderPipeline
                 public bool inverseVignette;
                 public bool isAlphaMasking;
                 public bool isUVMovieNoScale;
+                public UnityEngine.Texture movieTexture;
+                public UnityEngine.Texture movieMaskTexture;
 
                 public bool IsValid()
                 {
@@ -163,6 +165,8 @@ namespace Gallop.RenderPipeline
             private static readonly int ParameterId = Shader.PropertyToID("_Parameter");
             private static readonly int BloomId = Shader.PropertyToID("_Bloom");
             private static readonly int CameraDepthTextureId = Shader.PropertyToID("_CameraDepthTexture");
+            private static readonly int TexMovieId = Shader.PropertyToID("_texMovie");
+            private static readonly int TexMovieMaskId = Shader.PropertyToID("_texMovieMask");
             private static readonly int BloomIsScreenBlendId = Shader.PropertyToID("_BloomIsScreenBlend");
             private static readonly int BloomDofWeightId = Shader.PropertyToID("_bloomDofWeight");
 
@@ -445,6 +449,10 @@ namespace Gallop.RenderPipeline
                 cmd.SetGlobalFloat(PostFilmIsInverseVignetteId, layer.inverseVignette ? 1f : 0f);
                 cmd.SetGlobalFloat(PostFilmIsAlphaMaskingId, layer.isAlphaMasking ? 1f : 0f);
                 cmd.SetGlobalFloat(PostFilmIsWithoutDepthId, layer.depthClip > 1f || layer.depthClip <= 0f ? 1f : 0f);
+                // uv-movie film layers composite the authored clip frames over the
+                // screen; an unbound movie texture samples black.
+                cmd.SetGlobalTexture(TexMovieId, layer.movieTexture != null ? layer.movieTexture : UnityEngine.Texture2D.blackTexture);
+                cmd.SetGlobalTexture(TexMovieMaskId, layer.movieMaskTexture != null ? layer.movieMaskTexture : UnityEngine.Texture2D.blackTexture);
             }
 
             // the composite reads per-material values the game never sets either, so

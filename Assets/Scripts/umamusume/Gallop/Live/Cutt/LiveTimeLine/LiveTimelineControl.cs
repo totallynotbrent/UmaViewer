@@ -264,6 +264,78 @@ namespace Gallop.Live.Cutt
         public event Action<ToneCurveUpdateInfo> OnUpdateToneCurve;
         public event Action<LensDistortionUpdateInfo> OnUpdateLensDistortion;
         public event Action<TransmittedLightUpdateInfo> OnUpdateTransmittedLight;
+
+        // the multicamera post driver routes per-camera keys through the same
+        // consumers as the global tracks; events can only be raised from inside.
+        internal void RaiseMultiCameraBloomDiffusion(PostEffectUpdateInfo_BloomDiffusion info)
+        {
+            OnUpdatePostEffect_BloomDiffusion?.Invoke(info);
+        }
+
+        internal void RaiseMultiCameraDof(PostEffectUpdateInfo_DOF info)
+        {
+            OnUpdatePostEffect_DOF?.Invoke(info);
+        }
+
+        internal void RaiseMultiCameraRadialBlur(RadialBlurUpdateInfo info)
+        {
+            OnUpdateRadialBlur?.Invoke(info);
+        }
+
+        internal void RaiseMultiCameraTiltShift(TiltShiftUpdateInfo info)
+        {
+            OnUpdateTiltShift?.Invoke(info);
+        }
+
+        internal void RaiseMultiCameraTransmittedLight(TransmittedLightUpdateInfo info)
+        {
+            OnUpdateTransmittedLight?.Invoke(info);
+        }
+
+        internal void RaiseMultiCameraStageGrade(float saturation)
+        {
+            OnUpdateStageGrade?.Invoke(saturation);
+        }
+
+        // the multicamera postfilm bridge builds the same update info the global
+        // layer evaluator does, from a synthetic key carrying the authored values.
+        internal void RaiseMultiCameraPostFilm(LiveTimelineKeyPostFilmData cur, int layerIndex)
+        {
+            if (OnUpdatePostFilm == null || cur == null)
+                return;
+
+            PostFilmUpdateInfo updateInfo = default;
+            updateInfo.layerIndex = layerIndex;
+            updateInfo.TimelineName = "multicam";
+            updateInfo.TimelineNameHash = Animator.StringToHash("multicam");
+            updateInfo.filmMode = cur.filmMode;
+            updateInfo.colorType = cur.colorType;
+            updateInfo.filmPower = cur.filmPower;
+            updateInfo.filmOffsetParam = cur.filmOffsetParam;
+            updateInfo.filmOptionParam = cur.filmOptionParam;
+            updateInfo.color0 = cur.color0;
+            updateInfo.color1 = cur.color1;
+            updateInfo.color2 = cur.color2;
+            updateInfo.color3 = cur.color3;
+            updateInfo.depthPower = cur.depthPower;
+            updateInfo.DepthClip = cur.DepthClip;
+            updateInfo.RollAngle = cur.RollAngle;
+            updateInfo.FilmScale = cur.FilmScale;
+            updateInfo.loopType = cur.loopType;
+            updateInfo.loopCount = cur.loopCount;
+            updateInfo.loopExecutedCount = cur.loopExecutedCount;
+            updateInfo.loopIntervalFrame = cur.loopIntervalFrame;
+            updateInfo.isPasteLoopUnit = cur.isPasteLoopUnit;
+            updateInfo.isChangeLoopInterpolate = cur.isChangeLoopInterpolate;
+            updateInfo.layerMode = cur.layerMode;
+            updateInfo.movieResId = cur.movieResId;
+            updateInfo.movieFrameOffset = cur.movieFrameOffset;
+            updateInfo.movieSpeed = cur.movieSpeed;
+            updateInfo.colorBlend = cur.colorBlend;
+            updateInfo.colorBlendFactor = cur.colorBlendFactor;
+
+            OnUpdatePostFilm(cur, ref updateInfo, _currentFrame);
+        }
         public event Action<VoiceUpdateInfo> OnUpdateVoice;
         public event System.Action<int, LiveTimelineKeyCharaPartsData> OnUpdateCharaParts;
         public event Action<CharaFootLightUpdateInfo> OnUpdateCharaFootLight;
@@ -316,6 +388,9 @@ namespace Gallop.Live.Cutt
         public bool _limitFovForWidth = false;
 
         private float _currentFrame;
+
+        // the authored monitor feed and other consumers read the live frame.
+        public float currentFrame => _currentFrame;
 
         private bool _isExtraCameraLayer;
 

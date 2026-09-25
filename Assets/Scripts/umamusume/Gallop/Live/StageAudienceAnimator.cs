@@ -55,6 +55,24 @@ namespace Gallop.Live
                     clipsPlayed++;
                 }
                 Director.FileLog($"[audience] started {clipsPlayed} stage animations");
+
+                // one-shot census of the authored audience tracks so a silent
+                // skip is visible: name, key count, and binding state.
+                var wsSheet = _ctl != null ? _ctl.GetMainLiveSheet() : null;
+                if (wsSheet == null || wsSheet.audienceList == null || wsSheet.audienceList.Count == 0)
+                {
+                    Director.FileLog("[audience] census: no audienceList on sheet");
+                }
+                else
+                {
+                    var sb = new System.Text.StringBuilder("[audience] census:");
+                    for (int i = 0; i < wsSheet.audienceList.Count; i++)
+                    {
+                        var entry = wsSheet.audienceList[i];
+                        sb.Append($" [{i}] name='{entry?.name}' keys={entry?.keys?.Count ?? -1}");
+                    }
+                    Director.FileLog(sb.ToString());
+                }
             }
         }
 
@@ -114,8 +132,9 @@ namespace Gallop.Live
             if (main == null)
                 return null;
 
-            // crowd prefabs live in 3d/env/live/common under their own name.
-            string bundleKey = $"3d/env/live/common/{prefabName}";
+            // crowd prefabs live under 3d/env/live/common/cyalume_audience/<name> in
+            // the manifest; try the exact folder first, then any key ending with the name.
+            string bundleKey = $"3d/env/live/common/cyalume_audience/{prefabName}";
             if (!main.AbList.TryGetValue(bundleKey, out var entry))
             {
                 foreach (var kv in main.AbList)

@@ -338,19 +338,4 @@ namespace Gallop.Live.Cutt
         }
     }
 
-    [Serializable]
-    public class LiveTimelineTitleData
-    {
-        public LiveTimelineKeyTitleDataList keys;
-
-        public ILiveTimelineKeyDataList GetKeyList()
-        {
-            return keys;
-        }
-
-        public LiveTimelineTitleData()
-        {
-            keys = new LiveTimelineKeyTitleDataList();
-        }
-    }
 }

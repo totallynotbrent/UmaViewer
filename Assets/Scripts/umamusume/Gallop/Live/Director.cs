@@ -53,6 +53,11 @@ namespace Gallop.Live
         [SerializeField]
         private CameraLookAt _cameraLookAt;
         private int _activeCameraIndex  = 1;
+
+        // the switcher-selected camera slot for consumers that scope their work
+        // per multicamera, e.g. the post-effect tracks; raw authored numbering.
+        private int _activeMultiCameraNo = -1;
+        public int activeMultiCameraIndex => _activeMultiCameraNo;
         private readonly int[] kTimelineCameraIndices = new int[3] { 1, 2, 3 };
         [SerializeField] private bool _enableMirrorReflection = true;
         [SerializeField] private List<MirrorReflection> _mirrorReflections = new List<MirrorReflection>();
@@ -526,6 +531,7 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdateCameraSwitcher += delegate (int cameraIndex_)
             {
+                _activeMultiCameraNo = cameraIndex_;
                 if (cameraIndex_ < 0)
                 {
                     _activeCameraIndex = 0;
@@ -1829,17 +1835,45 @@ namespace Gallop.Live
                     FileLog($"[postfilm] uv-movie layer requested movieResId={updateInfo.movieResId}");
                 }
 
-                // drive the stage monitor movie slot with the authored movie id so
-                // the on-stage screens play the clip the film layer names.
+                // drive the film layer's movie textures with the authored clip so the
+                // uv-movie composite overlays the clip frames on the screen.
                 if (_filmMovieProvider == null)
                     _filmMovieProvider = UnityEngine.Object.FindFirstObjectByType<MonitorUvMovieProvider>();
                 if (_filmMovieProvider != null && _filmMovieResId != updateInfo.movieResId)
                 {
                     _filmMovieResId = updateInfo.movieResId;
                     if (_filmMovieProvider.TryGetClipByDisplayId(updateInfo.movieResId, out var clip))
-                        FileLog($"[postfilm] monitor movie resolved for resId={updateInfo.movieResId} name={clip.metadata?.Name}");
+                    {
+                        _filmMovieClip = clip;
+                        _filmMovieStartFrame = _liveCurrentTime;
+                        FileLog($"[postfilm] monitor movie resolved for resId={updateInfo.movieResId} name={clip.metadata?.Name} images={clip.ImageCount}");
+                    }
                     else
+                    {
+                        _filmMovieClip = null;
                         FileLog($"[postfilm] monitor movie clip not found for resId={updateInfo.movieResId}");
+                    }
+                }
+
+                // advance the clip on its own fps clock and push the current frame
+                // plus its mask onto the film layer state for the composite.
+                if (_filmMovieClip != null)
+                {
+                    float elapsed = _liveCurrentTime - _filmMovieStartFrame;
+                    int framesPerImage = _filmMovieClip.metadata != null && _filmMovieClip.metadata.EffectiveFramePerImage > 0
+                        ? _filmMovieClip.metadata.EffectiveFramePerImage
+                        : 1;
+                    int imageIndex = Mathf.Clamp(
+                        Mathf.FloorToInt(elapsed * _filmMovieClip.Fps / framesPerImage),
+                        0,
+                        Mathf.Max(0, _filmMovieClip.ImageCount - 1));
+                    if (_filmMovieClip.TryGetFrameTexture(imageIndex, out var frameTex))
+                        layer.movieTexture = frameTex;
+                    if (_filmMovieClip.TryGetMaskTexture(imageIndex, out var maskTex))
+                    {
+                        layer.movieMaskTexture = maskTex;
+                        layer.isAlphaMasking = true;
+                    }
                 }
             }
         }
@@ -1847,6 +1881,8 @@ namespace Gallop.Live
         private bool _filmMovieLogged;
         private MonitorUvMovieProvider _filmMovieProvider;
         private int _filmMovieResId;
+        private MonitorUvMovieClipData _filmMovieClip;
+        private float _filmMovieStartFrame;
 
         private float _filmBestPower = -1f;
 

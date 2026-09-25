@@ -49,6 +49,7 @@ namespace Gallop.Live
                 var group = settings.propsDataGroup[i];
                 if (group == null || string.IsNullOrEmpty(group.propsName))
                 {
+                    Director.FileLog($"{PROP_LOG_TAG} skip group {i}: null or empty propsName (isCharaProps={group?.isCharaProps} majorId={group?.charaPropsMajorId})");
                     skipped++;
                     continue;
                 }
@@ -59,6 +60,7 @@ namespace Gallop.Live
                 List<int> targetSlots = ResolveTargetSlots(group, charaContainers);
                 if (targetSlots == null || targetSlots.Count == 0)
                 {
+                    Director.FileLog($"{PROP_LOG_TAG} skip group {i} '{group.propsName}': no chara slots matched conditions");
                     skipped++;
                     continue;
                 }
