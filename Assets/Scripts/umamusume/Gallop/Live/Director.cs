@@ -48,6 +48,10 @@ namespace Gallop.Live
         // f5 blocks the bg-color, global-light and facial-toon property-block writes on
         // the characters so a visually wrong frame splits viewer writes from the base look.
         public static bool CharaTintWritesDisabled;
+
+        // f4 blocks the authored global fog publish; only songs with a live fog track
+        // ever hit the handler, so this isolates the fog globals per concert.
+        public static bool FogPublishDisabled;
         private bool _forceAuthoredPassesOff;
         public StageController _stageController; //Edited to public
         [SerializeField]
@@ -748,6 +752,14 @@ namespace Gallop.Live
                     ToggleGallopWinParity();
                 }
 
+                // f4 blocks the authored fog publish so a washed or flat frame can be split
+                // between the global fog block and the base pipeline in one keystroke.
+                if (Input.GetKeyDown(KeyCode.F4))
+                {
+                    FogPublishDisabled = !FogPublishDisabled;
+                    FileLog($"[killswitch] fog publish {(FogPublishDisabled ? "disabled" : "restored")}");
+                }
+                
                 // f5 blocks the authored chara tint writes so a flat-color frame can be
                 // attributed to our property blocks or the base pipeline in one keystroke.
                 if (Input.GetKeyDown(KeyCode.F5))
@@ -1759,6 +1771,18 @@ namespace Gallop.Live
             // publishes the authored startDistance to the _Global_ block its stage
             // shaders read; forcing Unity's built-in RenderSettings.fog on top of that
             // double-fogs every material and tints the whole stage from zero meters.
+            if (FogPublishDisabled)
+            {
+                if (RenderSettings.fog)
+                    RenderSettings.fog = false;
+                Shader.SetGlobalColor(GlobalFogColorId, Color.clear);
+                Shader.SetGlobalFloat(GlobalFogMinDistanceId, 100000f);
+                Shader.SetGlobalFloat(GlobalFogLengthId, 0f);
+                Shader.SetGlobalFloat(GlobalMaxDensityId, 0f);
+                Shader.SetGlobalFloat(GlobalMaxHeightId, 0f);
+                return;
+            }
+
             bool on = info.isDistance || info.isHeight;
             if (RenderSettings.fog)
                 RenderSettings.fog = false;
