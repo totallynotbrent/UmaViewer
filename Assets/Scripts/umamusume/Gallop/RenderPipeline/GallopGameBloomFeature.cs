@@ -273,9 +273,11 @@ namespace Gallop.RenderPipeline
                 // samples as _Bloom), then two blur blits into C and D. each blit
                 // carries its own _Parameter shape exactly as authored, drawn with
                 // the legacy blit that binds _MainTex itself.
-                cmd.SetGlobalVector(ParameterId, new Vector4(srcW, srcH, Threshold, Intensity));
+                // per the game's CreateBloomTexture publish: the downsample levels carry
+                // texel reciprocals in xy, threshold in z, intensity in w.
+                cmd.SetGlobalVector(ParameterId, new Vector4(1f / srcW, 1f / srcH, Threshold, Intensity));
                 cmd.Blit(source.rt, _bloomA.rt, _fastBloomMaterial, 1);
-                cmd.SetGlobalVector(ParameterId, new Vector4(srcW, srcH, 0f, 1f));
+                cmd.SetGlobalVector(ParameterId, new Vector4(1f / srcW, 1f / srcH, 0f, 1f));
                 cmd.Blit(_bloomA.rt, _bloomB.rt, _fastBloomMaterial, 1);
                 cmd.SetGlobalVector(ParameterId, new Vector4(
                     blur / aspect * 0.00195312f,
