@@ -2731,16 +2731,19 @@ namespace Gallop.Live.Cutt
             if (sheet.ExposureKeys != null && sheet.ExposureKeys.Count > 0)
             {
                 FindTimelineKey(out var exCur, out var exNext, sheet.ExposureKeys, currentFrame);
+                // a disabled exposure key resets the gain to neutral; the game does
+                // not keep the last enabled value running past the track's end.
+                float gain = 0f;
                 if (exCur is LiveTimelineKeyExposureData exKey && exKey.IsEnable)
                 {
-                    float gain = exKey.Gain;
+                    gain = exKey.Gain;
                     if (exNext is LiveTimelineKeyExposureData exNextKey && exNextKey.interpolateType != 0)
                     {
                         float t = CalculateInterpolationValue(exKey, exNextKey, currentFrame);
                         gain = LerpWithoutClamp(exKey.Gain, exNextKey.Gain, t);
                     }
-                    OnUpdateExposure?.Invoke(gain);
                 }
+                OnUpdateExposure?.Invoke(gain);
             }
 
             if (sheet.colorCorrectionDataLists != null)
@@ -2751,9 +2754,11 @@ namespace Gallop.Live.Cutt
                     if (entry == null || entry.keys == null || entry.keys.Count == 0)
                         continue;
                     FindTimelineKey(out var cur, out _, entry.keys, currentFrame);
-                    if (cur is LiveTimelineKeyColorCorrectionData key && key.enable)
+                    // enabled key drives the grade; a disabled current key means the
+                    // track released the grade for this frame.
+                    if (cur is LiveTimelineKeyColorCorrectionData key)
                     {
-                        handler(key.saturation);
+                        handler(key.enable ? key.saturation : 1f);
                         return;
                     }
                 }
