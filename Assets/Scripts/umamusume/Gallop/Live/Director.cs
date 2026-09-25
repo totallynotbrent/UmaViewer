@@ -44,6 +44,10 @@ namespace Gallop.Live
         public bool _isLiveSetup; //Edit to pulic
         private bool _forceGameBloomOff;
         private bool _bypassComposite;
+
+        // f5 blocks the bg-color, global-light and facial-toon property-block writes on
+        // the characters so a visually wrong frame splits viewer writes from the base look.
+        public static bool CharaTintWritesDisabled;
         private bool _forceAuthoredPassesOff;
         public StageController _stageController; //Edited to public
         [SerializeField]
@@ -413,6 +417,8 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdateGlobalLight += delegate (ref GlobalLightUpdateInfo updateInfo)
             {
+                if (CharaTintWritesDisabled) return;
+
                 // the game re-applies the light state every frame so any competing
                 // writer (blink driver, wash, prefabs) loses to the authored track.
                 var tmpPos = -(updateInfo.lightRotation * Vector3.forward).normalized;
@@ -456,6 +462,8 @@ namespace Gallop.Live
 
             _liveTimelineControl.OnUpdateBgColor1 += delegate (ref BgColor1UpdateInfo updateInfo)
             {
+                if (CharaTintWritesDisabled) return;
+
                 // bg-color keys are the authored authority for character tint, so the
                 // walk re-applies every frame exactly like the game does.
                 foreach (var locator in _liveTimelineControl.liveCharactorLocators)
@@ -740,6 +748,14 @@ namespace Gallop.Live
                     ToggleGallopWinParity();
                 }
 
+                // f5 blocks the authored chara tint writes so a flat-color frame can be
+                // attributed to our property blocks or the base pipeline in one keystroke.
+                if (Input.GetKeyDown(KeyCode.F5))
+                {
+                    CharaTintWritesDisabled = !CharaTintWritesDisabled;
+                    FileLog($"[killswitch] chara tint writes {(CharaTintWritesDisabled ? "disabled" : "restored")}");
+                }
+                
                 // f6 bypasses the composite with a plain copy so a black screen
                 // splits between the composite draw and the plumbing in one keystroke.
                 if (Input.GetKeyDown(KeyCode.F6))
@@ -1410,26 +1426,47 @@ namespace Gallop.Live
 
         // facial toon parameters ride per-character material state; the viewer applies
         // them to the face renderers through a property block.
+        private MaterialPropertyBlock _facialToonMpb;
+        private readonly Dictionary<int, List<Renderer>> _facialToonRendererCache = new Dictionary<int, List<Renderer>>();
+
         private void OnUpdateFacialToon(int slot, FacialToonUpdateInfo updateInfo)
         {
+            if (CharaTintWritesDisabled) return;
             if (!updateInfo.isValid || slot < 0 || slot >= CharaContainerScript.Count)
                 return;
             var container = CharaContainerScript[slot];
-            var faceRoot = container.Head != null ? container.Head.transform : container.transform;
-            foreach (var ren in faceRoot.GetComponentsInChildren<Renderer>(true))
+
+            // the face renderer set is static once the model is bound; walking
+            // GetComponentsInChildren every frame cost more than the shader updates.
+            List<Renderer> renderers;
+            if (!_facialToonRendererCache.TryGetValue(slot, out renderers) || renderers == null)
             {
-                var mpb = new MaterialPropertyBlock();
-                ren.GetPropertyBlock(mpb);
-                mpb.SetFloat(Shader.PropertyToID("_CheekPretenseThreshold"), updateInfo.CheekPretenseThreshold);
-                mpb.SetFloat(Shader.PropertyToID("_NosePretenseThreshold"), updateInfo.NosePretenseThreshold);
-                mpb.SetFloat(Shader.PropertyToID("_CylinderBlend"), updateInfo.CylinderBlend);
-                mpb.SetFloat(Shader.PropertyToID("_HairNormalBlend"), updateInfo.HairNormalBlend);
-                mpb.SetFloat(Shader.PropertyToID("_EyeToonStep"), updateInfo.EyeToonStep);
-                mpb.SetFloat(Shader.PropertyToID("_EyeToonFeather"), updateInfo.EyeToonFeather);
-                mpb.SetFloat(Shader.PropertyToID("_EyeSaturation"), updateInfo.EyeSaturation);
+                renderers = new List<Renderer>();
+                var faceRoot = container.Head != null ? container.Head.transform : container.transform;
+                foreach (var ren in faceRoot.GetComponentsInChildren<Renderer>(true))
+                    renderers.Add(ren);
+                _facialToonRendererCache[slot] = renderers;
+            }
+
+            if (_facialToonMpb == null) _facialToonMpb = new MaterialPropertyBlock();
+            foreach (var ren in renderers)
+            {
+                if (ren == null) continue;
+                // the global-light and bg-color handlers wrote their own blocks to
+                // these renderers earlier this frame; setpropertyblock replaces
+                // wholesale, so read back and extend instead of clobbering.
+                _facialToonMpb.Clear();
+                ren.GetPropertyBlock(_facialToonMpb);
+                _facialToonMpb.SetFloat(Shader.PropertyToID("_CheekPretenseThreshold"), updateInfo.CheekPretenseThreshold);
+                _facialToonMpb.SetFloat(Shader.PropertyToID("_NosePretenseThreshold"), updateInfo.NosePretenseThreshold);
+                _facialToonMpb.SetFloat(Shader.PropertyToID("_CylinderBlend"), updateInfo.CylinderBlend);
+                _facialToonMpb.SetFloat(Shader.PropertyToID("_HairNormalBlend"), updateInfo.HairNormalBlend);
+                _facialToonMpb.SetFloat(Shader.PropertyToID("_EyeToonStep"), updateInfo.EyeToonStep);
+                _facialToonMpb.SetFloat(Shader.PropertyToID("_EyeToonFeather"), updateInfo.EyeToonFeather);
+                _facialToonMpb.SetFloat(Shader.PropertyToID("_EyeSaturation"), updateInfo.EyeSaturation);
                 if (updateInfo.UseOriginalDirectionalLight != 0)
-                    mpb.SetVector(Shader.PropertyToID("_OriginalDirectionalLightDir"), updateInfo.OriginalDirectionalLightDir);
-                ren.SetPropertyBlock(mpb);
+                    _facialToonMpb.SetVector(Shader.PropertyToID("_OriginalDirectionalLightDir"), updateInfo.OriginalDirectionalLightDir);
+                ren.SetPropertyBlock(_facialToonMpb);
             }
         }
 

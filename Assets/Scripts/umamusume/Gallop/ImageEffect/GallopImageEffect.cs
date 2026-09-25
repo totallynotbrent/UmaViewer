@@ -38,6 +38,12 @@ namespace Gallop
         private bool _gameBloomStateLogged;
         private bool _gameBloomStateLoggedValue;
 
+        // stops added on top of the authored exposure grade; negative pulls an
+        // over-bright composite back without touching the timeline tracks.
+        [SerializeField]
+        [Range(-3f, 1f)]
+        private float globalExposureBias = -0.35f;
+
         public void ToggleGameBloom()
         {
             _useGameBloom = !_useGameBloom;
@@ -497,6 +503,9 @@ namespace Gallop
             if (_colorAdjust != null)
             {
                 float exp = _timelineExposure != float.MinValue ? _timelineExposure : 0f;
+                // global bias on top of the authored grade so an over-bright bloom
+                // composite can be pulled back without editing every track.
+                exp += globalExposureBias;
                 _colorAdjust.postExposure.overrideState = true;
                 _colorAdjust.postExposure.value = exp;
                 // subtle lift to hit the dark concert grade without crushing the mids.
