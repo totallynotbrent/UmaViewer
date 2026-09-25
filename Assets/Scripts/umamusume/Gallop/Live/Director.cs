@@ -1776,10 +1776,10 @@ namespace Gallop.Live
                 if (RenderSettings.fog)
                     RenderSettings.fog = false;
                 Shader.SetGlobalColor(GlobalFogColorId, Color.clear);
-                Shader.SetGlobalFloat(GlobalFogMinDistanceId, 100000f);
-                Shader.SetGlobalFloat(GlobalFogLengthId, 0f);
-                Shader.SetGlobalFloat(GlobalMaxDensityId, 0f);
-                Shader.SetGlobalFloat(GlobalMaxHeightId, 0f);
+                Shader.SetGlobalVector(GlobalFogMinDistanceId, new Vector4(100000f, 0f, 0f, 0f));
+                Shader.SetGlobalVector(GlobalFogLengthId, new Vector4(0f, 0f, 0f, 1e-06f));
+                Shader.SetGlobalFloat(GlobalMaxDensityId, 1f);
+                Shader.SetGlobalFloat(GlobalMaxHeightId, 100f);
                 return;
             }
 
@@ -1787,14 +1787,23 @@ namespace Gallop.Live
             if (RenderSettings.fog)
                 RenderSettings.fog = false;
 
+            // the game publishes this block through GraphicSettings::UpdateFog, decoded
+            // from its disasm: min and length are vec4s (length = max - min per
+            // component, w clamped to 1e-6), density is remapped to 1 - d * 0.01 (so
+            // the "density" global actually carries how much SURVIVES the fog), and
+            // height rides raw. publishing raw expDensity here painted whole
+            // concerts in the authored fog color because every consumer read ~1.0
+            // where the game ships ~0.99995.
             Shader.SetGlobalColor(GlobalFogColorId, on ? info.color : Color.clear);
-            Shader.SetGlobalFloat(GlobalFogMinDistanceId, on ? info.startDistance : 100000f);
-            Shader.SetGlobalFloat(GlobalFogLengthId, on ? Mathf.Max(0.01f, info.end - info.startDistance) : 0f);
-            Shader.SetGlobalFloat(GlobalMaxDensityId, on ? Mathf.Max(0.0001f, info.expDensity) : 0f);
-            // height fog only reads the height block when the key asks for it; a flat
-            // 1000m publish applies ground fog to everything otherwise.
-            Shader.SetGlobalFloat(GlobalMaxHeightId, on && info.isHeight ? info.height : 0f);
-            Shader.SetGlobalVector(GlobalFogWorldOriginId, Vector3.zero);
+            float minDist = on ? info.startDistance : 100000f;
+            float maxDist = on ? Mathf.Max(minDist + 0.01f, info.end) : 100000f;
+            Shader.SetGlobalVector(GlobalFogMinDistanceId, new Vector4(minDist, 0f, 0f, 0f));
+            Shader.SetGlobalVector(GlobalFogLengthId, new Vector4(maxDist - minDist, 0f, 0f, Mathf.Max(1e-06f, maxDist - minDist)));
+            Shader.SetGlobalFloat(GlobalMaxDensityId, on ? 1f - info.expDensity * 0.01f : 1f);
+            // height fog only reads the height block when the key asks for it; the
+            // game's own off-state publishes a 100m height.
+            Shader.SetGlobalFloat(GlobalMaxHeightId, on && info.isHeight ? info.height : 100f);
+            Shader.SetGlobalVector(GlobalFogWorldOriginId, Vector4.zero);
 
             if (!on)
                 return;
@@ -1803,6 +1812,52 @@ namespace Gallop.Live
             {
                 _globalFogLogged = true;
                 FileLog($"[fog] authored fog active: mode={info.fogMode} color={info.color} density={info.expDensity:F4} start={info.startDistance} range={info.start}-{info.end} height={info.height}/{info.heightDensity}");
+                LogFogConsumers();
+            }
+        }
+
+        // the fog globals have no obvious consumer in the extracted game shaders, so
+        // the first fog publish walks every live renderer once and logs which shaders
+        // actually expose the fog properties; the bench log then names the consumer.
+        private static bool _fogConsumersLogged;
+        private void LogFogConsumers()
+        {
+            if (_fogConsumersLogged)
+                return;
+            _fogConsumersLogged = true;
+
+            try
+            {
+                var seen = new Dictionary<string, int>();
+                var all = FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+                for (int i = 0; i < all.Length; i++)
+                {
+                    var r = all[i];
+                    if (r == null)
+                        continue;
+                    var mats = r.sharedMaterials;
+                    if (mats == null)
+                        continue;
+                    for (int k = 0; k < mats.Length; k++)
+                    {
+                        var m = mats[k];
+                        if (m == null || m.shader == null)
+                            continue;
+                        if (!m.HasProperty(GlobalFogColorId))
+                            continue;
+                        string key = m.shader.name;
+                        seen.TryGetValue(key, out int n);
+                        seen[key] = n + 1;
+                    }
+                }
+                FileLog($"[fogdiag] shaders exposing _Global_FogColor: {seen.Count}");
+                foreach (var kv in seen)
+                    FileLog($"[fogdiag]   {kv.Key} x{kv.Value}");
+                FileLog($"[fogdiag] live globals: color={Shader.GetGlobalColor(GlobalFogColorId)} min={Shader.GetGlobalFloat(GlobalFogMinDistanceId)} len={Shader.GetGlobalFloat(GlobalFogLengthId)} density={Shader.GetGlobalFloat(GlobalMaxDensityId)} height={Shader.GetGlobalFloat(GlobalMaxHeightId)}");
+            }
+            catch (Exception ex)
+            {
+                FileLog($"[fogdiag] census failed: {ex.Message}");
             }
         }
 
