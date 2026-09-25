@@ -739,8 +739,12 @@ namespace Gallop.Live.Cutt
             Vector3 outLookAt = Vector3.zero;
             LatestCameraLookAtPosition = liveStageCenterPos;
 
+            Gallop.Live.SectionProfiler.Begin("timeline.formation");
             AlterLateUpdate_FormationOffset(currentLiveTime);
+            Gallop.Live.SectionProfiler.End();
+            Gallop.Live.SectionProfiler.Begin("timeline.cameramotion");
             AlterLateUpdate_CameraMotion(camSheet, _currentFrame);
+            Gallop.Live.SectionProfiler.End();
 
             int wsCount = data.worksheetList.Count;
             // update-phase tracks read the timescale-mapped frame so authored slow
@@ -769,14 +773,18 @@ namespace Gallop.Live.Cutt
                 Gallop.Live.SectionProfiler.End();
             }
 
+            Gallop.Live.SectionProfiler.Begin("timeline.camerapos");
             AlterUpdate_CameraSwitcher(camSheet, _currentFrame);
             AlterUpdate_CameraPos(camSheet, _currentFrame);
             AlterUpdate_CameraLookAt(camSheet, _currentFrame, ref outLookAt);
             AlterUpdate_CameraFov(camSheet, _currentFrame);
             AlterUpdate_CameraRoll(camSheet, _currentFrame);
             AlterUpdate_MultiCamera(camSheet, _currentFrame);
+            Gallop.Live.SectionProfiler.End();
 
+            Gallop.Live.SectionProfiler.Begin("timeline.globallight");
             AlterUpdate_GlobalLight(camSheet, _currentFrame);
+            Gallop.Live.SectionProfiler.End();
             AlterUpdate_EnvironmentMirror(camSheet, _currentFrame);
             AlterUpdate_MirrorReflection(camSheet, _currentFrame);
             AlterUpdate_HdrBloom(camSheet, Mathf.RoundToInt(_currentFrame));
@@ -799,21 +807,28 @@ namespace Gallop.Live.Cutt
                 var ws = data.worksheetList[w];
                 if (ws == null) continue;
 
+                Gallop.Live.SectionProfiler.Begin("timeline.stageobj");
                 AlterUpdate_TransformControl(ws, mappedFrame);
                 AlterUpdate_ObjectControl(ws, mappedFrame);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("timeline.renderereffect");
                 AlterUpdate_Renderer(ws, _currentFrame);
                 AlterUpdate_LensFlare(ws, _currentFrame);
                 AlterUpdate_Projector(ws, _currentFrame);
                 AlterUpdate_Particle(ws, mappedFrame);
                 AlterUpdate_ParticleGroup(ws, mappedFrame);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("timeline.stageobj2");
                 AlterUpdate_LightShafts(ws, _currentFrame);
                 AlterUpdate_NodeScale(ws, _currentFrame);
                 AlterUpdate_Title(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_CameraLayer(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.End();
                 AlterUpdate_FacialNoise(ws, mappedFrame);
                 AlterUpdate_CharaMotionNoise(ws, mappedFrame);
                 AlterUpdate_SweatLocator(ws, _currentFrame);
                 AlterUpdate_LightProjection(ws, _currentFrame);
+                Gallop.Live.SectionProfiler.Begin("timeline.chara");
                 AlterUpdate_Audience(ws, _currentFrame);
                 AlterUpdate_MobControl(ws, _currentFrame);
                 AlterUpdate_CyalumeControl(ws, _currentFrame);
@@ -823,9 +838,12 @@ namespace Gallop.Live.Cutt
                 AlterUpdate_FacialToon(ws, mappedFrameInt);
                 AlterUpdate_CharaWind(ws, mappedFrameInt);
                 AlterUpdate_FlashPlayer(ws, mappedFrameInt);
+                Gallop.Live.SectionProfiler.End();
+                Gallop.Live.SectionProfiler.Begin("timeline.charanode");
                 AlterUpdate_AdditionalLight(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_CharaNode(ws, Mathf.RoundToInt(_currentFrame));
                 AlterUpdate_TransparentCamera(ws, Mathf.RoundToInt(_currentFrame));
+                Gallop.Live.SectionProfiler.End();
             }
 
             //BgColor2属于全局舞台颜色控制，只使用主 worksheet。

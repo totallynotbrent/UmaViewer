@@ -69,7 +69,7 @@ namespace Gallop.Live
                     for (int i = 0; i < wsSheet.audienceList.Count; i++)
                     {
                         var entry = wsSheet.audienceList[i];
-                        sb.Append($" [{i}] name='{entry?.name}' keys={entry?.keys?.Count ?? -1}");
+                        sb.Append($" [{i}] name='{entry?.name}' keys={entry?.keys?.Count ?? -1} json={UnityEngine.JsonUtility.ToJson(entry)}");
                     }
                     Director.FileLog(sb.ToString());
                 }
@@ -104,11 +104,17 @@ namespace Gallop.Live
             int instanceKey = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(entry);
             if (!_crowdInstances.TryGetValue(instanceKey, out var instance) || instance == null)
             {
-                GameObject prefab = ResolveCrowdPrefab(entry.name);
-                if (prefab == null)
-                    return;
-                instance = Instantiate(prefab, dir.transform);
-                instance.name = $"Audience_{entry._objectIndex}_{entry.name}";
+                // the game resolves the crowd from the stage's own preloaded audience
+                // objects (name-substring _r/_d pick); instantiate only as a fallback.
+                instance = FindStageAudienceObject(entry.name);
+                if (instance == null)
+                {
+                    GameObject prefab = ResolveCrowdPrefab(entry.name);
+                    if (prefab == null)
+                        return;
+                    instance = Instantiate(prefab, dir.transform);
+                    instance.name = $"Audience_{entry._objectIndex}_{entry.name}";
+                }
                 _crowdInstances[instanceKey] = instance;
             }
 
@@ -121,6 +127,25 @@ namespace Gallop.Live
             // animationIndex-th clip when the track selects one.
             if (animationIndex >= 0)
                 PlayCrowdClip(instance, animationIndex, animationSpeed);
+        }
+
+        // the stage prefab ships its audience blocks already instantiated; find the
+        // one matching the track name so we drive the game's own crowd object.
+        private GameObject FindStageAudienceObject(string trackName)
+        {
+            if (_stage == null || string.IsNullOrEmpty(trackName))
+                return null;
+            var shortName = trackName.Replace("pfb_env_live_cmn_", "");
+            var candidates = _stage.GetComponentsInChildren<Transform>(true);
+            foreach (var t in candidates)
+            {
+                if (t == null || t.parent != _stage.transform)
+                    continue;
+                var n = t.name;
+                if (n.Contains(shortName) || (n.Contains("audience") && n.Contains("_r") == trackName.Contains("_r")))
+                    return t.gameObject;
+            }
+            return null;
         }
 
         private GameObject ResolveCrowdPrefab(string prefabName)

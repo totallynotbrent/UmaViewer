@@ -47,9 +47,12 @@ namespace Gallop.Live
             for (int i = 0; i < groupCount; i++)
             {
                 var group = settings.propsDataGroup[i];
-                if (group == null || string.IsNullOrEmpty(group.propsName))
+                // chara props resolve by their major/minor id bundle key, so an empty
+                // propsName only disqualifies stage props.
+                bool charaPropsResolvable = group != null && group.isCharaProps && group.charaPropsMajorId > 0;
+                if (group == null || (string.IsNullOrEmpty(group.propsName) && !charaPropsResolvable))
                 {
-                    Director.FileLog($"{PROP_LOG_TAG} skip group {i}: null or empty propsName (isCharaProps={group?.isCharaProps} majorId={group?.charaPropsMajorId})");
+                    Director.FileLog($"{PROP_LOG_TAG} skip group {i}: null or unresolvable (isCharaProps={group?.isCharaProps} majorId={group?.charaPropsMajorId})");
                     skipped++;
                     continue;
                 }
@@ -103,6 +106,9 @@ namespace Gallop.Live
                 string kind = group.IsRichProp ? "richprop"
                     : group.IsToonProp ? "toonprop"
                     : "prop";
+                string folder = group.IsRichProp ? "rich_prop"
+                    : group.IsToonProp ? "toon_prop"
+                    : "prop";
                 string prefix = group.IsRichProp ? "pfb_rich_prop"
                     : group.IsToonProp ? "pfb_toon_prop"
                     : "pfb_chr_prop";
@@ -111,9 +117,9 @@ namespace Gallop.Live
                 for (int v = minor; v >= 0 && entry == null; v--)
                 {
                     prefabName = $"{prefix}{major}_{v:00}";
-                    // bundle keys follow 3d/chara/<kind>/prop<major>_<minor>/<prefabName>;
-                    // rich/toon dirs share the same prop<major> folder shape.
-                    string bundleKey = $"3d/chara/{kind}/prop{major}_{v:00}/{prefabName}";
+                    // manifest keys are 3d/chara/<kind>/<folder><major>_<minor>/<prefab>,
+                    // e.g. 3d/chara/toonprop/toon_prop1087_00/pfb_toon_prop1087_00.
+                    string bundleKey = $"3d/chara/{kind}/{folder}{major}_{v:00}/{prefabName}";
                     if (main.AbList.TryGetValue(bundleKey, out var exact))
                     {
                         entry = exact;

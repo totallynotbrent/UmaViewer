@@ -157,9 +157,16 @@ namespace Gallop.Live.Cutt
         public LiveTimelineKeyFormationOffsetDataList place20Keys; // 0xA8
         private readonly ILiveTimelineKeyDataList[] _cacheDataList; // 0xB0
 
+        private List<LiveTimelineKeyFormationOffsetDataList> _initCache;
+
+        // the list is rebuilt every formation-offset frame; cache it once per worksheet
+        // so the hot timeline path stops allocating a 20-entry list per frame.
         public List<LiveTimelineKeyFormationOffsetDataList> Init()
         {
-            return new List<LiveTimelineKeyFormationOffsetDataList> { centerKeys, left1Keys , right1Keys, left2Keys, right2Keys, place06Keys, place07Keys, place08Keys, place09Keys, place10Keys, place11Keys, place12Keys, place13Keys, place14Keys, place15Keys, place16Keys, place17Keys, place18Keys, place19Keys, place20Keys };
+            if (_initCache != null)
+                return _initCache;
+            _initCache = new List<LiveTimelineKeyFormationOffsetDataList> { centerKeys, left1Keys , right1Keys, left2Keys, right2Keys, place06Keys, place07Keys, place08Keys, place09Keys, place10Keys, place11Keys, place12Keys, place13Keys, place14Keys, place15Keys, place16Keys, place17Keys, place18Keys, place19Keys, place20Keys };
+            return _initCache;
         }
     }
 }

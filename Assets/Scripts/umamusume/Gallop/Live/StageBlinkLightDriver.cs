@@ -567,6 +567,9 @@ namespace Gallop.Live
                 if (_stage.StageObjectUnitMap.TryGetValue(rootName, out var unit) &&
                     unit != null && unit.ChildObjects != null && unit.ChildObjects.Length > 0)
                 {
+                    // build the per-unit runtime key once per root instead of one string
+                    // allocation per child per frame.
+                    var runtimeKeyForRoot = rootName + "__U";
                     for (int i = 0; i < unit.ChildObjects.Length; i++)
                     {
                         var childPrefab = unit.ChildObjects[i];
@@ -575,7 +578,7 @@ namespace Gallop.Live
 
                         if (_stage.StageObjectMap.TryGetValue(childPrefab.name, out var realGo) && realGo != null)
                         {
-                            string runtimeKey = rootName + "__U" + i;
+                            string runtimeKey = i == 0 ? runtimeKeyForRoot + "0" : runtimeKeyForRoot + i;
                             ApplyToRootCached(runtimeKey, realGo, updateInfo, liveNow);
                         }
                     }
