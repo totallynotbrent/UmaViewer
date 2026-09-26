@@ -1290,30 +1290,45 @@ namespace Gallop.Live.Cutt
                 return;
             }
 
-            float blend = 0f;
+            // the game interpolates BOTH the High and Low pairs between keys, then
+            // picks between them by the ANIMATED hand height (two-threshold switch,
+            // stand-node update 0x7ff8e50a06b0), not by key interpolation.
+            float keyBlend = 0f;
             if (nextKey != null && nextKey.interpolateType != LiveCameraInterpolateType.None)
-                blend = CalculateInterpolationValue(curKey, nextKey, time * 60);
+                keyBlend = CalculateInterpolationValue(curKey, nextKey, time * 60);
+
+            Vector3 lowL = curKey.IKMicStandLOffsetLow;
+            Vector3 highL = curKey.IKMicStandLOffsetHigh;
+            Vector3 lowR = curKey.IKMicStandROffsetLow;
+            Vector3 highR = curKey.IKMicStandROffsetHigh;
+            if (nextKey != null && nextKey.interpolateType != LiveCameraInterpolateType.None)
+            {
+                lowL = Vector3.Lerp(lowL, nextKey.IKMicStandLOffsetLow, keyBlend);
+                highL = Vector3.Lerp(highL, nextKey.IKMicStandLOffsetHigh, keyBlend);
+                lowR = Vector3.Lerp(lowR, nextKey.IKMicStandROffsetLow, keyBlend);
+                highR = Vector3.Lerp(highR, nextKey.IKMicStandROffsetHigh, keyBlend);
+            }
 
             if (curKey.IsEnabledIKMicStandLOffset && leftIK != null)
-                AimHandAtMicNode(chara, leftIK, "Mic_Node_L",
-                    curKey.IKMicStandLOffsetLow, curKey.IKMicStandLOffsetHigh, blend);
+                AimHandAtMicNode(chara, leftIK, "Mic_Node_L", lowL, highL);
             else if (leftIK != null) leftIK.IKPositionWeight = 0f;
 
             if (curKey.IsEnabledIKMicStandROffset && rightIK != null)
-                AimHandAtMicNode(chara, rightIK, "Mic_Node_R",
-                    curKey.IKMicStandROffsetLow, curKey.IKMicStandROffsetHigh, blend);
+                AimHandAtMicNode(chara, rightIK, "Mic_Node_R", lowR, highR);
             else if (rightIK != null) rightIK.IKPositionWeight = 0f;
         }
 
-        // aim one hand at its mic node: target = node position + the authored offset,
-        // lerping the Low/High pair by the key blend so raised-hand sections ride high.
+        // aim one hand at its mic node with the game's height switch: the two target
+        // candidates are node + Low offset and node + High offset; the weight rides
+        // with the hand's animated height between the two target heights (>= high
+        // target -> full High, <= low target -> the 0.5 hysteresis rate, between ->
+        // proportional). below both it keeps tracking, matching stand-node state 4.
         private static void AimHandAtMicNode(
             UmaContainerCharacter chara,
             IKSolverLimb handIK,
             string nodeName,
             Vector3 lowOffset,
-            Vector3 highOffset,
-            float blend)
+            Vector3 highOffset)
         {
             Transform node = FindDeepChild(chara.transform, nodeName);
             if (node == null)
@@ -1321,7 +1336,19 @@ namespace Gallop.Live.Cutt
                 handIK.IKPositionWeight = 0f;
                 return;
             }
-            Vector3 offset = Vector3.Lerp(lowOffset, highOffset, blend);
+            Vector3 lowTarget = node.position + chara.transform.TransformVector(lowOffset);
+            Vector3 highTarget = node.position + chara.transform.TransformVector(highOffset);
+            float handY = handIK.bone3.transform.position.y;
+            float lowY = lowTarget.y;
+            float highY = highTarget.y;
+            float weight;
+            if (handY >= highY)
+                weight = 1f;
+            else if (handY >= lowY)
+                weight = 0.5f + 0.5f * Mathf.Clamp01((handY - lowY) / Mathf.Max(0.01f, highY - lowY));
+            else
+                weight = 0.5f;
+            Vector3 offset = Vector3.Lerp(lowOffset, highOffset, weight);
             handIK.IKPosition = node.position + chara.transform.TransformVector(offset);
             handIK.IKPositionWeight = 1f;
         }
