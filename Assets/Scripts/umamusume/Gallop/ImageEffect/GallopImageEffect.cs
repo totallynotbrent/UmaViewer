@@ -485,8 +485,8 @@ namespace Gallop
             // copy overdrives the hot songs. compress logarithmically so the mild range
             // stays close to raw while the hot range lands in urp's sane scatter band.
             // repeated bench feedback says the stack still reads hot, so the urp path
-            // scales its final intensity down to match the game chain's 0.75 dimmer.
-            float urpIntensity = Mathf.Log(1f + Mathf.Max(0f, bloomIntensity), 2f) * 0.5f * 0.75f;
+            // scales its final intensity down to match the game chain's 0.6 dimmer.
+            float urpIntensity = Mathf.Log(1f + Mathf.Max(0f, bloomIntensity), 2f) * 0.5f * 0.6f;
             float totalIntensity = urpIntensity + Mathf.Min(diffusionHint * 0.02f, 0.4f) + _volumeLightBloomLift;
 
             bool enabled = (param.IsEnableBloom || param.IsEnableDiffusion) && totalIntensity > 0f;

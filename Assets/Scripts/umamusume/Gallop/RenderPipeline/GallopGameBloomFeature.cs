@@ -52,7 +52,7 @@ namespace Gallop.RenderPipeline
             // material carries a serialized dimmer we cannot read, and the ported
             // chain reads slightly hotter than the game, so this scales the final
             // output down instead of over-driving every authored track.
-            public static float OutputDimmer = 0.75f;
+            public static float OutputDimmer = 0.6f;
             public static float BloomIsScreenBlend = 1f;
 
             // the postfilm block the game's screen-overlay chain publishes every
