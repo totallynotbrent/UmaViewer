@@ -38,6 +38,15 @@ namespace Gallop
         private bool _gameBloomStateLogged;
         private bool _gameBloomStateLoggedValue;
 
+        private bool _brightnessCensusLogged;
+
+        // one-line global color summary for the brightness census.
+        private static string PrintGlobal(string name)
+        {
+            var c = Shader.GetGlobalColor(name);
+            return name + "=(" + c.r.ToString("F2") + "," + c.g.ToString("F2") + "," + c.b.ToString("F2") + ")";
+        }
+
         public void ToggleGameBloom()
         {
             _useGameBloom = !_useGameBloom;
@@ -426,6 +435,22 @@ namespace Gallop
                 Director.FileLog($"[gamebloom] state useGameBloom={useGameBloom} authoredIntensity={authoredBloomIntensity:F2} enableBloom={param.IsEnableBloom} blend={param.BloomBlendMode} dofWeight={param.BloomDofWeight:F2} outputDimmer={Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.OutputDimmer:F2}");
             }
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.GameBloomEnabled = useGameBloom;
+
+            // one-shot brightness census so a bench log separates stage brightness
+            // (global shader inputs) from post brighteners (exposure, grade, dimmer).
+            if (!_brightnessCensusLogged && useGameBloom)
+            {
+                _brightnessCensusLogged = true;
+                Director.FileLog(
+                    "[brightness]" +
+                    $" postExposure={(_colorAdjust != null && _colorAdjust.postExposure.overrideState ? _colorAdjust.postExposure.value : 0f):F2}" +
+                    $" sat={(_colorAdjust != null && _colorAdjust.saturation.overrideState ? _colorAdjust.saturation.value : 0f):F1}" +
+                    $" dimmer={Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.OutputDimmer:F2}" +
+                    " lightmap=" + PrintGlobal("_Global_LightmapColor") + PrintGlobal("_Global_LightmapModulateColor") + PrintGlobal("_Global_LightmapDensityAddColor") +
+                    " dirt=" + PrintGlobal("_GlobalDirtColor") + " rim=" + PrintGlobal("_GlobalRimColor") +
+                    " toon=" + PrintGlobal("_GlobalToonColor") + $" outlineW={Shader.GetGlobalFloat("_GlobalOutlineWidth"):F2}" +
+                    $" outlineO={Shader.GetGlobalFloat("_GlobalOutlineOffset"):F2}");
+            }
             if (useGameBloom)
             {
                 _bloom.active = false;
