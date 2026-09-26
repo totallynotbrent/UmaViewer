@@ -103,6 +103,10 @@ public class UmaContainerCharacter : UmaContainer
     public float BodyScale = 1;
 
     private BipedIK IK;
+
+    // hand IK solvers for the formation track's mic-stand system; null until CreateIK.
+    public IKSolverLimb LeftHandIK => IK != null ? IK.solvers.leftHand : null;
+    public IKSolverLimb RightHandIK => IK != null ? IK.solvers.rightHand : null;
     private List<Transform> _humanoidBones;
     private UIHandleCharacterRoot handleRoot;
 

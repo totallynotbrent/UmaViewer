@@ -6,6 +6,7 @@ using UnityEngine;
 using System.Linq;
 using System.IO;
 using Gallop.Live;
+using RootMotion.FinalIK;
 
 namespace Gallop.Live.Cutt
 {
@@ -1260,6 +1261,97 @@ namespace Gallop.Live.Cutt
                 var e = chara.transform.eulerAngles; chara.transform.eulerAngles = new Vector3(e.x, curKey.RotationY, e.z);
                 var lp = chara.Position.localEulerAngles; chara.Position.localEulerAngles = new Vector3(lp.x, curKey.LocalRotationY, lp.z);
             }
+
+            UpdateFormationIKMicStand(chara, curKey, nextKey, time);
+        }
+
+        // the game's mic-stand IK (LiveTimelineControl::UpdateIKSystemMicStand): when a
+        // formation key selects the MicStand IK system, each enabled hand is IK'd toward
+        // the chara's Mic_Node_L/R plus the authored offset pair. the game blends the
+        // High offset when the hand rides up and the Low offset when it rests; the blend
+        // phase follows the animation's own hand height between the two authored heights.
+        private static void UpdateFormationIKMicStand(
+            UmaContainerCharacter chara,
+            LiveTimelineKeyFormationOffsetData curKey,
+            LiveTimelineKeyFormationOffsetData nextKey,
+            float time)
+        {
+            if (chara == null || curKey == null) return;
+            bool micStand = curKey.IKSystem == LiveTimelineKeyFormationOffsetData.IKSystemType.MicStand;
+            var leftIK = chara.LeftHandIK;
+            var rightIK = chara.RightHandIK;
+
+            if (!micStand || (leftIK == null && rightIK == null))
+            {
+                // release both hands whenever the current key is not a mic-stand key so
+                // a finished mic section never leaves a hand pinned.
+                if (leftIK != null) leftIK.IKPositionWeight = 0f;
+                if (rightIK != null) rightIK.IKPositionWeight = 0f;
+                return;
+            }
+
+            float blend = 0f;
+            if (nextKey != null && nextKey.interpolateType != LiveCameraInterpolateType.None)
+                blend = CalculateInterpolationValue(curKey, nextKey, time * 60);
+
+            if (curKey.IsEnabledIKMicStandLOffset && leftIK != null)
+                AimHandAtMicNode(chara, leftIK, "Mic_Node_L",
+                    curKey.IKMicStandLOffsetLow, curKey.IKMicStandLOffsetHigh, blend);
+            else if (leftIK != null) leftIK.IKPositionWeight = 0f;
+
+            if (curKey.IsEnabledIKMicStandROffset && rightIK != null)
+                AimHandAtMicNode(chara, rightIK, "Mic_Node_R",
+                    curKey.IKMicStandROffsetLow, curKey.IKMicStandROffsetHigh, blend);
+            else if (rightIK != null) rightIK.IKPositionWeight = 0f;
+        }
+
+        // aim one hand at its mic node: target = node position + the authored offset,
+        // lerping the Low/High pair by the key blend so raised-hand sections ride high.
+        private static void AimHandAtMicNode(
+            UmaContainerCharacter chara,
+            IKSolverLimb handIK,
+            string nodeName,
+            Vector3 lowOffset,
+            Vector3 highOffset,
+            float blend)
+        {
+            Transform node = FindDeepChild(chara.transform, nodeName);
+            if (node == null)
+            {
+                handIK.IKPositionWeight = 0f;
+                return;
+            }
+            Vector3 offset = Vector3.Lerp(lowOffset, highOffset, blend);
+            handIK.IKPosition = node.position + chara.transform.TransformVector(offset);
+            handIK.IKPositionWeight = 1f;
+        }
+
+        // mic nodes are resolved per chara once and cached; rig lookups are too
+        // expensive to repeat on every mic-stand frame.
+        private static readonly Dictionary<int, Dictionary<string, Transform>> _micNodeCache =
+            new Dictionary<int, Dictionary<string, Transform>>();
+
+        private static Transform FindDeepChild(Transform root, string name)
+        {
+            int id = root.GetInstanceID();
+            if (!_micNodeCache.TryGetValue(id, out var byName))
+            {
+                byName = new Dictionary<string, Transform>();
+                _micNodeCache[id] = byName;
+            }
+            if (byName.TryGetValue(name, out var cached))
+                return cached;
+            Transform found = null;
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == name)
+                {
+                    found = t;
+                    break;
+                }
+            }
+            byName[name] = found;
+            return found;
         }
 
         public static void FindTimelineKeyCurrent(out LiveTimelineKey curKey, ILiveTimelineKeyDataList keys, float curFrame)
