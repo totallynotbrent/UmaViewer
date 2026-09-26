@@ -4731,7 +4731,14 @@ namespace Gallop.Live.Cutt
             var currentKey = _simpleListCurrentKey as LiveTimelineKeyPostEffectDOFData;
             var nextKey = _simpleListNextKey as LiveTimelineKeyPostEffectDOFData;
             if (currentKey == null)
+            {
+                // no key covers this frame: publish the invalid state so the
+                // consumer drops the latched focus instead of freezing it.
+                PostEffectUpdateInfo_DOF resetInfo = default;
+                resetInfo.isValid = false;
+                OnUpdatePostEffect_DOF(resetInfo);
                 return;
+            }
 
             float t = _simpleListT;
             PostEffectUpdateInfo_DOF updateInfo = default;

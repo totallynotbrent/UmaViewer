@@ -11,13 +11,17 @@ public class UmaViewerGlobalShader : MonoBehaviour
     public float _GlobalOutlineWidth = 1.0f;
     public float _GlobalCameraFov = 0.1f;
     public float _CylinderBlend = 0.0f;
-    public Color _GlobalToonColor = new Color(1, 1, 1, 0);
+    // defaults decoded from the game's GraphicSettings .ctor default table
+    // (dump 2026-09-26, out/graphicsettings_default_colors.json): toon white with
+    // alpha 1, dirt triple gray-brown, shadow color quarter gray.
+    public Color _GlobalToonColor = new Color(1, 1, 1, 1);
     public Color _Global_FogColor;
-    public Color _GlobalDirtRimSpecularColor;
-    public Color _GlobalDirtToonColor;
-    public Color _GlobalRimColor = new Color(1, 1, 1, 0);
-    public Color _GlobalDirtColor;
+    public Color _GlobalDirtRimSpecularColor = new Color(0.25f, 0.25f, 0.25f, 1f);
+    public Color _GlobalDirtToonColor = new Color(0.5f, 0.5f, 0.5f, 1f);
+    public Color _GlobalRimColor = new Color(1, 1, 1, 1);
+    public Color _GlobalDirtColor = new Color(0.6f, 0.451f, 0.384f, 1f);
     public Color _Global_LightmapColor = Color.white;
+    public Color _Global_LightmapShadowColor = new Color(0.25f, 0.25f, 0.25f, 1f);
     public Color _Global_LightmapDensityAddColor = Color.clear;
     public Color _Global_LightmapModulateColor = Color.white;
     public Color _RimColor2;
@@ -69,6 +73,7 @@ public class UmaViewerGlobalShader : MonoBehaviour
         Shader.SetGlobalColor("_GlobalRimColor", _GlobalRimColor);
         Shader.SetGlobalColor("_GlobalDirtColor", _GlobalDirtColor);
         Shader.SetGlobalColor("_Global_LightmapColor", _Global_LightmapColor);
+        Shader.SetGlobalColor("_Global_LightmapShadowColor", _Global_LightmapShadowColor);
         Shader.SetGlobalColor("_Global_LightmapDensityAddColor", _Global_LightmapDensityAddColor);
         Shader.SetGlobalColor("_Global_LightmapModulateColor", _Global_LightmapModulateColor);
         Shader.SetGlobalColor("_RimColor2", _RimColor2);

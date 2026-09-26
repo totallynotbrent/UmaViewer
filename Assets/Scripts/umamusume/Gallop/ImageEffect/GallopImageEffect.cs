@@ -134,6 +134,14 @@ namespace Gallop
             _timelineFocusSpread = blurSpread;
         }
 
+        // drop the authored focus so the camera falls back to lookAt focus; the
+        // dof track publishes this when no key covers the current frame.
+        public void ClearTimelineFocus()
+        {
+            _timelineFocusDistance = -1f;
+            _depthOfFieldActive = false;
+        }
+
         public void ApplyTimelineFilm(Color color, float power, bool isVignette)
         {
             ApplyTimelineFilm(color, power, isVignette, PostFilmBlend.Lerp);

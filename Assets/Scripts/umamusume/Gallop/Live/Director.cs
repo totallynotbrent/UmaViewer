@@ -1351,9 +1351,15 @@ namespace Gallop.Live
         // parameters at their current values instead of forcing defaults.
         private void OnUpdatePostEffect_DOF(PostEffectUpdateInfo_DOF updateInfo)
         {
-            if (!updateInfo.isValid) return;
-
             GallopImageEffect imageEffect = GetActivePostEffect();
+            if (!updateInfo.isValid)
+            {
+                // the dof track is exhausted for this frame: release the latched
+                // authored focus so the camera falls back to lookAt focus.
+                imageEffect?.ClearTimelineFocus();
+                return;
+            }
+
             if (imageEffect == null) return;
 
             // dof keys drive the focus plane only; the dedicated bloom track owns
