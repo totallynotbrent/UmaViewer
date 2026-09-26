@@ -1436,7 +1436,6 @@ namespace Gallop.Live
                     continue;
 
                 var block = GetBgColorBlock(r);
-                r.GetPropertyBlock(block);
                 if (profile.hasCharaColor) block.SetColor(PID_CharaColor, updateInfo.color);
                 if (profile.hasToonDark) block.SetColor(PID_ToonDarkColor, updateInfo.toonDarkColor);
                 if (profile.hasToonBright) block.SetColor(PID_ToonBrightColor, updateInfo.toonBrightColor);
@@ -1468,7 +1467,6 @@ namespace Gallop.Live
                         var sharedMats = GetBgColorProfile(r).sharedMaterials;
                         if (sharedMats == null || sharedMats.Length == 0) continue;
                         var block = GetBgColorBlock(r);
-                        r.GetPropertyBlock(block);
                         ApplyBgColor2ToRuntimeGroupBlock(group.kind, block, sharedMats, ref updateInfo, extra);
                         r.SetPropertyBlock(block);
                     }
@@ -1487,7 +1485,6 @@ namespace Gallop.Live
                 var sharedMats = GetBgColorProfile(r).sharedMaterials;
                 if (sharedMats == null || sharedMats.Length == 0) continue;
                 var block = GetBgColorBlock(r);
-                r.GetPropertyBlock(block);
                 ApplyBgColor2ToRuntimeGroupBlock(BgColor2RuntimeKind.LegacyFallback, block, sharedMats, ref updateInfo, extra);
                 r.SetPropertyBlock(block);
             }
@@ -1738,13 +1735,18 @@ namespace Gallop.Live
                 mat.SetFloat("_ColorPowerMultiply", extra);
         }
 
-        /// <summary> Returns a reusable per-renderer MPB (GetPropertyBlock overwrites, so
-        /// reading-back per-renderer props each frame is preserved). </summary>
+        /// <summary> Returns the per-renderer MPB, seeded once from the renderer and
+        /// maintained incrementally afterwards; the block cache rebuilds on stage reload. </summary>
         private MaterialPropertyBlock GetBgColorBlock(Renderer r)
         {
             if (_bgColorBlocks.TryGetValue(r, out var block))
                 return block;
             block = new MaterialPropertyBlock();
+            // seed once so properties other systems wrote survive our first set;
+            // afterwards the block is maintained incrementally because this driver
+            // owns every property it writes and the per-frame native GetPropertyBlock
+            // roundtrip was the bgcolor section's dominant time cost.
+            r.GetPropertyBlock(block);
             _bgColorBlocks[r] = block;
             return block;
         }
