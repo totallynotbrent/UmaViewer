@@ -85,44 +85,59 @@ Shader "Gallop/ImageEffect/SeparableWeightedBlurDof34_CG"
             return sum;
         }
 
-        // blurH: 5 samples * 0.2, MAX with the CoC from t1
+        // blurH: 5 samples * 0.2, MAX with the input's own coc alpha
         float4 frag_blur_h(vs_blur i) : SV_Target
         {
-            float4 coc = tex2D(_CocTex, i.uv);
             float4 acc = 0;
             acc += tex2D(_MainTex, i.uv) * 0.2;
             acc += tex2D(_MainTex, i.off1.xy) * 0.2;
             acc += tex2D(_MainTex, i.off2.xy) * 0.2;
             acc += tex2D(_MainTex, i.off3.xy) * 0.2;
             acc += tex2D(_MainTex, i.off4.xy) * 0.2;
-            acc.a = max(coc.a, acc.a);
+            // the center tap carries the prefilter's coc in alpha; the offset taps
+            // carry their own. take the max across taps so no in-focus detail
+            // bleeds through the blur.
+            float cocMax = acc.a;
+            cocMax = max(cocMax, tex2D(_MainTex, i.off1.xy).a);
+            cocMax = max(cocMax, tex2D(_MainTex, i.off2.xy).a);
+            cocMax = max(cocMax, tex2D(_MainTex, i.off3.xy).a);
+            cocMax = max(cocMax, tex2D(_MainTex, i.off4.xy).a);
+            acc.a = max(cocMax, acc.a);
             return acc;
         }
 
-        // blurV: taps 0.75/0.5 scaled by 1/3.5, MAX with the CoC
+        // blurV: taps 0.75/0.5 scaled by 1/3.5, MAX with the input's own coc alpha
         float4 frag_blur_v(vs_blur i) : SV_Target
         {
-            float4 coc = tex2D(_CocTex, i.uv);
             float2 t = _InvRenderTargetSize.xy;
-            float4 acc = tex2D(_MainTex, i.uv) * 0.28571428;
-            acc += tex2D(_MainTex, i.uv + float2(0, t.y * 0.75)) * 0.28571428 * 0.75;
-            acc += tex2D(_MainTex, i.uv - float2(0, t.y * 0.75)) * 0.28571428 * 0.75;
-            acc += tex2D(_MainTex, i.uv + float2(t.x * 0.5, t.y * 0.5)) * 0.28571428 * 0.5;
-            acc += tex2D(_MainTex, i.uv - float2(t.x * 0.5, t.y * 0.5)) * 0.28571428 * 0.5;
-            acc.a = max(coc.a, acc.a);
+            float4 c0 = tex2D(_MainTex, i.uv);
+            float4 c1 = tex2D(_MainTex, i.uv + float2(0, t.y * 0.75));
+            float4 c2 = tex2D(_MainTex, i.uv - float2(0, t.y * 0.75));
+            float4 c3 = tex2D(_MainTex, i.uv + float2(t.x * 0.5, t.y * 0.5));
+            float4 c4 = tex2D(_MainTex, i.uv - float2(t.x * 0.5, t.y * 0.5));
+            float4 acc = c0 * 0.28571428;
+            acc += c1 * 0.28571428 * 0.75;
+            acc += c2 * 0.28571428 * 0.75;
+            acc += c3 * 0.28571428 * 0.5;
+            acc += c4 * 0.28571428 * 0.5;
+            // keep the strongest coc across the taps so the composite never
+            // under-blurs a bright region the prefilter marked.
+            acc.a = max(max(max(c0.a, c1.a), max(c2.a, c3.a)), max(c4.a, acc.a));
             return acc;
         }
 
         sampler2D _BlurTex;
 
         // composite: blurred^2 blend against the depth-sampled sharp image, MAD
-        // weighted by the CoC (the game's final fold)
+        // weighted by the CoC. the coc rides the blur chain's alpha channel (the
+        // prefilter writes it and the blur passes preserve it), so the composite
+        // reads it from _BlurTex instead of a separate coc texture.
         float4 frag_composite(v2f_img i) : SV_Target
         {
-            float coc = tex2D(_CocTex, i.uv).a;
+            float4 blur = tex2D(_BlurTex, i.uv);
+            float coc = blur.a;
             float4 sharp = tex2D(_MainTex, i.uv);
-            float4 blurred = tex2D(_BlurTex, i.uv);
-            blurred *= blurred;
+            float4 blurred = blur * blur;
             float w = saturate(coc);
             return blurred * w + sharp * (1.0 - w);
         }

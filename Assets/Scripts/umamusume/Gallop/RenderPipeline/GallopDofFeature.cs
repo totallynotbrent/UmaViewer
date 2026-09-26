@@ -83,9 +83,12 @@ namespace Gallop.RenderPipeline
                 cmd.Blit(source, _halfA, _material, 0);          // prefilter + coc
                 cmd.Blit(_halfA, _halfB, _material, 1);           // blurH
                 cmd.Blit(_halfB, _halfA, _material, 2);           // blurV
+                // the blur result (rgb + preserved coc in alpha) lives in halfA;
+                // the composite must read it while writing a DIFFERENT target or
+                // the read-while-write hazard blacks the frame.
                 _material.SetTexture(_BlurTexId, _halfA);
-                cmd.Blit(source, _halfA, _material, 3);           // composite
-                Blitter.BlitCameraTexture(cmd, _halfA, source);
+                cmd.Blit(source, _halfB, _material, 3);           // composite
+                Blitter.BlitCameraTexture(cmd, _halfB, source);
 
                 context.ExecuteCommandBuffer(cmd);
                 CommandBufferPool.Release(cmd);
