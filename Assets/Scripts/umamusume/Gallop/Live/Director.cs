@@ -1371,13 +1371,38 @@ namespace Gallop.Live
                          updateInfo.dofBlurType == DofDiffusionBloomOverlayParam.DofDiffusionBloomType.Dof;
             imageEffect.DepthOfFieldActive = dofOn;
 
-            // authored focus: charactor=1 locks focus to the character slot's
-            // authored focal distance; otherwise dofFocalPoint is an absolute
-            // plane distance from the camera.
-            float authoredDistance = Mathf.Max(0.1f, updateInfo.dofFocalPoint);
+            // game focal math (PrepareDofParam decode): charactor=1 means the
+            // focal transform is the lead character; the focus plane is the
+            // camera-space z of that transform divided by the far clip (focal01),
+            // scaled back to world distance. otherwise dofFocalPoint is the
+            // authored plane distance straight from the keys.
+            float focusDistance;
+            var focusCamera = imageEffect.GetComponent<Camera>();
+            if (updateInfo.charactor == 1 && focusCamera != null &&
+                CharaContainerScript != null && CharaContainerScript.Count > 0)
+            {
+                var chara = CharaContainerScript[0];
+                if (chara != null)
+                {
+                    Vector3 local = focusCamera.transform.InverseTransformPoint(chara.transform.position);
+                    float farClip = Mathf.Max(1f, focusCamera.farClipPlane);
+                    // the game guards negative (behind-camera) focal to zero.
+                    float focal01 = Mathf.Max(0f, local.z / farClip);
+                    focusDistance = Mathf.Max(0.1f, focal01 * farClip);
+                }
+                else
+                {
+                    focusDistance = Mathf.Max(0.1f, updateInfo.dofFocalPoint);
+                }
+            }
+            else
+            {
+                focusDistance = Mathf.Max(0.1f, updateInfo.dofFocalPoint);
+            }
             imageEffect.SetTimelineFocusSpread(Mathf.Max(0.05f, updateInfo.blurSpread));
+            imageEffect.SetTimelineFocusSmoothness(Mathf.Max(0.1f, updateInfo.dofSmoothness));
             imageEffect.SetTimelineFocus(
-                authoredDistance,
+                focusDistance,
                 Mathf.Max(0f, updateInfo.forcalSize),
                 updateInfo.charactor == 1);
         }

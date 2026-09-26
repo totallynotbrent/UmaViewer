@@ -70,6 +70,7 @@ namespace Gallop
         private float _timelineFocusDistance = -1f;
         private float _timelineFocusSize = 1.5f;
         private float _timelineFocusSpread = 1f;
+        private float _timelineFocusSmoothness = 1f;
         private bool _timelineFocusOnChara;
         private bool _depthOfFieldActive;
 
@@ -132,6 +133,13 @@ namespace Gallop
         public void SetTimelineFocusSpread(float blurSpread)
         {
             _timelineFocusSpread = blurSpread;
+        }
+
+        // authored dof smoothness (the game clamps it to >= 0.1); shapes how
+        // quickly blur ramps away from the focus plane.
+        public void SetTimelineFocusSmoothness(float smoothness)
+        {
+            _timelineFocusSmoothness = Mathf.Max(0.1f, smoothness);
         }
 
         // drop the authored focus so the camera falls back to lookAt focus; the
@@ -599,22 +607,10 @@ namespace Gallop
             {
                 // authored dof keys win: the game stores an absolute focal
                 // distance with an optional character lock; follow it directly.
+                // the director already resolved the chara focal plane with the
+                // game's focal01 math (camera-space z / far clip), so the authored
+                // distance is the exact focus plane with no extra blending.
                 focusDistance = _timelineFocusDistance;
-                var director = Gallop.Live.Director.instance;
-                if (_timelineFocusOnChara && director != null &&
-                    director.CharaContainerScript != null && director.CharaContainerScript.Count > 0)
-                {
-                    // character-locked shots track the lead performer's body
-                    // so handheld close-ups stay on the performer, not the set.
-                    var chara = director.CharaContainerScript[0];
-                    if (chara != null)
-                    {
-                        float charaDist = Vector3.Distance(
-                            _camera.transform.position,
-                            chara.transform.position);
-                        focusDistance = Mathf.Lerp(focusDistance, charaDist, 0.7f);
-                    }
-                }
             }
             else
             {
@@ -636,9 +632,16 @@ namespace Gallop
             float authoredAperture;
             if (_depthOfFieldActive && _timelineFocusSize >= 0f)
             {
+                // game relation (PrepareDofParam/CalculateMaxCoC decode): the COC
+                // curve stays linear, blur grows with spread and smoothness, and
+                // the focal size (sharp band, 0-30) pushes far blur outward. the
+                // volume's aperture is the COC lever, so f-number falls with the
+                // blur drivers and rises with the authored band.
                 float blurSpread = Mathf.Max(0.05f, _timelineFocusSpread);
+                float smoothness = Mathf.Max(0.1f, _timelineFocusSmoothness);
+                float band = Mathf.Clamp(_timelineFocusSize, 0f, 30f);
                 authoredAperture = Mathf.Clamp(
-                    44f / (1f + Mathf.Clamp(_timelineFocusSize, 0f, 30f) * 0.5f) / blurSpread,
+                    32f / ((1f + band * 0.5f) * (blurSpread * (0.5f + 0.5f * smoothness))),
                     1.1f, 32f);
             }
             else
