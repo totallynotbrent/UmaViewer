@@ -18,6 +18,7 @@ namespace Gallop.Live
         private Camera _feedCamera;
         private LiveTimelineControl _ctl;
         private bool _censusLogged;
+        private bool _widthRateLogged;
         private readonly List<Renderer> _monitorRenderers = new List<Renderer>();
 
         private void LateUpdate()
@@ -57,7 +58,7 @@ namespace Gallop.Live
             if (!_censusLogged)
             {
                 _censusLogged = true;
-                Director.FileLog($"[monitorfeed] live feed active: posGroups={sheet.monitorCameraPosKeys.Count} lookGroups={(sheet.monitorCameraLookAtKeys?.Count ?? 0)} monitors={_monitorRenderers.Count} res={FeedWidth}x{FeedHeight}");
+                Director.FileLog($"[monitorfeed] live feed active: posGroups={sheet.monitorCameraPosKeys.Count} lookGroups={(sheet.monitorCameraLookAtKeys?.Count ?? 0)} monitors={_monitorRenderers.Count} res={_feedTexture.width}x{_feedTexture.height}");
             }
         }
 
@@ -67,7 +68,19 @@ namespace Gallop.Live
         {
             if (_feedTexture == null)
             {
-                _feedTexture = new RenderTexture(FeedWidth, FeedHeight, 24, RenderTextureFormat.DefaultHDR)
+                int width = FeedWidth;
+                // authored rate narrows the feed like the game's monitor texture width.
+                var monitor = _ctl?.data?.MonitorCameraSettings;
+                if (monitor != null && monitor.IsEnabledTextureWidthRate && monitor.TextureWidthRate > 0f)
+                {
+                    width = Mathf.Max(64, Mathf.RoundToInt(FeedWidth * monitor.TextureWidthRate));
+                    if (!_widthRateLogged)
+                    {
+                        _widthRateLogged = true;
+                        Director.FileLog($"[monitorfeed] texture width rate {monitor.TextureWidthRate} applied: {width}x{FeedHeight}");
+                    }
+                }
+                _feedTexture = new RenderTexture(width, FeedHeight, 24, RenderTextureFormat.DefaultHDR)
                 {
                     name = "MonitorLiveFeed",
                     filterMode = FilterMode.Bilinear,

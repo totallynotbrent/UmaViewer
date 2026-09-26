@@ -1217,6 +1217,23 @@ namespace Gallop.Live
             return 1f;
         }
 
+        // game accessor: the authored sharp-band floor, data value clamped up to 30.
+        public float GetMaxForcalSize()
+        {
+            var data = _liveTimelineControl?.data;
+            if (data == null)
+                return 30f;
+            return Mathf.Max(data.maxForcalSize, 30f);
+        }
+
+        // game accessor: the authored arena anchor, timeline data when controlled.
+        public Vector3 GetStageArenaPosition()
+        {
+            if (isTimelineControlled)
+                return _liveTimelineControl.data.StageArenaPosition;
+            return new Vector3(0f, 1f, 10f);
+        }
+
         private void UpdateMirrorReflections()
         {
             if (_mirrorReflections == null || _mirrorReflections.Count == 0)
@@ -1401,9 +1418,11 @@ namespace Gallop.Live
             }
             imageEffect.SetTimelineFocusSpread(Mathf.Max(0.05f, updateInfo.blurSpread));
             imageEffect.SetTimelineFocusSmoothness(Mathf.Max(0.1f, updateInfo.dofSmoothness));
+            // game clamp: the authored sharp band never exceeds the per-song floor.
+            float forcalSize = Mathf.Clamp(updateInfo.forcalSize, 0f, GetMaxForcalSize());
             imageEffect.SetTimelineFocus(
                 focusDistance,
-                Mathf.Max(0f, updateInfo.forcalSize),
+                forcalSize,
                 updateInfo.charactor == 1);
         }
 

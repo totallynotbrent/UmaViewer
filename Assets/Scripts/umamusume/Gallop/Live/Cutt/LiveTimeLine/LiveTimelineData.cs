@@ -133,6 +133,12 @@ namespace Gallop.Live.Cutt
     }
 
     [System.Serializable]
+    public class LiveTimelineProjectorSettings
+    {
+        public bool IsEnabledProjectorObjectForLightMode;
+    }
+
+    [System.Serializable]
     public class LiveTimelineMonitorCameraSettings
     {
         public bool IsEnabledTextureWidthRate;
@@ -206,6 +212,7 @@ namespace Gallop.Live.Cutt
         public LiveTimelineA2USettings a2uSettings;
         public LiveTimelineMultiCameraSettings multiCameraSettings;
         public LiveTimelineMonitorCameraSettings MonitorCameraSettings;
+        public LiveTimelineProjectorSettings ProjectorSettings;
         public List<LiveTimelineWorkSheet> worksheetList;
         public LiveTimelineData.FacialTimelineType FacialLineType;
         public bool isUseHQParticle;
@@ -215,6 +222,11 @@ namespace Gallop.Live.Cutt
         public float maxForcalSize;
         public bool isUseMirrorScanMotionDictionary;
         public bool isUseGameSettingToParticle;
+        public Vector3 StageArenaPosition;
+        public bool IsChangedCharaLayerOnlyMirrorRendering;
+        public bool IsRenderMirrorObjectOnlyOnBaseCamera;
+        public bool UseDepthOnlyCube;
+        public int DepthOnlyCubeCount;
         public LiveTimelineStageObjectsSettings stageObjectsSettings;
         public LiveTimelineDebugSettings debugSettings;
     }
