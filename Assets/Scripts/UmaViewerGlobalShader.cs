@@ -11,7 +11,9 @@ public class UmaViewerGlobalShader : MonoBehaviour
     // offset shifts every outline, fattening/brightening silhouettes.
     public float _GlobalOutlineOffset = 0f;
     public float _GlobalOutlineWidth = 1.0f;
-    public float _GlobalCameraFov = 0.1f;
+    // the game's SetGlobalCameraFov publishes min(fieldOfView / 30, 1), a normalized
+    // fov scale; FixedUpdate keeps it current and Start publishes this default.
+    public float _GlobalCameraFov = 1.0f;
     public float _CylinderBlend = 0.0f;
     // defaults decoded from the game's GraphicSettings .ctor default table
     // (dump 2026-09-26, out/graphicsettings_default_colors.json): toon white with
@@ -143,23 +145,19 @@ public class UmaViewerGlobalShader : MonoBehaviour
 
     private void FixedUpdate()
     {
-        //Used to calculate the correct outline
-        //Outline need more adjust in live
-        var umaContainer = UmaViewerBuilder.Instance.CurrentUMAContainer;
-        if (umaContainer != null && umaContainer.UpBodyBone)
+        // the game publishes min(fieldOfView / 30, 1) each frame from
+        // GraphicSettings::SetGlobalCameraFov (disasm 0x7ff8e49f1f70, divss const
+        // 30.0, minss 1.0); the outline shaders consume it as a fov scale.
+        var aniCamera = UmaViewerBuilder.Instance.AnimationCamera;
+        var camera = aniCamera != null && aniCamera.enabled ? aniCamera : Camera.main;
+        if (camera != null)
         {
-            var upBone = umaContainer.UpBodyBone;
-            var aniCamera = UmaViewerBuilder.Instance.AnimationCamera;
-            var camera = aniCamera.enabled ? aniCamera : Camera.main;
-            var distance = Vector3.Distance(camera.transform.position, upBone.transform.position);
-            var outlineWidth = (umaContainer.IsMini ? 20f : 40.0f) * (distance * Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad));
-            Shader.SetGlobalFloat("_GlobalCameraFov", outlineWidth);
+            Shader.SetGlobalFloat("_GlobalCameraFov", Mathf.Min(camera.fieldOfView / 30f, 1f));
         }
         else
         {
-            Shader.SetGlobalFloat("_GlobalCameraFov", 30);
+            Shader.SetGlobalFloat("_GlobalCameraFov", 1f);
         }
-       
     }
 
    
