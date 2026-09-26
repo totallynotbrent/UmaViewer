@@ -1361,10 +1361,12 @@ namespace Gallop.Live.Cutt
             }
             else if (handY >= lowY)
             {
-                // between the thresholds the game applies the authored rate; the
-                // exact value sits in the stand-node component (asked in the comms
-                // file), so hold the last target at a mid strength until it lands.
-                weight = 0.6f;
+                // between the thresholds the game applies the character's runtime
+                // height rate (ModelController::GetHeightRate on the stand-node
+                // component); the equivalent normalized metric here is the hand's
+                // current height over the character's total height.
+                float charHeight = Mathf.Max(0.01f, chara.transform.lossyScale.y);
+                weight = Mathf.Clamp01(handY / charHeight);
                 target = _lastMicTarget.TryGetValue(handIK, out var last) ? last : lowTarget;
             }
             else

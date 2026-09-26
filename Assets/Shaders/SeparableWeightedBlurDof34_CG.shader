@@ -81,7 +81,10 @@ Shader "Gallop/ImageEffect/SeparableWeightedBlurDof34_CG"
             // 1/(a*z + b) with the z-projection params = the game's cb0[23]
             // linearize; eye distance normalized by the far clip.
             float z01 = 1.0 / (_ZBufferParams.x * rawDepth + _ZBufferParams.y);
-            float coc = abs(z01 - _DofFocal01) * _DofCocScale;
+            // the coc is SIGNED and the target is unorm: negative far-side values
+            // saturate to zero at the store, so the game blurs only the near side
+            // of the focal plane and the background stays sharp.
+            float coc = saturate((z01 - _DofFocal01) * _DofCocScale);
             sum.a = min(coc, _MaxCoC);
             return sum;
         }
