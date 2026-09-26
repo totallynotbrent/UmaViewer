@@ -66,18 +66,20 @@ namespace Gallop.RenderPipeline
                 float w = desc.width, h = desc.height;
                 float farClip = renderingData.cameraData.camera.farClipPlane;
 
-                // PrepareDofParam decode: the pow curve stays linear (both publishes
-                // are 1.0), farBlend widens the sharp band with the focal size, and
-                // the vertical scale rides the aspect term.
+                // PrepareDofParam decode: focal01 is the camera-space focal distance
+                // over the far clip; the coc itself is (1/z - focal) * scale from the
+                // COCBG_RICH register walk (postdofbloom_coc_downsample_decoded.md).
                 float focal01 = Mathf.Clamp01(FocusDistance / Mathf.Max(1f, farClip));
-                float farBlend = FocalSize / farClip * 0.5f + focal01;
-                _material.SetVector("_CurveParams", new Vector4(1f, 1f, farBlend, (1f / h) * (w / h)));
+                _material.SetFloat("_DofFocal01", focal01);
                 _material.SetVector("_InvRenderTargetSize", new Vector4(1f / w, 1f / h, w, h));
                 // CalculateMaxCoc decode: the coc cap scales with resolution.
                 float maxCoc = Mathf.Min(BlurSpread, (BlurSpread / 50f * 4f + 6f) / h);
                 _material.SetFloat("_MaxCoC", maxCoc);
-                _material.SetFloat("_Aspect", w / h);
-                _material.SetFloat("_bloomDofWeight", 1f);
+                // the coc scale (game cb0[140].y) widens with the authored blur
+                // spread and the sharp band: the focal size widens the in-focus
+                // zone so the far-side coc ramps later.
+                float cocScale = Mathf.Max(0.05f, BlurSpread) * (0.5f + 0.5f * Mathf.Clamp01(Smoothness)) / Mathf.Max(1f, FocalSize * 0.5f);
+                _material.SetFloat("_DofCocScale", cocScale);
                 _material.SetVector("_Offsets", new Vector4(BlurSpread / w, BlurSpread / h, BlurSpread / w, BlurSpread / h));
 
                 cmd.Blit(source, _halfA, _material, 0);          // prefilter + coc
