@@ -1428,32 +1428,21 @@ namespace Gallop.Live
                 var r = targets[i];
                 if (r == null) continue;
 
-                var sharedMats = r.sharedMaterials;
+                var profile = GetBgColorProfile(r);
+                var sharedMats = profile.sharedMaterials;
                 if (sharedMats == null || sharedMats.Length == 0) continue;
-
-                bool hasChara = false, hasDark = false, hasBright = false, hasOutline = false, hasSat = false, hasPower = false;
-                for (int s = 0; s < sharedMats.Length; s++)
-                {
-                    var sm = sharedMats[s];
-                    if (sm == null) continue;
-                    if (!hasChara && sm.HasProperty(PID_CharaColor)) hasChara = true;
-                    if (!hasDark && sm.HasProperty(PID_ToonDarkColor)) hasDark = true;
-                    if (!hasBright && sm.HasProperty(PID_ToonBrightColor)) hasBright = true;
-                    if (!hasOutline && sm.HasProperty(PID_OutlineColor)) hasOutline = true;
-                    if (!hasSat && sm.HasProperty(PID_Saturation)) hasSat = true;
-                    if (!hasPower && sm.HasProperty(PID_ColorPower)) hasPower = true;
-                    if (hasChara && hasDark && hasBright && hasOutline && hasSat && hasPower) break;
-                }
-                if (!hasChara && !hasDark && !hasBright && !hasOutline && !hasSat && !hasPower) continue;
+                if (!profile.hasCharaColor && !profile.hasToonDark && !profile.hasToonBright &&
+                    !profile.hasOutline && !profile.hasSaturation && !profile.hasColorPower)
+                    continue;
 
                 var block = GetBgColorBlock(r);
                 r.GetPropertyBlock(block);
-                if (hasChara) block.SetColor(PID_CharaColor, updateInfo.color);
-                if (hasDark) block.SetColor(PID_ToonDarkColor, updateInfo.toonDarkColor);
-                if (hasBright) block.SetColor(PID_ToonBrightColor, updateInfo.toonBrightColor);
-                if (hasOutline) block.SetColor(PID_OutlineColor, updateInfo.outlineColor);
-                if (hasSat) block.SetFloat(PID_Saturation, updateInfo.Saturation);
-                if (hasPower && updateInfo.colorPower > 0f) block.SetFloat(PID_ColorPower, updateInfo.colorPower);
+                if (profile.hasCharaColor) block.SetColor(PID_CharaColor, updateInfo.color);
+                if (profile.hasToonDark) block.SetColor(PID_ToonDarkColor, updateInfo.toonDarkColor);
+                if (profile.hasToonBright) block.SetColor(PID_ToonBrightColor, updateInfo.toonBrightColor);
+                if (profile.hasOutline) block.SetColor(PID_OutlineColor, updateInfo.outlineColor);
+                if (profile.hasSaturation) block.SetFloat(PID_Saturation, updateInfo.Saturation);
+                if (profile.hasColorPower && updateInfo.colorPower > 0f) block.SetFloat(PID_ColorPower, updateInfo.colorPower);
                 r.SetPropertyBlock(block);
             }
         }
@@ -1476,7 +1465,7 @@ namespace Gallop.Live
                     {
                         var r = group.renderers[k];
                         if (r == null) continue;
-                        var sharedMats = r.sharedMaterials;
+                        var sharedMats = GetBgColorProfile(r).sharedMaterials;
                         if (sharedMats == null || sharedMats.Length == 0) continue;
                         var block = GetBgColorBlock(r);
                         r.GetPropertyBlock(block);
@@ -1495,7 +1484,7 @@ namespace Gallop.Live
             {
                 var r = legacyRendererTargets[i];
                 if (r == null) continue;
-                var sharedMats = r.sharedMaterials;
+                var sharedMats = GetBgColorProfile(r).sharedMaterials;
                 if (sharedMats == null || sharedMats.Length == 0) continue;
                 var block = GetBgColorBlock(r);
                 r.GetPropertyBlock(block);
@@ -1760,6 +1749,44 @@ namespace Gallop.Live
             return block;
         }
 
+        // per-renderer static profile: sharedMaterials allocates a new array on every
+        // call, and the HasProperty scans are constant once the stage loads, so both
+        // are cached to stop the per-frame garbage the bgcolor driver was generating.
+        private class BgColorRendererProfile
+        {
+            public Material[] sharedMaterials;
+            public bool hasCharaColor;
+            public bool hasToonDark;
+            public bool hasToonBright;
+            public bool hasOutline;
+            public bool hasSaturation;
+            public bool hasColorPower;
+        }
+
+        private readonly Dictionary<Renderer, BgColorRendererProfile> _bgColorProfiles =
+            new Dictionary<Renderer, BgColorRendererProfile>();
+
+        private BgColorRendererProfile GetBgColorProfile(Renderer r)
+        {
+            if (_bgColorProfiles.TryGetValue(r, out var profile))
+                return profile;
+            var mats = r.sharedMaterials;
+            profile = new BgColorRendererProfile { sharedMaterials = mats };
+            for (int s = 0; s < mats.Length; s++)
+            {
+                var sm = mats[s];
+                if (sm == null) continue;
+                if (!profile.hasCharaColor && sm.HasProperty(PID_CharaColor)) profile.hasCharaColor = true;
+                if (!profile.hasToonDark && sm.HasProperty(PID_ToonDarkColor)) profile.hasToonDark = true;
+                if (!profile.hasToonBright && sm.HasProperty(PID_ToonBrightColor)) profile.hasToonBright = true;
+                if (!profile.hasOutline && sm.HasProperty(PID_OutlineColor)) profile.hasOutline = true;
+                if (!profile.hasSaturation && sm.HasProperty(PID_Saturation)) profile.hasSaturation = true;
+                if (!profile.hasColorPower && sm.HasProperty(PID_ColorPower)) profile.hasColorPower = true;
+            }
+            _bgColorProfiles[r] = profile;
+            return profile;
+        }
+
         private void RebuildBgColorCache()
         {
             _bgColorRendererCache.Clear();
@@ -1769,6 +1796,7 @@ namespace Gallop.Live
             _allStageRenderers.Clear();
             _bgColor2Groups.Clear();
             _bgColorBlocks.Clear();
+            _bgColorProfiles.Clear();
             _bindingsBySharedMaterialRef.Clear();
             _bindingsBySharedMaterialName.Clear();
 
