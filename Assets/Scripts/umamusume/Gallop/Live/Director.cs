@@ -2097,6 +2097,9 @@ namespace Gallop.Live
         {
             UnbindTimelineEvents();
             _fixtureLights.Clear();
+            // static prop registries outlive the scene; drop them so the next live
+            // starts from a clean props/material cache.
+            StagePropsDriver.ClearRegisteredProps();
 
             if (_instance == this)
                 _instance = null;

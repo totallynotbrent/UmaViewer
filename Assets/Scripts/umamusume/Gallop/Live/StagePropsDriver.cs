@@ -44,6 +44,12 @@ namespace Gallop.Live
             }
         }
 
+        // the per-renderer instance materials, instantiated once; touching
+        // Renderer.material every frame re-allocates the managed wrapper after each
+        // GC collection, which was the props section's garbage source.
+        private static readonly Dictionary<Renderer, Material> _propsMaterials =
+            new Dictionary<Renderer, Material>();
+
         // applies a timeline props color/visibility update to every registered prop
         // renderer; null-safe when no props have registered yet.
         public static void ApplyPropsColor(Color color, bool rendererEnable)
@@ -57,9 +63,22 @@ namespace Gallop.Live
                     if (r == null)
                         continue;
                     r.enabled = rendererEnable;
-                    r.material.color = color;
+                    if (!_propsMaterials.TryGetValue(r, out var mat) || mat == null)
+                    {
+                        mat = r.material;
+                        _propsMaterials[r] = mat;
+                    }
+                    mat.color = color;
                 }
             }
+        }
+
+        // clears the cached instance materials; called when props registers change so
+        // stale renderers never keep materials alive across lives.
+        public static void ClearRegisteredProps()
+        {
+            _propsRenderersByJoint.Clear();
+            _propsMaterials.Clear();
         }
 
         private void OnEnable()
