@@ -1361,12 +1361,14 @@ namespace Gallop.Live.Cutt
             }
             else if (handY >= lowY)
             {
-                // between the thresholds the game applies the character's runtime
-                // height rate (ModelController::GetHeightRate on the stand-node
-                // component); the equivalent normalized metric here is the hand's
-                // current height over the character's total height.
-                float charHeight = Mathf.Max(0.01f, chara.transform.lossyScale.y);
-                weight = Mathf.Clamp01(handY / charHeight);
+                // between the thresholds the game applies the character's height rate
+                // (ModelController::GetHeightRate, register-exact): a per-character
+                // constant from the scale product through the 0.827 / 0.338 / 1.6665
+                // transform, not a live hand-height fraction. BodyScale carries the
+                // game's heightCm-over-default-model-height ratio and the viewer
+                // applies no extra parent scale, so it is the full product.
+                float totalScale = Mathf.Max(0.01f, chara.BodyScale);
+                weight = Mathf.Clamp((totalScale - 0.827f) / 0.338f, 0f, 1.6665f);
                 target = _lastMicTarget.TryGetValue(handIK, out var last) ? last : lowTarget;
             }
             else
