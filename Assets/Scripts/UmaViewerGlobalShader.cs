@@ -7,9 +7,9 @@ public class UmaViewerGlobalShader : MonoBehaviour
     
     public float _Global_MaxDensity = 1.0f;
     public float _Global_MaxHeight = 10.0f;
-    // game default is 0 (SetDefaultCharacterEnv never writes it); a nonzero
-    // offset shifts every outline, fattening/brightening silhouettes.
-    public float _GlobalOutlineOffset = 0f;
+    // the graphicsettings ctor writes offset 1.0 alongside the width; only the
+    // width gets rewritten later, so the offset default survives at 1.0.
+    public float _GlobalOutlineOffset = 1.0f;
     public float _GlobalOutlineWidth = 1.0f;
     // the game's SetGlobalCameraFov publishes min(fieldOfView / 30, 1), a normalized
     // fov scale; FixedUpdate keeps it current and Start publishes this default.

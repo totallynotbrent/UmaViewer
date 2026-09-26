@@ -72080,7 +72080,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _Global_MaxDensity: 1
   _Global_MaxHeight: 10
-  _GlobalOutlineOffset: 0
+  _GlobalOutlineOffset: 1
   _GlobalOutlineWidth: 1
   _GlobalCameraFov: 0.1
   _CylinderBlend: 0

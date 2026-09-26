@@ -66,20 +66,19 @@ namespace Gallop.RenderPipeline
                 float w = desc.width, h = desc.height;
                 float farClip = renderingData.cameraData.camera.farClipPlane;
 
-                // PrepareDofParam decode: focal01 is the camera-space focal distance
-                // over the far clip; the coc itself is (1/z - focal) * scale from the
-                // COCBG_RICH register walk (postdofbloom_coc_downsample_decoded.md).
+                // PrepareDofParam decode: the coc subtrahend is farBlend =
+                // DofFocalSize/farClip*0.5 + focal01, and the scale is offsetY =
+                // InvRT.y * aspect (the resolution-derived runtime value the game
+                // picks by target orientation, 1/288 portrait or 1/911 landscape).
                 float focal01 = Mathf.Clamp01(FocusDistance / Mathf.Max(1f, farClip));
-                _material.SetFloat("_DofFocal01", focal01);
+                float farBlend = FocalSize / Mathf.Max(1f, farClip) * 0.5f + focal01;
+                _material.SetFloat("_DofFocal01", farBlend);
                 _material.SetVector("_InvRenderTargetSize", new Vector4(1f / w, 1f / h, w, h));
                 // CalculateMaxCoc decode: the coc cap scales with resolution.
                 float maxCoc = Mathf.Min(BlurSpread, (BlurSpread / 50f * 4f + 6f) / h);
                 _material.SetFloat("_MaxCoC", maxCoc);
-                // the coc scale (game cb0[140].y) widens with the authored blur
-                // spread and the sharp band: the focal size widens the in-focus
-                // zone so the far-side coc ramps later.
-                float cocScale = Mathf.Max(0.05f, BlurSpread) * (0.5f + 0.5f * Mathf.Clamp01(Smoothness)) / Mathf.Max(1f, FocalSize * 0.5f);
-                _material.SetFloat("_DofCocScale", cocScale);
+                float offsetY = w <= h ? 1f / 288f : 1f / 911f;
+                _material.SetFloat("_DofCocScale", offsetY);
                 _material.SetVector("_Offsets", new Vector4(BlurSpread / w, BlurSpread / h, BlurSpread / w, BlurSpread / h));
 
                 cmd.Blit(source, _halfA, _material, 0);          // prefilter + coc
