@@ -66,6 +66,7 @@ MonoBehaviour:
   - {fileID: 7263918440012451001}
   - {fileID: 7263918440012451002}
   - {fileID: 7263918440012451003}
+  - {fileID: 8841213009254371123}
   m_RendererFeatureMap: a2e53b18a90641ffaee5ec1f99bbce1c
   m_UseNativeRenderPass: 0
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -183,5 +184,18 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9dd223d635624bf1bd1701adbc131671, type: 3}
   m_Name: GallopTransmittedLightFeature
+  m_EditorClassIdentifier: 
+  m_Active: 1
+--- !u!114 &8841213009254371123
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 477de5da6d53449da6f895e35e3e45cc, type: 3}
+  m_Name: GallopDofFeature
   m_EditorClassIdentifier: 
   m_Active: 1

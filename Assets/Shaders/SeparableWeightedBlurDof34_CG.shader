@@ -1,0 +1,161 @@
+// the game's separable weighted-blur DOF (SeparableWeightedBlurDof34), ported from
+// the decoded DXBC: prefilter 4-tap with 1.25/1.5 weights, blurH 5x0.2, blurV
+// 0.75/0.5 scaled by 1/3.5, composite squared-MAD against the COC texture.
+// pass indices follow the game's material: 1 = prefilter, 2 = blurH, 3 = blurV,
+// 5 = composite (FindPass names PASS_DOF34_*).
+Shader "Gallop/ImageEffect/SeparableWeightedBlurDof34_CG"
+{
+    Properties
+    {
+        _MainTex ("Texture", 2D) = "white" {}
+    }
+    SubShader
+    {
+        Cull Off
+        ZWrite Off
+        ZTest Always
+        Blend Off
+
+        CGINCLUDE
+        #include "UnityCG.cginc"
+
+        sampler2D _MainTex;
+        float4 _MainTex_TexelSize;
+        sampler2D _CocTex;
+        sampler2D _CameraDepthTexture;
+        float4 _CurveParams;     // x,y = pow curve (game leaves linear = 1), z = farBlend, w = offsetY
+        float _bloomDofWeight;
+        float4 _InvRenderTargetSize;
+        float _MaxCoC;
+        float _Aspect;
+        float4 _Offsets;         // id 178: the blur-size texel deltas from BlurBlt
+
+        static const float WEIGHT_PREFILTER_A = 1.25;
+        static const float WEIGHT_PREFILTER_B = 1.5;
+
+        struct vs_blur
+        {
+            float4 pos : POSITION;
+            float2 uv  : TEXCOORD0;
+            float4 off1 : TEXCOORD1;
+            float4 off2 : TEXCOORD2;
+            float4 off3 : TEXCOORD3;
+            float4 off4 : TEXCOORD4;
+        };
+
+        // the VS emits four sample offsets scaled by the blur deltas (cb0[2] in the
+        // game's blob = blur size * invRT); UV0 stays the plain blit uv.
+        vs_blur vert_blur(appdata_img v, float4 off1 : TEXCOORD1, float4 off2 : TEXCOORD2,
+                          float4 off3 : TEXCOORD3, float4 off4 : TEXCOORD4)
+        {
+            vs_blur o;
+            o.pos = UnityObjectToClipPos(v.vertex);
+            o.uv = v.texcoord;
+            o.off1 = float4(v.texcoord + _Offsets.xy * 1.0, 0, 0);
+            o.off2 = float4(v.texcoord + _Offsets.xy * 2.0, 0, 0);
+            o.off3 = float4(v.texcoord + _Offsets.zw * 1.0, 0, 0);
+            o.off4 = float4(v.texcoord + _Offsets.zw * 2.0, 0, 0);
+            return o;
+        }
+
+        // prefilter: downsamples the color and computes the coc from the camera
+        // depth with the game's linear curve (both pow publishes are 1.0, so coc
+        // is the distance ratio scaled by the curve params); the 1.25/1.5 weights
+        // shape the downsample taps like the game's prefilter.
+        float4 frag_prefilter(v2f_img i) : SV_Target
+        {
+            float2 t = _InvRenderTargetSize.xy * WEIGHT_PREFILTER_A;
+            float4 c0 = tex2D(_MainTex, i.uv);
+            float4 c1 = tex2D(_MainTex, i.uv + t);
+            float4 c2 = tex2D(_MainTex, i.uv - t);
+            float4 c3 = tex2D(_MainTex, i.uv + float2(t.y, -t.x));
+            float4 sum = (c0 + c1 + c2 + c3) * WEIGHT_PREFILTER_B;
+
+            float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
+            float eyeDepth = LinearEyeDepth(rawDepth);
+            float depth01 = saturate(eyeDepth / _ProjectionParams.z);
+            float band = _CurveParams.z;
+            float coc = saturate(abs(depth01 - _CurveParams.w) * band);
+            coc = min(coc, _MaxCoC);
+            sum.a = coc;
+            return sum;
+        }
+
+        // blurH: 5 samples * 0.2, MAX with the CoC from t1
+        float4 frag_blur_h(vs_blur i) : SV_Target
+        {
+            float4 coc = tex2D(_CocTex, i.uv);
+            float4 acc = 0;
+            acc += tex2D(_MainTex, i.uv) * 0.2;
+            acc += tex2D(_MainTex, i.off1.xy) * 0.2;
+            acc += tex2D(_MainTex, i.off2.xy) * 0.2;
+            acc += tex2D(_MainTex, i.off3.xy) * 0.2;
+            acc += tex2D(_MainTex, i.off4.xy) * 0.2;
+            acc.a = max(coc.a, acc.a);
+            return acc;
+        }
+
+        // blurV: taps 0.75/0.5 scaled by 1/3.5, MAX with the CoC
+        float4 frag_blur_v(vs_blur i) : SV_Target
+        {
+            float4 coc = tex2D(_CocTex, i.uv);
+            float2 t = _InvRenderTargetSize.xy;
+            float4 acc = tex2D(_MainTex, i.uv) * 0.28571428;
+            acc += tex2D(_MainTex, i.uv + float2(0, t.y * 0.75)) * 0.28571428 * 0.75;
+            acc += tex2D(_MainTex, i.uv - float2(0, t.y * 0.75)) * 0.28571428 * 0.75;
+            acc += tex2D(_MainTex, i.uv + float2(t.x * 0.5, t.y * 0.5)) * 0.28571428 * 0.5;
+            acc += tex2D(_MainTex, i.uv - float2(t.x * 0.5, t.y * 0.5)) * 0.28571428 * 0.5;
+            acc.a = max(coc.a, acc.a);
+            return acc;
+        }
+
+        sampler2D _BlurTex;
+
+        // composite: blurred^2 blend against the depth-sampled sharp image, MAD
+        // weighted by the CoC (the game's final fold)
+        float4 frag_composite(v2f_img i) : SV_Target
+        {
+            float coc = tex2D(_CocTex, i.uv).a;
+            float4 sharp = tex2D(_MainTex, i.uv);
+            float4 blurred = tex2D(_BlurTex, i.uv);
+            blurred *= blurred;
+            float w = saturate(coc);
+            return blurred * w + sharp * (1.0 - w);
+        }
+        ENDCG
+
+        Pass // 1 - prefilter
+        {
+            Name "Prefilter"
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag_prefilter
+            ENDCG
+        }
+        Pass // 2 - blurH
+        {
+            Name "BlurH"
+            CGPROGRAM
+            #pragma vertex vert_blur
+            #pragma fragment frag_blur_h
+            ENDCG
+        }
+        Pass // 3 - blurV
+        {
+            Name "BlurV"
+            CGPROGRAM
+            #pragma vertex vert_blur
+            #pragma fragment frag_blur_v
+            ENDCG
+        }
+        Pass // 5 - composite
+        {
+            Name "Composite"
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag_composite
+            ENDCG
+        }
+    }
+    Fallback Off
+}

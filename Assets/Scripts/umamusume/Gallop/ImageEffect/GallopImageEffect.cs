@@ -83,6 +83,9 @@ namespace Gallop
         private bool _timelineFocusOnChara;
         private bool _depthOfFieldActive;
 
+        // cached lookup of the game dof chain shader.
+        private Shader _gameDofShader;
+
         public bool DepthOfFieldActive
         {
             get => _depthOfFieldActive;
@@ -641,6 +644,25 @@ namespace Gallop
             {
                 Vector3 focusPoint = control.LatestCameraLookAtPosition;
                 focusDistance = Vector3.Distance(_camera.transform.position, focusPoint);
+            }
+
+            // drive the game's own dof chain when its shader is healthy; the urp
+            // volume bokeh below is only the fallback for unsupported gfx apis.
+            if (_gameDofShader == null)
+                _gameDofShader = Shader.Find("Gallop/ImageEffect/SeparableWeightedBlurDof34_CG");
+            bool gameDofHealthy = _gameDofShader != null && _gameDofShader.isSupported;
+
+            Gallop.RenderPipeline.GallopDofFeature.Active = gameDofHealthy && _depthOfFieldActive;
+            if (Gallop.RenderPipeline.GallopDofFeature.Active)
+            {
+                Gallop.RenderPipeline.GallopDofFeature.FocusDistance = focusDistance;
+                Gallop.RenderPipeline.GallopDofFeature.FocalSize = _timelineFocusSize;
+                Gallop.RenderPipeline.GallopDofFeature.BlurSpread = Mathf.Max(0.05f, _timelineFocusSpread);
+                Gallop.RenderPipeline.GallopDofFeature.Smoothness = Mathf.Max(0.1f, _timelineFocusSmoothness);
+                // the game chain owns the screen; the volume bokeh must not double-
+                // blur on top of it.
+                _dof.active = false;
+                return;
             }
 
             _dof.active = true;
