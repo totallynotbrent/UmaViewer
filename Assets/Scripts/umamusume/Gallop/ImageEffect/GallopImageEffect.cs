@@ -441,7 +441,7 @@ namespace Gallop
 
             // one-shot brightness census so a bench log separates stage brightness
             // (global shader inputs) from post brighteners (exposure, grade, dimmer).
-            if (!_brightnessCensusLogged && useGameBloom)
+            if (!_brightnessCensusLogged)
             {
                 _brightnessCensusLogged = true;
                 Director.FileLog(
