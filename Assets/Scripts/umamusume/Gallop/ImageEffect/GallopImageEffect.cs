@@ -407,7 +407,7 @@ namespace Gallop
             {
                 _gameBloomStateLogged = true;
                 _gameBloomStateLoggedValue = useGameBloom;
-                Director.FileLog($"[gamebloom] state useGameBloom={useGameBloom} authoredIntensity={authoredBloomIntensity:F2} enableBloom={param.IsEnableBloom} blend={param.BloomBlendMode} dofWeight={param.BloomDofWeight:F2}");
+                Director.FileLog($"[gamebloom] state useGameBloom={useGameBloom} authoredIntensity={authoredBloomIntensity:F2} enableBloom={param.IsEnableBloom} blend={param.BloomBlendMode} dofWeight={param.BloomDofWeight:F2} outputDimmer={Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.OutputDimmer:F2}");
             }
             Gallop.RenderPipeline.GallopGameBloomFeature.GallopGameBloomPass.GameBloomEnabled = useGameBloom;
             if (useGameBloom)

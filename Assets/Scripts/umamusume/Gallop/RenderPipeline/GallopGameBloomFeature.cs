@@ -48,6 +48,11 @@ namespace Gallop.RenderPipeline
             public static float Threshold = 0.8f;
             public static float BlurSize = 3f;
             public static float BloomDofWeight = 1f;
+            // output brightness scale for the whole composite chain; the game's own
+            // material carries a serialized dimmer we cannot read, and the ported
+            // chain reads slightly hotter than the game, so this scales the final
+            // output down instead of over-driving every authored track.
+            public static float OutputDimmer = 0.9f;
             public static float BloomIsScreenBlend = 1f;
 
             // the postfilm block the game's screen-overlay chain publishes every
@@ -142,6 +147,7 @@ namespace Gallop.RenderPipeline
             private int _lastLoggedH = -1;
 
             private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+            private static readonly int DimmerColorId = Shader.PropertyToID("_DimmerColor");
             private static readonly int PostFilmPowerId = Shader.PropertyToID("_PostFilmPower");
             private static readonly int PostFilmOffsetParamId = Shader.PropertyToID("_PostFilmOffsetParam");
             private static readonly int PostFilmOptionParamId = Shader.PropertyToID("_PostFilmOptionParam");
@@ -337,8 +343,12 @@ namespace Gallop.RenderPipeline
                 {
                     ClearFilmKeywords(compositeMaterial);
                 }
-                // the bloom composite is always pass 0, drawn the legacy way.
+                // the bloom composite is always pass 0, drawn the legacy way. the
+                // dimmer scales the composite output so the ported chain can sit at
+                // the game's brightness without editing any authored track.
                 compositeMaterial.SetTexture(MainTexId, source);
+                if (compositeMaterial.HasProperty(DimmerColorId))
+                    compositeMaterial.SetColor(DimmerColorId, new Color(OutputDimmer, OutputDimmer, OutputDimmer, 1f));
                 cmd.Blit(source.rt, _composite.rt, compositeMaterial, 0);
                 // the game draws up to three film layers after the composite, each
                 // gated by its own validity and drawn through the film passes with
@@ -357,6 +367,8 @@ namespace Gallop.RenderPipeline
                     SetFilmGlobals(cmd, layer, filmSrc);
                     int filmPass = (i == 0 ? 1 : 3) + (layer.inverseVignette ? 1 : 0);
                     compositeMaterial.SetTexture(MainTexId, filmSrc.rt);
+                    if (compositeMaterial.HasProperty(DimmerColorId))
+                        compositeMaterial.SetColor(DimmerColorId, new Color(OutputDimmer, OutputDimmer, OutputDimmer, 1f));
                     cmd.Blit(filmSrc.rt, filmDst.rt, compositeMaterial, filmPass);
                     var swap = filmSrc;
                     filmSrc = filmDst;
@@ -489,9 +501,11 @@ namespace Gallop.RenderPipeline
                 }
                 if (m.HasProperty("_DimmerColor") && m.GetColor("_DimmerColor").r == 0f)
                 {
-                    // the composite multiplies its whole output by the dimmer color.
-                    m.SetColor("_DimmerColor", Color.white);
-                    Gallop.Live.Director.FileLog("[gamebloom] _DimmerColor defaulted to zero; pinned to white");
+                    // the composite multiplies its whole output by the dimmer color; a
+                    // fresh material carries zero so it must be pinned, and the pin is
+                    // the same output dimmer the draws apply.
+                    m.SetColor("_DimmerColor", new Color(OutputDimmer, OutputDimmer, OutputDimmer, 1f));
+                    Gallop.Live.Director.FileLog($"[gamebloom] _DimmerColor defaulted to zero; pinned to dimmer {OutputDimmer:F2}");
                 }
             }
 
