@@ -69,7 +69,11 @@ Shader "Gallop/ImageEffect/SeparableWeightedBlurDof34_CG"
             float4 c1 = tex2D(_MainTex, i.uv + t);
             float4 c2 = tex2D(_MainTex, i.uv - t);
             float4 c3 = tex2D(_MainTex, i.uv + float2(t.y, -t.x));
-            float4 sum = (c0 + c1 + c2 + c3) * WEIGHT_PREFILTER_B;
+            // the game's downsample-conservent pass normalizes its weighted taps
+            // (final MUL by a ~1/7 constant); an unnormalized 4x1.5 sum would feed
+            // the squared-blur composite a 6x overbright signal and blow out every
+            // blurred region.
+            float4 sum = (c0 + c1 + c2 + c3) * WEIGHT_PREFILTER_B / (4.0 * WEIGHT_PREFILTER_B);
 
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
             float eyeDepth = LinearEyeDepth(rawDepth);
