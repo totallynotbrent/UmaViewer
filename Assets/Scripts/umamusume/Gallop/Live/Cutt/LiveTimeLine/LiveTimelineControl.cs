@@ -1285,8 +1285,18 @@ namespace Gallop.Live.Cutt
             {
                 // release both hands whenever the current key is not a mic-stand key so
                 // a finished mic section never leaves a hand pinned.
-                if (leftIK != null) leftIK.IKPositionWeight = 0f;
-                if (rightIK != null) rightIK.IKPositionWeight = 0f;
+                if (leftIK != null)
+                {
+                    leftIK.IKPositionWeight = 0f;
+                    _lastMicTarget.Remove(leftIK);
+                    _lastMicWeight.Remove(leftIK);
+                }
+                if (rightIK != null)
+                {
+                    rightIK.IKPositionWeight = 0f;
+                    _lastMicTarget.Remove(rightIK);
+                    _lastMicWeight.Remove(rightIK);
+                }
                 return;
             }
 
@@ -1318,11 +1328,12 @@ namespace Gallop.Live.Cutt
             else if (rightIK != null) rightIK.IKPositionWeight = 0f;
         }
 
-        // aim one hand at its mic node with the game's height switch: the two target
-        // candidates are node + Low offset and node + High offset; the weight rides
-        // with the hand's animated height between the two target heights (>= high
-        // target -> full High, <= low target -> the 0.5 hysteresis rate, between ->
-        // proportional). below both it keeps tracking, matching stand-node state 4.
+        // aim one hand at its mic node with the game's height switch (stand-node
+        // update decode): the hand's animated height picks the offset DISCRETELY
+        // (>= high -> High target, >= low -> partial rate, below -> keep tracking
+        // the last target), and the weight gates how hard the limb solves toward
+        // it. the offset never slides between the pair mid-hold; only the key
+        // interpolation moves it.
         private static void AimHandAtMicNode(
             UmaContainerCharacter chara,
             IKSolverLimb handIK,
@@ -1342,16 +1353,39 @@ namespace Gallop.Live.Cutt
             float lowY = lowTarget.y;
             float highY = highTarget.y;
             float weight;
+            Vector3 target;
             if (handY >= highY)
+            {
                 weight = 1f;
+                target = highTarget;
+            }
             else if (handY >= lowY)
-                weight = 0.5f + 0.5f * Mathf.Clamp01((handY - lowY) / Mathf.Max(0.01f, highY - lowY));
+            {
+                // between the thresholds the game applies the authored rate; the
+                // exact value sits in the stand-node component (asked in the comms
+                // file), so hold the last target at a mid strength until it lands.
+                weight = 0.6f;
+                target = _lastMicTarget.TryGetValue(handIK, out var last) ? last : lowTarget;
+            }
             else
-                weight = 0.5f;
-            Vector3 offset = Vector3.Lerp(lowOffset, highOffset, weight);
-            handIK.IKPosition = node.position + chara.transform.TransformVector(offset);
-            handIK.IKPositionWeight = 1f;
+            {
+                // below the low threshold the stand-node keeps tracking (state 4):
+                // persist the previous target and weight rather than forcing low.
+                weight = _lastMicWeight.TryGetValue(handIK, out var w) ? w : 0.6f;
+                target = _lastMicTarget.TryGetValue(handIK, out var t) ? t : lowTarget;
+            }
+            _lastMicTarget[handIK] = target;
+            _lastMicWeight[handIK] = weight;
+            handIK.IKPosition = target;
+            handIK.IKPositionWeight = weight;
         }
+
+        // per-hand mic tracking state so the below-threshold branch can keep the
+        // last target like the game's stand-node state 4.
+        private static readonly Dictionary<IKSolverLimb, Vector3> _lastMicTarget =
+            new Dictionary<IKSolverLimb, Vector3>();
+        private static readonly Dictionary<IKSolverLimb, float> _lastMicWeight =
+            new Dictionary<IKSolverLimb, float>();
 
         // mic nodes are resolved per chara once and cached; rig lookups are too
         // expensive to repeat on every mic-stand frame.
