@@ -485,6 +485,12 @@ namespace Gallop.Live
                             _cachedBgColorMPB.SetColor("_ToonBrightColor", updateInfo.toonBrightColor);
                             _cachedBgColorMPB.SetColor("_OutlineColor", updateInfo.outlineColor);
                             _cachedBgColorMPB.SetFloat("_Saturation", updateInfo.Saturation);
+                            // the game scales each character's outline width by the
+                            // authored power through the model controller
+                            // (SetOutlineWidthForPower); the property block carries
+                            // the scaled width for the chara shaders' _OutlineWidth.
+                            float globalOutlineWidth = Shader.GetGlobalFloat("_GlobalOutlineWidth");
+                            _cachedBgColorMPB.SetFloat("_OutlineWidth", globalOutlineWidth * Mathf.Max(0f, updateInfo.outlineWidthPower));
                             foreach (var renderer in container.Renderers)
                             {
                                 renderer.SetPropertyBlock(_cachedBgColorMPB);
