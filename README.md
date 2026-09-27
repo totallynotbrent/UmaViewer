@@ -1,4 +1,12 @@
 # Uma Viewer 
+
+> Archived. I stopped working on this in September 2026. The concert work had
+> stalled for a while by then: every lighting fix broke something else, and after
+> weeks of that the viewer looked worse than when I started. The character and
+> stage viewer still works fine, so the repo stays up as-is for anyone who wants
+> to build on it. The newest code is on the Experimental branch, and the
+> prerelease builds are still attached to the Releases page.
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 ⚠️ If you see **"Failed to load il2cpp"** or dlls or the app cannot start on Windows, it may be blocked by **Windows Smart App Control**.
 

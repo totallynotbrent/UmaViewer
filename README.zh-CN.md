@@ -1,5 +1,7 @@
 # Uma Viewer 
 
+> 已归档。我于 2026 年 9 月停止了这个项目的开发。当时演唱会相关的开发已经停滞了很久：每次修好一个光照问题就会弄坏另一个，几周下来查看器反而比我刚开始时更差了。角色和舞台查看功能仍然可以正常使用，所以仓库保持原样，留给想继续开发的人。最新代码在 Experimental 分支，预发布版构建仍挂在 Releases 页面。
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 ⚠️ 如果你看到 **“Failed to load il2cpp”**、DLL 加载失败，或者程序无法在 Windows 上启动，可能是被 **Windows Smart App Control（智能应用控制）** 阻止了。
