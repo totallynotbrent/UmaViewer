@@ -49,10 +49,9 @@ namespace Gallop.RenderPipeline
             public static float BlurSize = 3f;
             public static float BloomDofWeight = 1f;
             // output brightness scale for the whole composite chain; the game's own
-            // material carries a serialized dimmer we cannot read, and the ported
-            // chain reads slightly hotter than the game, so this scales the final
-            // output down instead of over-driving every authored track.
-            public static float OutputDimmer = 0.6f;
+            // the game's material dimmer is white (1.0); a global dim here also
+            // compounds through every film layer draw, darkening whole concerts.
+            public static float OutputDimmer = 1f;
             public static float BloomIsScreenBlend = 1f;
 
             // the postfilm block the game's screen-overlay chain publishes every
